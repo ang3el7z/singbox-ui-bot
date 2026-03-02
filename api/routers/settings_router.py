@@ -1,6 +1,6 @@
 """
-App settings — runtime-editable values stored in AppSetting table.
-These override the .env defaults without requiring a container restart.
+App settings — stored in the AppSetting table (DB is the single source of truth).
+Values are seeded from .env on first startup by api/main.py:_seed_and_apply_settings().
 
 Supported keys:
   tz        — IANA timezone string (e.g. "Europe/Moscow", "UTC")
@@ -8,15 +8,12 @@ Supported keys:
 """
 import os
 import time as _time
-from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
-from sqlalchemy import select
 
 from api.database import AppSetting, async_session
 from api.deps import require_any_auth, audit
-from api.config import settings as _cfg
 
 router = APIRouter()
 
@@ -27,14 +24,12 @@ _ALLOWED = {"tz", "bot_lang"}
 # ─── Helpers (also imported by bot handlers) ──────────────────────────────────
 
 async def get_setting(key: str, default: str = "") -> str:
-    """Read a setting from AppSetting table, falling back to .env / default."""
+    """Read a setting from the AppSetting table (seeded from .env on first startup)."""
     async with async_session() as session:
         row = await session.get(AppSetting, key)
         if row and row.value is not None:
             return row.value
-    # Fall back to .env values
-    env_fallback = {"tz": _cfg.tz, "bot_lang": _cfg.bot_lang}
-    return env_fallback.get(key, default)
+    return default
 
 
 async def set_setting(key: str, value: str) -> None:
@@ -64,10 +59,10 @@ def _apply_setting(key: str, value: str) -> None:
 
 
 async def get_all_settings() -> dict:
-    """Return all current settings (DB values, falling back to .env)."""
+    """Return all current settings from DB (always seeded on startup)."""
     return {
-        "tz":       await get_setting("tz",       _cfg.tz),
-        "bot_lang": await get_setting("bot_lang",  _cfg.bot_lang),
+        "tz":       await get_setting("tz"),
+        "bot_lang": await get_setting("bot_lang"),
     }
 
 

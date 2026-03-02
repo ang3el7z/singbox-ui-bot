@@ -23,7 +23,7 @@ async def lifespan(app: FastAPI):
     import asyncio
     await init_db()
     await _ensure_default_web_user()
-    await _apply_saved_settings()
+    await _seed_and_apply_settings()
     # Start background scheduler
     from api.services.scheduler import scheduler_loop
     _sched_task = asyncio.create_task(scheduler_loop())
@@ -35,12 +35,34 @@ async def lifespan(app: FastAPI):
         pass
 
 
-async def _apply_saved_settings() -> None:
-    """Re-apply runtime settings that were persisted in DB (e.g. after container restart)."""
-    from api.routers.settings_router import get_all_settings, _apply_setting
-    saved = await get_all_settings()
-    for key, value in saved.items():
-        _apply_setting(key, value)
+async def _seed_and_apply_settings() -> None:
+    """
+    On first startup: seed the DB with values from .env so the DB becomes
+    the single source of truth for all runtime settings.
+    On subsequent startups: re-apply whatever is already in the DB.
+    """
+    from api.database import AppSetting, async_session
+    from api.routers.settings_router import _apply_setting
+
+    # All settings that should exist in DB; values come from .env on first run.
+    _defaults = {
+        "tz":       settings.tz,
+        "bot_lang": settings.bot_lang,
+    }
+
+    async with async_session() as session:
+        for key, env_value in _defaults.items():
+            row = await session.get(AppSetting, key)
+            if row is None:
+                # First run — seed from .env
+                session.add(AppSetting(key=key, value=env_value))
+        await session.commit()
+
+        # Apply every setting to the running process
+        for key in _defaults:
+            row = await session.get(AppSetting, key)
+            if row:
+                _apply_setting(key, row.value)
 
 
 async def _ensure_default_web_user() -> None:
