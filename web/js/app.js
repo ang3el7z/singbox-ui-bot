@@ -346,7 +346,8 @@ function routingComponent() {
     return {
         rules: {},
         selectedKey: "domain",
-        ruleKeys: ["domain", "domain_suffix", "domain_keyword", "ip_cidr", "geosite", "geoip", "rule_set"],
+        // Note: geosite/geoip are Xray concepts — use rule_set (SRS URL) for geo-based filtering
+        ruleKeys: ["domain", "domain_suffix", "domain_keyword", "ip_cidr", "rule_set"],
         showAdd: false,
         form: { rule_key: "domain", value: "", outbound: "proxy" },
         outbounds: ["proxy", "direct", "block", "dns"],

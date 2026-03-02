@@ -9,14 +9,16 @@ from api.deps import require_any_auth, audit
 
 router = APIRouter()
 
-RuleKey = Literal["domain", "domain_suffix", "domain_keyword", "ip_cidr", "geosite", "geoip", "rule_set"]
+# Note: geosite/geoip are Xray concepts — not supported in sing-box.
+# For geo-based filtering use rule_set pointing to an .srs file.
+RuleKey = Literal["domain", "domain_suffix", "domain_keyword", "ip_cidr", "rule_set"]
 
 _BUILTIN_OUTBOUNDS = ["proxy", "direct", "block", "dns"]
 
 
 class RuleCreate(BaseModel):
     rule_key: RuleKey
-    value: str
+    value: str   # comma-separated for domain/domain_suffix/domain_keyword/ip_cidr
     outbound: str = "proxy"  # any valid outbound tag, including federation nodes
 
 

@@ -450,7 +450,7 @@ tailwind.config = {
             <button class="btn btn-ghost text-sm"
                     :class="selectedKey===key && 'btn-primary'"
                     @click="selectKey(key)"
-                    x-text="key.replace(/_/g,' ')"></button>
+                    x-text="({'domain':'🌐 Domain','domain_suffix':'🔠 Suffix','domain_keyword':'🔍 Keyword','ip_cidr':'📍 IP CIDR','rule_set':'📦 SRS Rule Sets'})[key] || key"></button>
           </template>
         </div>
 
@@ -483,13 +483,26 @@ tailwind.config = {
                 <label class="text-slate-400 text-sm block mb-1">Rule Type</label>
                 <select x-model="form.rule_key" class="form-input">
                   <template x-for="k in ruleKeys" :key="k">
-                    <option :value="k" x-text="k.replace(/_/g,' ')"></option>
+                    <option :value="k" x-text="({'domain':'🌐 Domain (exact)','domain_suffix':'🔠 Domain Suffix','domain_keyword':'🔍 Domain Keyword','ip_cidr':'📍 IP CIDR','rule_set':'📦 SRS Rule Set (URL)'})[k] || k"></option>
                   </template>
                 </select>
               </div>
               <div>
-                <label class="text-slate-400 text-sm block mb-1">Value</label>
-                <input type="text" x-model="form.value" class="form-input" required placeholder="example.com or 1.1.1.0/24"/>
+                <label class="text-slate-400 text-sm block mb-1">
+                  Value
+                  <span x-show="form.rule_key !== 'rule_set'" class="text-slate-500 font-normal"> — comma-separated for multiple</span>
+                </label>
+                <input type="text" x-model="form.value" class="form-input" required
+                  :placeholder="({'domain':'youtube.com, youtu.be, ytimg.com','domain_suffix':'youtube.com, googlevideo.com','domain_keyword':'youtube, twitch','ip_cidr':'8.8.8.8/32, 1.1.1.0/24','rule_set':'https://github.com/.../geosite-youtube.srs'})[form.rule_key] || 'value'"/>
+                <!-- per-type hint -->
+                <p class="text-slate-500 text-xs mt-1" x-show="form.rule_key === 'domain_suffix'">
+                  Matches the domain and all subdomains: <code>youtube.com</code> → matches <code>www.youtube.com</code>, <code>m.youtube.com</code> etc.
+                </p>
+                <p class="text-slate-500 text-xs mt-1" x-show="form.rule_key === 'rule_set'">
+                  URL must point to an <code>.srs</code> binary file or a <code>.json</code> source file.
+                  Use SRS releases from <a href="https://github.com/SagerNet/sing-geosite/releases" target="_blank" class="text-blue-400 underline">sing-geosite</a>
+                  or <a href="https://github.com/legiz-ru/sb-rule-sets" target="_blank" class="text-blue-400 underline">legiz-ru/sb-rule-sets</a>.
+                </p>
               </div>
               <div>
                 <label class="text-slate-400 text-sm block mb-1">Outbound / Action</label>

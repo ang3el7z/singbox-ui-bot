@@ -187,10 +187,11 @@ _DOCS["overview"] = {
 - Удаление
 
 #### 🗺 Routing (маршрутизация)
-- Правила: domain, domain_suffix, domain_keyword, ip_cidr, geosite, geoip, rule_set
-- Действия: proxy, direct, block, dns
+- Правила: `domain`, `domain_suffix`, `domain_keyword`, `ip_cidr`, `rule_set` (SRS URL)
+- Поддержка comma-separated: несколько доменов/IP через запятую в одном правиле
+- Действия: proxy, direct, block, dns, или любая нода федерации
 - Импорт/экспорт правил в JSON
-- Добавление внешних rule set по URL (автоскачиваются Sing-Box)
+- Добавление внешних SRS rule set по URL (автоскачиваются Sing-Box, с интервалом)
 
 #### 🛡 AdGuard Home
 - Включение/выключение DNS-защиты
@@ -379,10 +380,11 @@ Both interfaces share **one backend (FastAPI)** and have **exactly the same func
 - Delete
 
 #### 🗺 Routing
-- Rules: domain, domain_suffix, domain_keyword, ip_cidr, geosite, geoip, rule_set
-- Actions: proxy, direct, block, dns
+- Rules: `domain`, `domain_suffix`, `domain_keyword`, `ip_cidr`, `rule_set` (SRS URL)
+- Comma-separated values: multiple domains/IPs in one rule
+- Actions: proxy, direct, block, dns, or any federation node outbound
 - Import/export rules as JSON
-- Add external rule sets by URL (auto-downloaded by Sing-Box)
+- Add external SRS rule sets by URL (auto-downloaded and updated by Sing-Box)
 
 #### 🛡 AdGuard Home
 - Enable/disable DNS protection
@@ -1260,7 +1262,10 @@ curl -X POST https://домен/api/inbounds/ \\
 
 #### `GET /api/routing/rules/{rule_key}` — Правила по типу
 
-`rule_key`: `domain`, `domain_suffix`, `domain_keyword`, `ip_cidr`, `geosite`, `geoip`, `rule_set`
+`rule_key`: `domain`, `domain_suffix`, `domain_keyword`, `ip_cidr`, `rule_set`
+
+> ⚠️ `geosite` и `geoip` — концепции Xray/V2Ray и **не поддерживаются в sing-box**.
+> Для фильтрации по географии используй `rule_set` с URL на `.srs` файл.
 
 ```bash
 curl https://домен/api/routing/rules/domain \\
@@ -1277,33 +1282,37 @@ curl https://домен/api/routing/rules/domain \\
 
 #### `POST /api/routing/rules` — Добавить правило
 
+Поле `value` поддерживает **comma-separated** значения — несколько доменов/IP в одном запросе:
+
 ```bash
 curl -X POST https://домен/api/routing/rules \\
   -H "Authorization: Bearer eyJ..." \\
   -H "Content-Type: application/json" \\
   -d '{
-    "rule_key": "geosite",
-    "value": "ru",
+    "rule_key": "domain_suffix",
+    "value": "youtube.com, googlevideo.com, ytimg.com",
     "outbound": "direct"
   }'
 ```
 
-`outbound`: `proxy` | `direct` | `block` | `dns`
+`outbound`: `proxy` | `direct` | `block` | `dns` | или тег ноды федерации
 
 Ответ: `{"detail": "Rule added"}`
 
-#### `DELETE /api/routing/rules?rule_key=geosite&value=ru` — Удалить правило
+#### `DELETE /api/routing/rules?rule_key=domain_suffix&value=youtube.com` — Удалить правило
 
-#### `POST /api/routing/rule-sets` — Добавить remote rule set
+#### `POST /api/routing/rule-sets` — Добавить remote SRS rule set
 
 ```bash
 curl -X POST https://домен/api/routing/rule-sets \\
   -H "Authorization: Bearer eyJ..." \\
   -H "Content-Type: application/json" \\
   -d '{
-    "tag": "geosite-ads",
-    "url": "https://raw.githubusercontent.com/SagerNet/sing-geosite/rule-set/geosite-category-ads-all.srs",
-    "format": "binary"
+    "tag": "srs-ads",
+    "url": "https://github.com/SagerNet/sing-geosite/releases/latest/download/geosite-category-ads-all.srs",
+    "format": "binary",
+    "update_interval": "1d",
+    "download_detour": "direct"
   }'
 ```
 
@@ -1686,13 +1695,20 @@ Sing-Box проверяет их **сверху вниз** и применяет
 
 | Тип | Пример | Описание |
 |-----|--------|----------|
-| `domain` | `youtube.com` | Точный домен |
-| `domain_suffix` | `.youtube.com` | Домен и все поддомены |
-| `domain_keyword` | `youtube` | Любой домен, содержащий слово |
-| `ip_cidr` | `8.8.8.8/32` | IP-адрес или подсеть |
-| `geosite` | `ru`, `youtube`, `category-ads-all` | Набор сайтов из встроенной базы |
-| `geoip` | `ru`, `cn` | IP-диапазоны страны |
-| `rule_set` | URL на `.srs` файл | Внешний набор правил (скачивается автоматически) |
+| `domain` | `youtube.com` | Точный домен (через запятую — несколько) |
+| `domain_suffix` | `youtube.com` | Домен и все поддомены (через запятую) |
+| `domain_keyword` | `youtube` | Любой домен, содержащий слово (через запятую) |
+| `ip_cidr` | `8.8.8.8/32` | IP-адрес или подсеть (через запятую) |
+| `rule_set` | URL на `.srs` файл | Внешний SRS-набор правил (автоматически скачивается и обновляется) |
+
+> **⚠️ Важно:** `geosite` и `geoip` — это концепции Xray/V2Ray, в sing-box их нет.
+> Для фильтрации по стране или сервису используй `rule_set` с URL на `.srs` файл
+> из репозитория [sing-geosite](https://github.com/SagerNet/sing-geosite/releases) или других источников.
+
+**Comma-separated:** Для `domain`, `domain_suffix`, `domain_keyword`, `ip_cidr` можно вводить несколько значений через запятую — они добавятся в один массив правила:
+```
+domain_suffix: youtube.com, googlevideo.com, ytimg.com → direct
+```
 
 ### Действия (outbound)
 
@@ -1713,16 +1729,20 @@ Sing-Box проверяет их **сверху вниз** и применяет
 
 ### Сценарий 1: Рунет напрямую, остальное через VPN
 
+Добавляем SRS-список российских сайтов, выставляем `direct`:
+
 ```
-geosite:ru  → direct   ← российские сайты без VPN
-geoip:ru    → direct   ← российские IP без VPN
-(default)   → proxy    ← весь остальной трафик через VPN
+rule_set:ru-bundle.srs  → direct   ← российские сайты без VPN
+(default)               → proxy    ← весь остальной трафик через VPN
 ```
 
 Добавить в боте:
-1. `🗺 Routing → ➕ Add rule`
-2. Тип: `geosite`, Значение: `ru`, Действие: `direct`
-3. Тип: `geoip`, Значение: `ru`, Действие: `direct`
+1. `🗺 Routing → ➕ Add rule → 📦 SRS Rule Set`
+2. Значение: `https://github.com/legiz-ru/sb-rule-sets/releases/latest/download/ru-bundle.srs`
+3. Действие: `direct`
+4. Интервал: `1d` | Скачивание: `direct`
+
+> Этот SRS содержит российские государственные, банковские и новостные домены.
 
 ---
 
@@ -1735,41 +1755,40 @@ geoip:ru    → direct   ← российские IP без VPN
    - Для Twitch-моста: имя `eu-bridge`, URL, secret, роль `bridge`
 3. `/menu → 🔗 Federation → 🌉 Create Bridge`
    - Для YouTube: выбери `ru-node` (1 сервер = прямой хоп)
-   - Для Twitch: выбери `eu-bridge` (промежуточный) → и добавь exit-ноду
+   - Для Twitch: выбери `eu-bridge` (промежуточный) → добавь exit-ноду
 
-После Create Bridge Sing-Box автоматически получит outbound-теги:
-- `exit_ru-node`
-- `bridge_to_eu-bridge`
+После Create Bridge Sing-Box получит outbound-теги: `exit_ru-node`, `bridge_to_eu-bridge`
 
-**Шаг 2 — Добавить правила роутинга:**
-1. `/menu → 🗺 Routing → ➕ Add rule`
-2. YouTube: Тип `geosite`, Значение `youtube`, Действие → выбери `exit_ru-node`
-3. Twitch: Тип `domain`, Значение `twitch.tv`, Действие → выбери `bridge_to_eu-bridge`
-4. Twitch stream: Тип `domain_suffix`, Значение `.twitch.tv`, то же действие
+**Шаг 2 — Вариант A: SRS-список (рекомендуется)**
+1. `🗺 Routing → ➕ Add rule → 📦 SRS Rule Set`
+2. YouTube SRS: `https://github.com/SagerNet/sing-geosite/releases/latest/download/geosite-youtube.srs`
+   → Действие: `exit_ru-node`
+3. Twitch SRS: `https://github.com/SagerNet/sing-geosite/releases/latest/download/geosite-twitch.srs`
+   → Действие: `bridge_to_eu-bridge`
+
+**Шаг 2 — Вариант B: Домены вручную (comma-separated)**
+1. `🗺 Routing → ➕ Add rule → 🔠 Domain Suffix`
+2. YouTube: `youtube.com, youtu.be, googlevideo.com, ytimg.com` → `exit_ru-node`
+3. Twitch: `twitch.tv, twitchsvc.net, jtvnw.net` → `bridge_to_eu-bridge`
 
 Итог:
 ```
-geosite:youtube     → exit_ru-node       ← YouTube через Россию
-domain:twitch.tv    → bridge_to_eu-bridge ← Twitch через мост в Европе
-.twitch.tv          → bridge_to_eu-bridge ← Twitch CDN тоже
-(default)           → proxy              ← остальное как обычно
+srs:geosite-youtube     → exit_ru-node         ← YouTube через Россию
+srs:geosite-twitch      → bridge_to_eu-bridge  ← Twitch через мост в Европе
+(default)               → proxy                ← остальное как обычно
 ```
 
 ---
 
-### Сценарий 3: Блокировка рекламы через rule_set
+### Сценарий 3: Блокировка рекламы через SRS
 
-Готовые SRS-списки для блокировки рекламы (формат `.srs`):
+AdGuard Home уже блокирует рекламу на уровне DNS для всех клиентов.
+Для дополнительной блокировки на уровне Sing-Box:
 
-```
-https://cdn.jsdelivr.net/gh/SagerNet/sing-geosite@rule-set/geosite-category-ads-all.srs
-```
-
-Добавить в боте:
-1. `🗺 Routing → ➕ Add rule`
-2. Тип: `rule_set`
-3. Значение: вставь URL выше
-4. Действие: `block`
+1. `🗺 Routing → ➕ Add rule → 📦 SRS Rule Set`
+2. Значение: `https://github.com/SagerNet/sing-geosite/releases/latest/download/geosite-category-ads-all.srs`
+3. Действие: `block`
+4. Интервал: `1d`
 
 Sing-Box скачает файл и будет автоматически обновлять его.
 
@@ -1777,35 +1796,34 @@ Sing-Box скачает файл и будет автоматически обн
 
 ### Сценарий 4: Конкретные сайты через определённую страну
 
-Хочешь чтобы Netflix шёл через американскую ноду:
+Netflix через американскую ноду — двумя способами:
 
+**Вариант A — SRS:**
 ```
-domain:netflix.com         → exit_us-node
-domain_suffix:.netflix.com → exit_us-node
-domain_suffix:.nflximg.net → exit_us-node
-domain_suffix:.nflxvideo.net → exit_us-node
+rule_set: geosite-netflix.srs → exit_us-node
 ```
 
-Или через geosite (если список есть):
-```
-geosite:netflix → exit_us-node
-```
+**Вариант B — домены вручную (comma-separated):**
+1. `🔠 Domain Suffix → netflix.com, nflximg.net, nflxvideo.net, nflxext.com` → `exit_us-node`
 
 ---
 
-## Полезные SRS-ссылки
+## Полезные SRS-ссылки (tagged releases — стабильные URL)
 
 | Список | URL |
 |--------|-----|
-| Реклама и трекеры | `https://cdn.jsdelivr.net/gh/SagerNet/sing-geosite@rule-set/geosite-category-ads-all.srs` |
-| YouTube | `https://cdn.jsdelivr.net/gh/SagerNet/sing-geosite@rule-set/geosite-youtube.srs` |
-| Google | `https://cdn.jsdelivr.net/gh/SagerNet/sing-geosite@rule-set/geosite-google.srs` |
-| Telegram | `https://cdn.jsdelivr.net/gh/SagerNet/sing-geosite@rule-set/geosite-telegram.srs` |
-| Netflix | `https://cdn.jsdelivr.net/gh/SagerNet/sing-geosite@rule-set/geosite-netflix.srs` |
-| Twitch | `https://cdn.jsdelivr.net/gh/SagerNet/sing-geosite@rule-set/geosite-twitch.srs` |
-| Геообходной | `https://cdn.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@sing/geo/geosite/geolocation-!cn.srs` |
+| 🇷🇺 Российский бандл | `https://github.com/legiz-ru/sb-rule-sets/releases/latest/download/ru-bundle.srs` |
+| Реклама и трекеры | `https://github.com/SagerNet/sing-geosite/releases/latest/download/geosite-category-ads-all.srs` |
+| YouTube | `https://github.com/SagerNet/sing-geosite/releases/latest/download/geosite-youtube.srs` |
+| Google | `https://github.com/SagerNet/sing-geosite/releases/latest/download/geosite-google.srs` |
+| Telegram | `https://github.com/SagerNet/sing-geosite/releases/latest/download/geosite-telegram.srs` |
+| Netflix | `https://github.com/SagerNet/sing-geosite/releases/latest/download/geosite-netflix.srs` |
+| Twitch | `https://github.com/SagerNet/sing-geosite/releases/latest/download/geosite-twitch.srs` |
+| Не-Китай | `https://github.com/MetaCubeX/meta-rules-dat/releases/latest/download/geosite-geolocation-!cn.srs` |
 
-> Список geosite тегов: [sing-geosite](https://github.com/SagerNet/sing-geosite/tree/rule-set)
+> **Используй `/releases/latest/download/`** — это tagged release, а не ветка (`rule-set` branch), которая может исчезнуть или сломаться.
+> Все файлы выше работают в sing-box 1.10+.
+> Репозиторий всех тегов: [sing-geosite releases](https://github.com/SagerNet/sing-geosite/releases)
 
 ---
 
@@ -1990,16 +2008,18 @@ If no rule matches — traffic goes via `final` (default: `proxy`).
 
 ### Scenario 1: Russian sites direct, everything else through VPN
 
+Add an SRS rule set with the Russian domains bundle, action `direct`:
+
 ```
-geosite:ru  → direct   ← Russian sites without VPN
-geoip:ru    → direct   ← Russian IP ranges without VPN
-(default)   → proxy    ← everything else through VPN
+rule_set:ru-bundle.srs  → direct   ← Russian sites without VPN
+(default)               → proxy    ← everything else through VPN
 ```
 
 Add in bot:
-1. `🗺 Routing → ➕ Add rule`
-2. Type: `geosite`, Value: `ru`, Action: `direct`
-3. Type: `geoip`, Value: `ru`, Action: `direct`
+1. `🗺 Routing → ➕ Add rule → 📦 SRS Rule Set`
+2. Value: `https://github.com/legiz-ru/sb-rule-sets/releases/latest/download/ru-bundle.srs`
+3. Action: `direct`
+4. Interval: `1d` | Download: `direct`
 
 ---
 
@@ -2011,76 +2031,76 @@ Add in bot:
    - For YouTube node: name `ru-node`, server URL, node's `FEDERATION_SECRET`, role `node`
    - For Twitch bridge: name `eu-bridge`, URL, secret, role `bridge`
 3. `/menu → 🔗 Federation → 🌉 Create Bridge`
-   - For YouTube: select `ru-node` (single hop = direct connection)
-   - For Twitch: select `eu-bridge` → then add exit node
+   - For YouTube: select `ru-node` (single hop)
+   - For Twitch: select `eu-bridge` → add exit node
 
-After Create Bridge, Sing-Box will have outbound tags:
-- `exit_ru-node`
-- `bridge_to_eu-bridge`
+After Create Bridge, Sing-Box gets outbound tags: `exit_ru-node`, `bridge_to_eu-bridge`
 
-**Step 2 — Add routing rules:**
-1. `/menu → 🗺 Routing → ➕ Add rule`
-2. YouTube: Type `geosite`, Value `youtube`, Action → select `exit_ru-node`
-3. Twitch: Type `domain`, Value `twitch.tv`, Action → select `bridge_to_eu-bridge`
-4. Twitch CDN: Type `domain_suffix`, Value `.twitch.tv`, same action
+**Step 2 — Option A: SRS list (recommended)**
+1. `🗺 Routing → ➕ Add rule → 📦 SRS Rule Set`
+2. YouTube SRS: `https://github.com/SagerNet/sing-geosite/releases/latest/download/geosite-youtube.srs`
+   → Action: `exit_ru-node`
+3. Twitch SRS: `https://github.com/SagerNet/sing-geosite/releases/latest/download/geosite-twitch.srs`
+   → Action: `bridge_to_eu-bridge`
+
+**Step 2 — Option B: Manual domains (comma-separated)**
+1. `🗺 Routing → ➕ Add rule → 🔠 Domain Suffix`
+2. YouTube: `youtube.com, youtu.be, googlevideo.com, ytimg.com` → `exit_ru-node`
+3. Twitch: `twitch.tv, twitchsvc.net, jtvnw.net` → `bridge_to_eu-bridge`
 
 Result:
 ```
-geosite:youtube     → exit_ru-node        ← YouTube through Russia
-domain:twitch.tv    → bridge_to_eu-bridge ← Twitch through EU bridge
-.twitch.tv          → bridge_to_eu-bridge ← Twitch CDN too
-(default)           → proxy               ← everything else as usual
+srs:geosite-youtube     → exit_ru-node        ← YouTube through Russia
+srs:geosite-twitch      → bridge_to_eu-bridge ← Twitch through EU bridge
+(default)               → proxy               ← everything else as usual
 ```
 
 ---
 
-### Scenario 3: Block ads via rule_set
+### Scenario 3: Block ads via SRS
 
-Ready-made SRS lists for ad blocking:
+AdGuard Home already blocks ads at DNS level for all clients.
+For additional sing-box level blocking:
 
-```
-https://cdn.jsdelivr.net/gh/SagerNet/sing-geosite@rule-set/geosite-category-ads-all.srs
-```
+1. `🗺 Routing → ➕ Add rule → 📦 SRS Rule Set`
+2. Value: `https://github.com/SagerNet/sing-geosite/releases/latest/download/geosite-category-ads-all.srs`
+3. Action: `block`
+4. Interval: `1d`
 
-Add in bot:
-1. `🗺 Routing → ➕ Add rule`
-2. Type: `rule_set`
-3. Value: paste the URL above
-4. Action: `block`
-
-Sing-Box will download the file and apply rules automatically.
+Sing-Box downloads the file and applies rules automatically.
 
 ---
 
 ### Scenario 4: Specific sites through a specific country
 
-Route Netflix through a US node:
+Route Netflix through a US node — two options:
 
+**Option A — SRS:**
 ```
-domain:netflix.com         → exit_us-node
-domain_suffix:.netflix.com → exit_us-node
-domain_suffix:.nflximg.net → exit_us-node
+rule_set: geosite-netflix.srs → exit_us-node
 ```
 
-Or via geosite:
-```
-geosite:netflix → exit_us-node
-```
+**Option B — manual domains (comma-separated):**
+1. `🔠 Domain Suffix → netflix.com, nflximg.net, nflxvideo.net, nflxext.com` → `exit_us-node`
 
 ---
 
-## Useful SRS links
+## Useful SRS links (tagged releases — stable URLs)
 
 | List | URL |
 |------|-----|
-| Ads & trackers | `https://cdn.jsdelivr.net/gh/SagerNet/sing-geosite@rule-set/geosite-category-ads-all.srs` |
-| YouTube | `https://cdn.jsdelivr.net/gh/SagerNet/sing-geosite@rule-set/geosite-youtube.srs` |
-| Google | `https://cdn.jsdelivr.net/gh/SagerNet/sing-geosite@rule-set/geosite-google.srs` |
-| Telegram | `https://cdn.jsdelivr.net/gh/SagerNet/sing-geosite@rule-set/geosite-telegram.srs` |
-| Netflix | `https://cdn.jsdelivr.net/gh/SagerNet/sing-geosite@rule-set/geosite-netflix.srs` |
-| Twitch | `https://cdn.jsdelivr.net/gh/SagerNet/sing-geosite@rule-set/geosite-twitch.srs` |
+| 🇷🇺 Russian bundle | `https://github.com/legiz-ru/sb-rule-sets/releases/latest/download/ru-bundle.srs` |
+| Ads & trackers | `https://github.com/SagerNet/sing-geosite/releases/latest/download/geosite-category-ads-all.srs` |
+| YouTube | `https://github.com/SagerNet/sing-geosite/releases/latest/download/geosite-youtube.srs` |
+| Google | `https://github.com/SagerNet/sing-geosite/releases/latest/download/geosite-google.srs` |
+| Telegram | `https://github.com/SagerNet/sing-geosite/releases/latest/download/geosite-telegram.srs` |
+| Netflix | `https://github.com/SagerNet/sing-geosite/releases/latest/download/geosite-netflix.srs` |
+| Twitch | `https://github.com/SagerNet/sing-geosite/releases/latest/download/geosite-twitch.srs` |
+| Non-China | `https://github.com/MetaCubeX/meta-rules-dat/releases/latest/download/geosite-geolocation-!cn.srs` |
 
-> Full geosite tag list: [sing-geosite](https://github.com/SagerNet/sing-geosite/tree/rule-set)
+> **Use `/releases/latest/download/`** — this is a tagged release, not a branch (`rule-set` branch) that can disappear.
+> All links above work with sing-box 1.10+.
+> Full list: [sing-geosite releases](https://github.com/SagerNet/sing-geosite/releases)
 
 ---
 
@@ -2787,14 +2807,15 @@ Sing-Box проверяет правила **сверху вниз** и прим
 
 **Пример 1: Российские сайты — напрямую, остальное — через VPN**
 ```
-geosite:ru      → direct   (рунет без VPN)
-geoip:ru        → direct   (российские IP без VPN)
-default (final) → proxy    (весь остальной трафик через VPN)
+rule_set:ru-bundle.srs → direct   (рунет без VPN, через SRS-список)
+default (final)        → proxy    (весь остальной трафик через VPN)
 ```
+> `geosite`/`geoip` — концепции Xray, в sing-box не поддерживаются.
+> Используй `rule_set` с `.srs` файлом.
 
 **Пример 2: Заблокировать рекламу**
 ```
-rule_set: https://.../geosite-category-ads-all.srs → block
+rule_set: https://github.com/SagerNet/sing-geosite/releases/latest/download/geosite-category-ads-all.srs → block
 ```
 
 **Пример 3: Конкретный домен через VPN**

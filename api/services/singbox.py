@@ -169,28 +169,40 @@ class SingBoxService:
         self.write_config(cfg)
 
     def add_route_rule(self, rule_key: str, value: str, outbound: str) -> None:
+        """
+        Add one or more routing rules.
+
+        For domain/domain_suffix/domain_keyword/ip_cidr, `value` may be
+        comma-separated (e.g. "youtube.com, youtu.be, ytimg.com").
+        Each item is added individually into the shared rule array for that outbound.
+
+        For rule_set, `value` is a single URL (the .srs or source JSON URL).
+        A rule_set entry is created and referenced from a rule.
+        """
         cfg = self.read_config()
         route = cfg.setdefault("route", {})
         rules = route.setdefault("rules", [])
 
         if rule_key == "rule_set":
-            # For rule sets, create a rule_set entry + rule referencing it
             rule_sets = route.setdefault("rule_set", [])
             tag = f"custom_{len(rule_sets)}"
             rule_sets.append({
                 "tag": tag,
                 "type": "remote",
-                "format": "binary" if value.endswith(".srs") else "source",
-                "url": value,
+                "format": "binary" if value.strip().endswith(".srs") else "source",
+                "url": value.strip(),
                 "download_detour": "direct",
                 "update_interval": "1d",
             })
             target = self._find_or_create_rule(rules, outbound, "rule_set")
             target["rule_set"].append(tag)
         else:
+            # Split comma-separated values, strip whitespace, deduplicate
+            values = [v.strip() for v in value.split(",") if v.strip()]
             target = self._find_or_create_rule(rules, outbound, rule_key)
-            if value not in target[rule_key]:
-                target[rule_key].append(value)
+            for v in values:
+                if v not in target[rule_key]:
+                    target[rule_key].append(v)
 
         self.write_config(cfg)
 

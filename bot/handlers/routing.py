@@ -11,14 +11,14 @@ from bot.keyboards.main import kb_back, kb_routing_menu, kb_routing_rules_list
 
 router = Router()
 
+# Note: geosite/geoip are Xray concepts, not supported in sing-box.
+# For geo-based filtering use "Rule Set (.srs URL)" pointing to a remote SRS file.
 RULE_KEYS = {
-    "domain": "Domain",
-    "domain_suffix": "Domain Suffix",
-    "domain_keyword": "Keyword",
-    "ip_cidr": "IP CIDR",
-    "geosite": "GeoSite",
-    "geoip": "GeoIP",
-    "rule_set": "Rule Set URL",
+    "domain":         "🌐 Domain (exact)",
+    "domain_suffix":  "🔠 Domain Suffix",
+    "domain_keyword": "🔍 Domain Keyword",
+    "ip_cidr":        "📍 IP CIDR",
+    "rule_set":       "📦 SRS Rule Set (URL)",
 }
 
 
@@ -63,13 +63,22 @@ async def cb_routing_add(cq: CallbackQuery, state: FSMContext):
     await cq.answer()
 
 
+_RULE_HINTS = {
+    "domain":         "Enter exact domain(s).\nComma-separated:\n<code>youtube.com, youtu.be, ytimg.com</code>",
+    "domain_suffix":  "Enter domain suffix/suffixes — matches domain and all subdomains.\nComma-separated:\n<code>youtube.com, googlevideo.com</code>\n<i>(.youtube.com, www.youtube.com etc. are matched automatically)</i>",
+    "domain_keyword": "Enter keyword(s) — matches any domain containing the word.\nComma-separated:\n<code>youtube, google, twitch</code>",
+    "ip_cidr":        "Enter IP or CIDR range(s).\nComma-separated:\n<code>8.8.8.8/32, 142.250.0.0/15</code>",
+    "rule_set":       "Enter URL of an SRS rule set file (.srs binary or .json source).\nExamples:\n<code>https://github.com/SagerNet/sing-geosite/releases/download/20250101/geosite-youtube.srs</code>\n<code>https://github.com/legiz-ru/sb-rule-sets/raw/main/ru-bundle.srs</code>",
+}
+
+
 @router.callback_query(AddRuleFSM.rule_key, F.data.startswith("rulekey_"))
 async def fsm_rule_key(cq: CallbackQuery, state: FSMContext):
     rule_key = cq.data.replace("rulekey_", "")
     await state.update_data(rule_key=rule_key)
     await state.set_state(AddRuleFSM.value)
-    label = RULE_KEYS.get(rule_key, rule_key)
-    await cq.message.answer(f"Enter {label} value:")
+    hint = _RULE_HINTS.get(rule_key, f"Enter value for <b>{rule_key}</b>:")
+    await cq.message.answer(hint, parse_mode="HTML")
     await cq.answer()
 
 
