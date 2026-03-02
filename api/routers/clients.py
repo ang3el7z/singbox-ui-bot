@@ -1,3 +1,4 @@
+import json
 import logging
 import secrets
 import uuid as uuid_lib
@@ -12,9 +13,25 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
-from api.database import get_db, Client, ClientTemplate
+from api.database import get_db, Client, ClientTemplate, Inbound as InboundModel
 from api.services.singbox import singbox, SingBoxError
 from api.deps import require_any_auth, audit
+
+
+async def _get_inbound_with_meta(tag: str, db: AsyncSession) -> Optional[dict]:
+    """
+    Return inbound config with all metadata fields (subscribe_port, subscribe_tls, etc.).
+
+    Priority:
+      1. DB Inbound record (stores full config including our metadata fields)
+      2. Live sing-box config.json (fallback — metadata fields stripped by save_inbound)
+    """
+    result = await db.execute(select(InboundModel).where(InboundModel.tag == tag))
+    db_inbound = result.scalar_one_or_none()
+    if db_inbound and db_inbound.config_json:
+        return json.loads(db_inbound.config_json)
+    # Fallback to live config (no subscribe_* fields)
+    return singbox.get_inbound(tag)
 
 
 async def _resolve_template(client: Client, db: AsyncSession) -> str:
@@ -345,7 +362,7 @@ async def public_subscription(
     if not c or not c.enable:
         raise HTTPException(status_code=404, detail="Subscription not found or disabled")
 
-    inbound = singbox.get_inbound(c.inbound_tag)
+    inbound = await _get_inbound_with_meta(c.inbound_tag, db)
     if not inbound:
         raise HTTPException(status_code=404, detail="Inbound not found")
 
@@ -410,7 +427,7 @@ async def get_subscription(
     c = await db.get(Client, client_id)
     if not c:
         raise HTTPException(status_code=404, detail="Client not found")
-    inbound = singbox.get_inbound(c.inbound_tag)
+    inbound = await _get_inbound_with_meta(c.inbound_tag, db)
     if not inbound:
         raise HTTPException(status_code=404, detail="Inbound not found")
     template_json = await _resolve_template(c, db)

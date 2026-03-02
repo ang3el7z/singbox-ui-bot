@@ -134,7 +134,11 @@ class RoutingAPI:
     async def get_route(self):                return await get("/api/routing/")
     async def get_outbounds(self):            return await get("/api/routing/outbounds")
     async def list_rules(self, key):          return await get(f"/api/routing/rules/{key}")
-    async def add_rule(self, key, val, out):  return await post("/api/routing/rules", json={"rule_key": key, "value": val, "outbound": out})
+    async def add_rule(self, key, val, out, download_detour="direct", update_interval="1d"):
+        return await post("/api/routing/rules", json={
+            "rule_key": key, "value": val, "outbound": out,
+            "download_detour": download_detour, "update_interval": update_interval,
+        })
     async def del_rule(self, key, val):       return await delete("/api/routing/rules", rule_key=key, value=val)
     async def add_rule_set(self, tag, url, fmt="binary"): return await post("/api/routing/rule-sets", json={"tag": tag, "url": url, "format": fmt})
     async def add_rule_set_full(self, tag, url, fmt="binary", download_detour="direct", update_interval="1d"):
@@ -176,7 +180,7 @@ class FederationAPI:
     async def delete(self, nid):              return await delete(f"/api/federation/{nid}")
     async def ping(self, nid):                return await post(f"/api/federation/{nid}/ping")
     async def ping_all(self):                 return await post("/api/federation/ping-all")
-    async def bridge(self, node_ids):         return await post("/api/federation/bridge", json={"node_ids": node_ids})
+    async def create_bridge(self, node_ids):  return await post("/api/federation/bridge", json={"node_ids": node_ids})
     async def topology(self):                 return await get("/api/federation/topology")
 
 

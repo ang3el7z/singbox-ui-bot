@@ -84,16 +84,25 @@ class SingBoxService:
     def get_inbound(self, tag: str) -> Optional[dict]:
         return next((ib for ib in self.get_inbounds() if ib.get("tag") == tag), None)
 
+    # Fields that are our own metadata and must not be written into sing-box config.json
+    _INBOUND_META_FIELDS = {"subscribe_port", "subscribe_tls"}
+
     def save_inbound(self, inbound: dict) -> None:
-        """Add or replace inbound by tag."""
+        """
+        Add or replace inbound by tag in sing-box config.json.
+        Strips internal metadata fields (subscribe_port, subscribe_tls) before writing —
+        sing-box does not understand them and would fail to start.
+        """
         cfg = self.read_config()
         inbounds = cfg.setdefault("inbounds", [])
         tag = inbound["tag"]
+        # Strip metadata before writing to sing-box config
+        sb_inbound = {k: v for k, v in inbound.items() if k not in self._INBOUND_META_FIELDS}
         existing = next((i for i, ib in enumerate(inbounds) if ib.get("tag") == tag), None)
         if existing is not None:
-            inbounds[existing] = inbound
+            inbounds[existing] = sb_inbound
         else:
-            inbounds.append(inbound)
+            inbounds.append(sb_inbound)
         self.write_config(cfg)
 
     def delete_inbound(self, tag: str) -> bool:
@@ -168,7 +177,14 @@ class SingBoxService:
         cfg["route"] = route
         self.write_config(cfg)
 
-    def add_route_rule(self, rule_key: str, value: str, outbound: str) -> None:
+    def add_route_rule(
+        self,
+        rule_key: str,
+        value: str,
+        outbound: str,
+        download_detour: str = "direct",
+        update_interval: str = "1d",
+    ) -> None:
         """
         Add one or more routing rules.
 
@@ -177,7 +193,8 @@ class SingBoxService:
         Each item is added individually into the shared rule array for that outbound.
 
         For rule_set, `value` is a single URL (the .srs or source JSON URL).
-        A rule_set entry is created and referenced from a rule.
+        A rule_set entry is created and referenced from a routing rule pointing to `outbound`.
+        `download_detour` and `update_interval` are used only for rule_set.
         """
         cfg = self.read_config()
         route = cfg.setdefault("route", {})
@@ -185,17 +202,22 @@ class SingBoxService:
 
         if rule_key == "rule_set":
             rule_sets = route.setdefault("rule_set", [])
-            tag = f"custom_{len(rule_sets)}"
-            rule_sets.append({
-                "tag": tag,
-                "type": "remote",
-                "format": "binary" if value.strip().endswith(".srs") else "source",
-                "url": value.strip(),
-                "download_detour": "direct",
-                "update_interval": "1d",
-            })
+            url = value.strip()
+            # Use URL hash as stable tag to avoid duplicates on re-add
+            import hashlib
+            tag = "custom_" + hashlib.md5(url.encode()).hexdigest()[:8]
+            if not any(rs["tag"] == tag for rs in rule_sets):
+                rule_sets.append({
+                    "tag": tag,
+                    "type": "remote",
+                    "format": "binary" if url.endswith(".srs") else "source",
+                    "url": url,
+                    "download_detour": download_detour,
+                    "update_interval": update_interval,
+                })
             target = self._find_or_create_rule(rules, outbound, "rule_set")
-            target["rule_set"].append(tag)
+            if tag not in target["rule_set"]:
+                target["rule_set"].append(tag)
         else:
             # Split comma-separated values, strip whitespace, deduplicate
             values = [v.strip() for v in value.split(",") if v.strip()]
@@ -323,37 +345,70 @@ class SingBoxService:
         return _json.loads(raw)
 
     def _build_outbound(self, client_data: dict, inbound: dict, domain: str) -> dict:
-        """Build the proxy outbound block for a given protocol."""
+        """
+        Build the client-side proxy outbound from server inbound settings.
+
+        Key fields from the inbound:
+          listen_port    — internal sing-box port
+          subscribe_port — public port clients connect to (e.g. 443 via Nginx). Falls back to listen_port.
+          subscribe_tls  — if True, add TLS to outbound even if inbound has no TLS (Nginx terminates it).
+          tls            — inbound TLS settings (Reality, plain TLS, etc.)
+          transport      — WS/gRPC/etc.
+
+        For WS protocols fronted by Nginx:
+          Nginx listens on subscribe_port (443) → TLS terminated → proxies to sing-box listen_port.
+          Client must connect to domain:443 with TLS, even though sing-box inbound has no TLS.
+        """
         proto = inbound.get("type", "vless")
-        port = inbound.get("listen_port", 443)
         tls = inbound.get("tls", {})
         transport = inbound.get("transport", {})
 
-        ob: dict = {"tag": "proxy", "type": proto, "server": domain, "server_port": port}
+        # subscribe_port overrides listen_port for the client outbound (e.g. Nginx on 443)
+        port = inbound.get("subscribe_port") or inbound.get("listen_port", 443)
+
+        # subscribe_tls forces TLS in the client outbound (used when Nginx terminates TLS)
+        force_tls = inbound.get("subscribe_tls", False)
+
+        ob: dict = {
+            "tag": "proxy",
+            "type": proto,
+            "server": domain,
+            "server_port": port,
+        }
 
         if proto == "vless":
             ob["uuid"] = client_data.get("uuid", "")
-            ob["flow"] = ""
-            if tls.get("enabled"):
-                reality = tls.get("reality", {})
-                if reality.get("enabled"):
-                    ob["tls"] = {
+            reality = tls.get("reality", {})
+            if reality.get("enabled"):
+                # VLESS + Reality: flow required, custom TLS fingerprint
+                ob["flow"] = "xtls-rprx-vision"
+                ob["tls"] = {
+                    "enabled": True,
+                    "server_name": tls.get("server_name", domain),
+                    "utls": {"enabled": True, "fingerprint": "chrome"},
+                    "reality": {
                         "enabled": True,
-                        "server_name": tls.get("server_name", domain),
-                        "utls": {"enabled": True, "fingerprint": "chrome"},
-                        "reality": {
-                            "enabled": True,
-                            "public_key": reality.get("public_key", ""),
-                            "short_id": (reality.get("short_id", [""])[0]),
-                        },
-                    }
-                else:
-                    ob["tls"] = {"enabled": True, "server_name": domain}
+                        "public_key": reality.get("public_key", ""),
+                        "short_id": (reality.get("short_id") or [""])[0],
+                    },
+                }
+            elif tls.get("enabled") or force_tls:
+                # VLESS + plain TLS (or Nginx-fronted WS)
+                ob["tls"] = {"enabled": True, "server_name": domain}
+            if transport.get("type") == "ws":
+                ob["transport"] = {"type": "ws", "path": transport.get("path", "/")}
+
+        elif proto == "vmess":
+            ob["uuid"] = client_data.get("uuid", "")
+            ob["alter_id"] = 0
+            if tls.get("enabled") or force_tls:
+                ob["tls"] = {"enabled": True, "server_name": domain}
             if transport.get("type") == "ws":
                 ob["transport"] = {"type": "ws", "path": transport.get("path", "/")}
 
         elif proto == "trojan":
             ob["password"] = client_data.get("password", "")
+            # Trojan always uses TLS
             ob["tls"] = {"enabled": True, "server_name": domain}
             if transport.get("type") == "ws":
                 ob["transport"] = {"type": "ws", "path": transport.get("path", "/")}

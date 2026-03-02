@@ -86,6 +86,8 @@ const api = {
     updateTemplate:  (id, data)     => apiFetch("PUT",    `/api/client-templates/${id}`, data),
     deleteTemplate:  (id)           => apiFetch("DELETE", `/api/client-templates/${id}`),
     setDefaultTmpl:  (id)           => apiFetch("POST",   `/api/client-templates/${id}/set-default`),
+    listPresets:     ()             => apiFetch("GET",    "/api/client-templates/presets"),
+    installPreset:   (name)         => apiFetch("POST",   `/api/client-templates/presets/${name}/install`),
 
     // Inbounds
     inbounds:      ()           => apiFetch("GET",  "/api/inbounds/"),

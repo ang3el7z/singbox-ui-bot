@@ -7,6 +7,8 @@ This placeholder is replaced at subscription time with the real proxy outbound
 built from client credentials + inbound settings.
 
 Endpoints:
+  GET    /api/client-templates/presets    list built-in preset templates (not seeded)
+  POST   /api/client-templates/presets/{name}/install  add a preset to the DB
   GET    /api/client-templates/           list all templates
   POST   /api/client-templates/           create new template
   GET    /api/client-templates/{id}       get single template
@@ -84,6 +86,40 @@ def _fmt(t: ClientTemplate) -> dict:
 
 
 # ─── Endpoints ────────────────────────────────────────────────────────────────
+
+@router.get("/presets")
+async def list_presets(auth: dict = Depends(require_any_auth)):
+    """Return built-in preset templates that can be installed into the DB."""
+    from api.services.template_seeds import PRESET_TEMPLATES
+    return [{"name": t["name"], "label": t["label"]} for t in PRESET_TEMPLATES]
+
+
+@router.post("/presets/{name}/install", status_code=201)
+async def install_preset(
+    name: str,
+    db: AsyncSession = Depends(get_db),
+    auth: dict = Depends(require_any_auth),
+):
+    """Add a preset template to the database (one-click install)."""
+    from api.services.template_seeds import PRESET_TEMPLATES
+    preset = next((t for t in PRESET_TEMPLATES if t["name"] == name), None)
+    if not preset:
+        raise HTTPException(status_code=404, detail=f"Preset '{name}' not found")
+    existing = await db.execute(select(ClientTemplate).where(ClientTemplate.name == name))
+    if existing.scalar_one_or_none():
+        raise HTTPException(status_code=400, detail=f"Template '{name}' already installed")
+    t = ClientTemplate(
+        name=preset["name"],
+        label=preset["label"],
+        is_default=False,
+        config_json=json.dumps(preset["config"], ensure_ascii=False),
+    )
+    db.add(t)
+    await db.commit()
+    await db.refresh(t)
+    await audit(auth["actor"], "install_preset_template", f"name={name}")
+    return _fmt(t)
+
 
 @router.get("/default")
 async def get_default_template(

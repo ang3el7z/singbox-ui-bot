@@ -298,12 +298,36 @@ def kb_federation_menu(nodes: list = None) -> InlineKeyboardMarkup:
                 InlineKeyboardButton(text="🗑", callback_data=f"fed_delete_{n['id']}"),
             )
     builder.row(
-        InlineKeyboardButton(text="➕ Add node",      callback_data="federation_add"),
-        InlineKeyboardButton(text="📡 Ping all",      callback_data="federation_ping_all"),
+        InlineKeyboardButton(text="➕ Add node",        callback_data="federation_add"),
+        InlineKeyboardButton(text="📡 Ping all",        callback_data="federation_ping_all"),
     )
     builder.row(
-        InlineKeyboardButton(text="🗺 Topology",      callback_data="federation_topology"),
-        InlineKeyboardButton(text="⬅️ Back",          callback_data="main_menu"),
+        InlineKeyboardButton(text="🌉 Create Bridge",   callback_data="federation_bridge"),
+        InlineKeyboardButton(text="🗺 Topology",        callback_data="federation_topology"),
+    )
+    builder.row(
+        InlineKeyboardButton(text="⬅️ Back",            callback_data="main_menu"),
+    )
+    return builder.as_markup()
+
+
+def kb_bridge_node_select(nodes: list, selected_ids: list) -> InlineKeyboardMarkup:
+    """Keyboard for selecting nodes in bridge chain order."""
+    builder = InlineKeyboardBuilder()
+    for n in nodes:
+        if not n.get("is_active"):
+            continue
+        nid = n["id"]
+        idx = selected_ids.index(nid) + 1 if nid in selected_ids else None
+        mark = f"[{idx}]" if idx else "[ ]"
+        builder.row(InlineKeyboardButton(
+            text=f"{mark} {n['name']} ({n['role']})",
+            callback_data=f"bridge_pick_{nid}",
+        ))
+    done_label = "✅ Create bridge" if selected_ids else "ℹ️ Select nodes first"
+    builder.row(
+        InlineKeyboardButton(text=done_label, callback_data="bridge_confirm"),
+        InlineKeyboardButton(text="⬅️ Cancel", callback_data="menu_federation"),
     )
     return builder.as_markup()
 

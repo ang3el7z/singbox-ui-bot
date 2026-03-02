@@ -14,41 +14,86 @@ from api.deps import require_any_auth, audit
 router = APIRouter()
 
 PROTOCOL_TEMPLATES = {
+    # VLESS + Reality (recommended — camouflages as real HTTPS traffic)
+    # Sing-box listens directly on the port, no Nginx proxy needed.
     "vless_reality": {
-        "type": "vless", "listen": "0.0.0.0",
+        "type": "vless",
+        "listen": "0.0.0.0",
         "users": [],
-        "tls": {"enabled": True, "server_name": "www.microsoft.com",
-                "reality": {"enabled": True,
-                            "handshake": {"server": "www.microsoft.com", "server_port": 443},
-                            "private_key": "", "short_id": [""]}},
+        "tls": {
+            "enabled": True,
+            "server_name": "www.microsoft.com",
+            "reality": {
+                "enabled": True,
+                "handshake": {"server": "www.microsoft.com", "server_port": 443},
+                "private_key": "",
+                "public_key": "",
+                "short_id": [""],
+            },
+        },
         "multiplex": {"enabled": True, "padding": True},
+        # subscribe_port / subscribe_tls are NOT set here:
+        # client connects directly to listen_port with Reality TLS.
     },
+
+    # VLESS + WebSocket, fronted by Nginx (Nginx does TLS on 443, proxies to this port)
+    # subscribe_port=443: client connects to domain:443 via Nginx, NOT to listen_port directly.
+    # subscribe_tls=True: Nginx terminates TLS, so client outbound needs TLS.
     "vless_ws": {
-        "type": "vless", "listen": "0.0.0.0", "users": [],
+        "type": "vless",
+        "listen": "0.0.0.0",
+        "users": [],
         "transport": {"type": "ws", "path": "/vless"},
+        "subscribe_port": 443,
+        "subscribe_tls": True,
     },
+
+    # VMess + WebSocket, fronted by Nginx (same pattern as vless_ws)
     "vmess_ws": {
-        "type": "vmess", "listen": "0.0.0.0", "users": [],
+        "type": "vmess",
+        "listen": "0.0.0.0",
+        "users": [],
         "transport": {"type": "ws", "path": "/vmess"},
+        "subscribe_port": 443,
+        "subscribe_tls": True,
     },
+
+    # Shadowsocks (direct, no Nginx)
     "shadowsocks": {
-        "type": "shadowsocks", "listen": "0.0.0.0",
-        "method": "aes-256-gcm", "password": "",
-        "users": [], "multiplex": {"enabled": True},
+        "type": "shadowsocks",
+        "listen": "0.0.0.0",
+        "method": "aes-256-gcm",
+        "password": "",
+        "users": [],
+        "multiplex": {"enabled": True},
     },
+
+    # Trojan + WebSocket, fronted by Nginx
     "trojan": {
-        "type": "trojan", "listen": "0.0.0.0", "users": [],
-        "tls": {"enabled": True},
+        "type": "trojan",
+        "listen": "0.0.0.0",
+        "users": [],
         "transport": {"type": "ws", "path": "/trojan"},
+        "subscribe_port": 443,
+        "subscribe_tls": True,
     },
+
+    # Hysteria2 (direct, own TLS — listens on UDP port)
     "hysteria2": {
-        "type": "hysteria2", "listen": "0.0.0.0",
-        "users": [], "tls": {"enabled": True},
-        "up_mbps": 100, "down_mbps": 100,
+        "type": "hysteria2",
+        "listen": "0.0.0.0",
+        "users": [],
+        "tls": {"enabled": True},
+        "up_mbps": 100,
+        "down_mbps": 100,
     },
+
+    # TUIC (direct, own TLS — listens on UDP port)
     "tuic": {
-        "type": "tuic", "listen": "0.0.0.0",
-        "users": [], "tls": {"enabled": True},
+        "type": "tuic",
+        "listen": "0.0.0.0",
+        "users": [],
+        "tls": {"enabled": True},
         "congestion_control": "bbr",
     },
 }

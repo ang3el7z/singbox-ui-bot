@@ -88,7 +88,7 @@ async def fsm_rule_value(msg: Message, state: FSMContext):
     await state.set_state(AddRuleFSM.outbound)
     try:
         data = await routing_api.get_outbounds()
-        outbounds = data.get("outbounds", ["proxy", "direct", "block", "dns"])
+        outbounds = data.get("outbounds", ["direct", "block"])
     except APIError:
         outbounds = ["proxy", "direct", "block", "dns"]
     from bot.keyboards.main import kb_outbound_select
@@ -159,16 +159,16 @@ async def fsm_srs_detour(cq: CallbackQuery, state: FSMContext):
     outbound = data.get("outbound", "proxy")
     url = data.get("value", "")
 
-    # Build tag from URL
-    import hashlib
-    tag = "custom_" + hashlib.md5(url.encode()).hexdigest()[:8]
     try:
-        from bot.api_client import routing_api as rapi
-        await rapi.add_rule_set_full(tag, url, "binary" if url.endswith(".srs") else "source", detour, interval)
+        await routing_api.add_rule(
+            "rule_set", url, outbound,
+            download_detour=detour,
+            update_interval=interval,
+        )
         await cq.message.answer(
-            f"✅ Rule set added:\n"
+            f"✅ SRS rule set added:\n"
             f"URL: <code>{url}</code>\n"
-            f"Outbound: {outbound} | Interval: {interval} | Download: {detour}",
+            f"→ <b>{outbound}</b> | update: {interval} | download via: {detour}",
             parse_mode="HTML",
             reply_markup=kb_back("menu_routing"),
         )

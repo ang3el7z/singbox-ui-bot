@@ -639,6 +639,10 @@ function federationComponent() {
         nodes: [],
         topology: null,
         showAdd: false,
+        showBridge: false,
+        bridgeSelected: [],    // ordered list of node IDs for the bridge chain
+        bridgeResult: null,
+        bridgeLoading: false,
         form: { name: "", url: "", secret: "", role: "node" },
         loading: false,
 
@@ -702,6 +706,39 @@ function federationComponent() {
             } catch (e) {
                 this.$dispatch("toast", { msg: e.message, type: "error" });
             }
+        },
+
+        // Bridge creation
+        openBridge() {
+            this.bridgeSelected = [];
+            this.bridgeResult = null;
+            this.showBridge = true;
+        },
+
+        toggleBridgeNode(id) {
+            const idx = this.bridgeSelected.indexOf(id);
+            if (idx >= 0) this.bridgeSelected.splice(idx, 1);
+            else this.bridgeSelected.push(id);
+        },
+
+        bridgeChain() {
+            const names = this.bridgeSelected.map(id => {
+                const n = this.nodes.find(n => n.id === id);
+                return n ? n.name : id;
+            });
+            return ['(this server)', ...names, 'Internet'].join(' → ');
+        },
+
+        async createBridge() {
+            if (!this.bridgeSelected.length) return;
+            this.bridgeLoading = true;
+            try {
+                const r = await api.createBridge(this.bridgeSelected);
+                this.bridgeResult = r;
+                this.$dispatch("toast", { msg: "Bridge created!", type: "success" });
+            } catch (e) {
+                this.$dispatch("toast", { msg: e.message, type: "error" });
+            } finally { this.bridgeLoading = false; }
         },
     };
 }
@@ -1076,19 +1113,38 @@ document.addEventListener("alpine:init", () => {
 function templatesComponent() {
     return {
         templates: [],
+        presets: [],
         selected: null,
         showCreate: false,
         showEdit: false,
+        showPresets: false,
         form: { name: "", label: "", config_json: "" },
         editForm: { label: "", config_json: "" },
         loading: false,
 
-        async init() { await this.load(); },
+        async init() {
+            await this.load();
+            try { this.presets = await api.listPresets(); } catch (e) {}
+        },
 
         async load() {
             this.loading = true;
             try { this.templates = await api.listTemplates(); }
             finally { this.loading = false; }
+        },
+
+        isInstalled(presetName) {
+            return this.templates.some(t => t.name === presetName);
+        },
+
+        async installPreset(preset) {
+            try {
+                await api.installPreset(preset.name);
+                await this.load();
+                this.$dispatch("toast", { msg: `Preset '${preset.label}' installed`, type: "success" });
+            } catch (e) {
+                this.$dispatch("toast", { msg: e.message, type: "error" });
+            }
         },
 
         async select(t) {

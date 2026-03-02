@@ -1,19 +1,43 @@
 """
 Bot Federation Service.
-Each bot exposes a small FastAPI over /federation/ for inter-bot communication.
+
+Each singbox-ui-bot exposes /federation/* endpoints for inter-server communication.
 All requests are signed with HMAC-SHA256 using FEDERATION_SECRET.
 
-Bridge mode: Bot A → (outbound) → Bot B → (outbound) → Bot C → Internet
-Node mode:   Bot B exposes its inbounds as outbounds for Bot A's users.
+--- How bridging works ---
+
+A bridge routes traffic from Server A through one or more intermediate servers to the Internet.
+
+Single-hop (direct exit):
+  Server A  ──(outbound: exit_B)──▶  Server B  ──▶  Internet
+
+Multi-hop (bridge chain):
+  Server A  ──(outbound: hop_B)──▶  Server B  ──(outbound: hop_C)──▶  Server C  ──▶  Internet
+
+Setup flow for A→B:
+  1. A calls B's POST /federation/provision_client
+     B creates a new sing-box client (UUID + credentials) on its first active inbound
+     B returns: {type, host, port, uuid, password, tls settings}
+  2. A builds a proper outbound from those credentials
+  3. A adds the outbound locally as `exit_B`
+  4. A can now route traffic rules to `exit_B`
+
+Setup flow for A→B→C:
+  1. A→C: provision_client → A gets creds for C
+  2. A→B: provision_client → A gets creds for B (A's local outbound to B = `hop_B`)
+  3. A→B: add_outbound     → B gets an outbound to C using C's credentials (`hop_C` on B)
+  4. A can now route to `hop_B` and traffic flows A→B→C→Internet
 """
 import hashlib
 import hmac
 import json
+import secrets
 import time
+import uuid as uuid_lib
 from typing import Any, Dict, List, Optional
 
 import httpx
-from fastapi import APIRouter, HTTPException, Request, Header
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
 from api.config import settings
@@ -66,11 +90,6 @@ class NodeInfoResponse(BaseModel):
     protocols: List[str]
 
 
-class InboundShareRequest(BaseModel):
-    payload: dict
-    signature: str
-
-
 @fed_router.get("/info")
 async def fed_info():
     """Public info about this node (no auth required)."""
@@ -94,7 +113,7 @@ async def fed_ping(request: Request):
 
 @fed_router.post("/inbounds")
 async def fed_get_inbounds(request: Request):
-    """Return inbound configs for bridging (authenticated)."""
+    """Return list of available inbounds (authenticated)."""
     data = await request.json()
     try:
         verify_signed_request(data, settings.federation_secret)
@@ -116,9 +135,102 @@ async def fed_get_inbounds(request: Request):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@fed_router.post("/provision_client")
+async def fed_provision_client(request: Request):
+    """
+    Create a dedicated bridge client on this node and return its credentials.
+
+    Caller (another singbox-ui-bot) will use the returned data to build
+    an outbound that routes traffic through this node.
+
+    Returns full connection details: type, host, port, uuid/password, TLS settings.
+    """
+    data = await request.json()
+    try:
+        payload = verify_signed_request(data, settings.federation_secret)
+    except ValueError as e:
+        raise HTTPException(status_code=403, detail=str(e))
+
+    client_name = payload.get("client_name", "bridge_client")
+    inbound_tag  = payload.get("inbound_tag")   # optional: pick specific inbound
+
+    # Pick inbound: explicit tag or first active one
+    inbounds = singbox.get_inbounds()
+    active = [ib for ib in inbounds if ib.get("enable", True)]
+    if not active:
+        raise HTTPException(status_code=503, detail="No active inbounds on this node")
+
+    if inbound_tag:
+        ib = next((i for i in active if i.get("tag") == inbound_tag), None)
+        if not ib:
+            raise HTTPException(status_code=404, detail=f"Inbound '{inbound_tag}' not found")
+    else:
+        ib = active[0]
+
+    proto = ib.get("type", "vless")
+    domain = get_runtime("domain") or ""
+    port = ib.get("listen_port", 443)
+    tls = ib.get("tls", {})
+
+    # Generate credentials
+    new_uuid = str(uuid_lib.uuid4())
+    new_password = secrets.token_hex(16)
+
+    # Add user to inbound
+    if proto in ("vless", "vmess", "tuic"):
+        user = {"name": client_name, "uuid": new_uuid}
+    elif proto in ("trojan", "hysteria2"):
+        user = {"name": client_name, "password": new_password}
+    elif proto == "shadowsocks":
+        # Shadowsocks: one user = one inbound; return existing method/password
+        user = None  # no per-user management for SS
+        new_password = ib.get("password", new_password)
+    else:
+        user = {"name": client_name, "uuid": new_uuid}
+
+    if user is not None:
+        singbox.add_user_to_inbound(ib["tag"], user)
+        await singbox.reload()
+
+    # Build response with all connection info needed to construct an outbound
+    result: dict = {
+        "inbound_tag": ib["tag"],
+        "type": proto,
+        "host": domain,
+        "port": port,
+        "client_name": client_name,
+    }
+
+    if proto in ("vless", "vmess", "tuic"):
+        result["uuid"] = new_uuid
+    if proto in ("trojan", "hysteria2", "shadowsocks"):
+        result["password"] = new_password
+    if proto == "shadowsocks":
+        result["method"] = ib.get("method", "aes-256-gcm")
+    if tls.get("enabled"):
+        tls_out: dict = {"enabled": True, "server_name": tls.get("server_name", domain)}
+        reality = tls.get("reality", {})
+        if reality.get("enabled"):
+            tls_out["reality"] = {
+                "enabled": True,
+                "public_key": reality.get("public_key", ""),
+                "short_id": (reality.get("short_id") or [""])[0],
+            }
+            tls_out["utls"] = {"enabled": True, "fingerprint": "chrome"}
+            # VLESS Reality requires flow
+            if proto == "vless":
+                result["flow"] = "xtls-rprx-vision"
+        result["tls"] = tls_out
+    transport = ib.get("transport", {})
+    if transport.get("type") == "ws":
+        result["transport"] = {"type": "ws", "path": transport.get("path", "/")}
+
+    return result
+
+
 @fed_router.post("/add_outbound")
 async def fed_add_outbound(request: Request):
-    """Add an outbound to this node (for bridge setup)."""
+    """Add an outbound to this node (for multi-hop bridge setup)."""
     data = await request.json()
     try:
         payload = verify_signed_request(data, settings.federation_secret)
@@ -133,6 +245,38 @@ async def fed_add_outbound(request: Request):
         return {"success": True}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ─── Outbound builder ─────────────────────────────────────────────────────────
+
+def build_outbound_from_provision(provision: dict, tag: str) -> dict:
+    """
+    Build a complete sing-box outbound from a /provision_client response.
+    All credentials and TLS settings are populated.
+    """
+    proto = provision["type"]
+    ob: dict = {
+        "tag":         tag,
+        "type":        proto,
+        "server":      provision["host"],
+        "server_port": provision["port"],
+    }
+    if proto in ("vless", "vmess", "tuic"):
+        ob["uuid"] = provision["uuid"]
+    if proto in ("trojan", "hysteria2"):
+        ob["password"] = provision["password"]
+    if proto == "shadowsocks":
+        ob["method"]   = provision.get("method", "aes-256-gcm")
+        ob["password"] = provision["password"]
+    if provision.get("flow"):
+        ob["flow"] = provision["flow"]
+    if provision.get("tls"):
+        ob["tls"] = provision["tls"]
+    if provision.get("transport"):
+        ob["transport"] = provision["transport"]
+    if proto == "tuic":
+        ob["congestion_control"] = "bbr"
+    return ob
 
 
 # ─── Federation client (calls remote nodes) ───────────────────────────────────
@@ -153,7 +297,9 @@ class FederationClient:
         client = await self._client()
         payload = self._signed({"from": get_runtime("domain")}, secret)
         try:
-            resp = await client.post(f"{node_url.rstrip('/')}/federation/ping", json=payload, timeout=10)
+            resp = await client.post(
+                f"{node_url.rstrip('/')}/federation/ping", json=payload, timeout=10
+            )
             return resp.status_code == 200
         except Exception:
             return False
@@ -161,15 +307,49 @@ class FederationClient:
     async def get_remote_inbounds(self, node_url: str, secret: str) -> List[Dict]:
         client = await self._client()
         payload = self._signed({"from": get_runtime("domain")}, secret)
-        resp = await client.post(f"{node_url.rstrip('/')}/federation/inbounds", json=payload)
+        resp = await client.post(
+            f"{node_url.rstrip('/')}/federation/inbounds", json=payload
+        )
         if resp.status_code != 200:
             raise ValueError(f"Remote node error: {resp.text}")
         return resp.json().get("inbounds", [])
 
-    async def add_outbound_to_node(self, node_url: str, secret: str, outbound: dict) -> bool:
+    async def provision_client(
+        self,
+        node_url: str,
+        secret: str,
+        client_name: str,
+        inbound_tag: Optional[str] = None,
+    ) -> dict:
+        """
+        Ask the remote node to create a bridge client and return its credentials.
+        Returns a dict that can be passed to build_outbound_from_provision().
+        """
         client = await self._client()
-        payload = self._signed({"from": get_runtime("domain"), "outbound": outbound}, secret)
-        resp = await client.post(f"{node_url.rstrip('/')}/federation/add_outbound", json=payload)
+        p: dict = {
+            "from": get_runtime("domain"),
+            "client_name": client_name,
+        }
+        if inbound_tag:
+            p["inbound_tag"] = inbound_tag
+        payload = self._signed(p, secret)
+        resp = await client.post(
+            f"{node_url.rstrip('/')}/federation/provision_client", json=payload, timeout=30
+        )
+        if resp.status_code != 200:
+            raise ValueError(f"Provision failed on {node_url}: {resp.text}")
+        return resp.json()
+
+    async def add_outbound_to_node(
+        self, node_url: str, secret: str, outbound: dict
+    ) -> bool:
+        client = await self._client()
+        payload = self._signed(
+            {"from": get_runtime("domain"), "outbound": outbound}, secret
+        )
+        resp = await client.post(
+            f"{node_url.rstrip('/')}/federation/add_outbound", json=payload
+        )
         return resp.status_code == 200
 
     async def get_all_nodes(self) -> List[Dict]:
@@ -204,69 +384,63 @@ class FederationClient:
             results.append({**node, "online": online})
         return results
 
-    async def create_bridge(self, node_chain: List[Dict]) -> bool:
+    async def create_bridge(self, node_chain: List[Dict]) -> dict:
         """
-        Set up a bridge chain: node_chain[0] → node_chain[1] → ... → Internet
-        Each node gets an outbound pointing to the next node in the chain.
+        Set up a bridge chain: (this server) → node_chain[0] → ... → node_chain[-1] → Internet
+
+        For each hop we call /provision_client on the target node to get real credentials,
+        then add the outbound either locally or to the previous hop's node.
+
+        Returns a summary of created outbounds.
         """
         if len(node_chain) < 1:
             raise ValueError("Bridge requires at least 1 node")
 
+        domain = get_runtime("domain") or "local"
+        created = []
+
         if len(node_chain) == 1:
-            # Single node: add local outbound pointing directly to that node
-            next_inbounds = await self.get_remote_inbounds(node_chain[0]["url"], node_chain[0]["secret"])
-            if not next_inbounds:
-                raise ValueError(f"Node {node_chain[0]['name']} has no available inbounds")
-            outbound = _build_outbound_for_inbound(next_inbounds[0], tag=f"exit_{node_chain[0]['name']}")
+            # Single-hop: local outbound → exit node
+            node = node_chain[0]
+            client_name = f"bridge_from_{domain[:20]}"
+            provision = await self.provision_client(node["url"], node["secret"], client_name)
+            outbound = build_outbound_from_provision(provision, tag=f"exit_{node['name']}")
             singbox.save_outbound(outbound)
             await singbox.reload()
-            return True
+            created.append({"server": "local", "outbound_tag": outbound["tag"]})
+            return {"created": created, "chain": f"(this server) → {node['name']} → Internet"}
 
-        # Multi-hop: The final node (exit) doesn't need a new outbound
-        # Nodes from 0 to N-2 each need an outbound to the next
-        for i in range(len(node_chain) - 1):
-            current_node = node_chain[i]
-            next_node = node_chain[i + 1]
+        # Multi-hop: A → B → C → Internet
+        # Step 1: For each consecutive pair (i, i+1), provision a client on node[i+1]
+        #         and add the outbound to node[i] (or locally for i==0)
+        for i in range(len(node_chain)):
+            current = node_chain[i]
+            if i < len(node_chain) - 1:
+                # Need an outbound on node[i] pointing to node[i+1]
+                next_node = node_chain[i + 1]
+                client_name = f"bridge_from_{current['name'][:15]}"
+                provision = await self.provision_client(
+                    next_node["url"], next_node["secret"], client_name
+                )
+                outbound_tag = f"hop_{next_node['name']}"
+                outbound = build_outbound_from_provision(provision, tag=outbound_tag)
 
-            # Get next node's inbounds to pick one as the outbound target
-            next_inbounds = await self.get_remote_inbounds(next_node["url"], next_node["secret"])
-            if not next_inbounds:
-                raise ValueError(f"Node {next_node['name']} has no available inbounds")
+                if i == 0:
+                    # Add outbound to THIS server (first hop is always local)
+                    singbox.save_outbound(outbound)
+                    await singbox.reload()
+                    created.append({"server": "local", "outbound_tag": outbound_tag})
+                else:
+                    # Add outbound to node[i] (intermediate bridge node)
+                    ok = await self.add_outbound_to_node(
+                        current["url"], current["secret"], outbound
+                    )
+                    if not ok:
+                        raise ValueError(f"Failed to add outbound to node {current['name']}")
+                    created.append({"server": current["name"], "outbound_tag": outbound_tag})
 
-            # Use first available inbound of next node
-            target = next_inbounds[0]
-            outbound = _build_outbound_for_inbound(target, tag=f"bridge_to_{next_node['name']}")
-
-            if i == 0:
-                # Add outbound to local Sing-Box
-                singbox.save_outbound(outbound)
-                await singbox.reload()
-            else:
-                # Add outbound to remote current_node
-                await self.add_outbound_to_node(current_node["url"], current_node["secret"], outbound)
-
-        return True
-
-
-def _build_outbound_for_inbound(inbound: dict, tag: str) -> dict:
-    """Build a minimal outbound config that connects to a remote inbound."""
-    proto = inbound.get("type", "vless")
-    host = inbound.get("host", "")
-    port = inbound.get("port", 443)
-
-    base = {"tag": tag, "type": proto, "server": host, "server_port": port}
-
-    if proto == "vless":
-        base["uuid"] = ""  # To be filled by admin
-        base["tls"] = {"enabled": True, "server_name": host}
-    elif proto == "shadowsocks":
-        base["method"] = "aes-256-gcm"
-        base["password"] = ""
-    elif proto == "trojan":
-        base["password"] = ""
-        base["tls"] = {"enabled": True, "server_name": host}
-
-    return base
+        chain = " → ".join(["(this server)"] + [n["name"] for n in node_chain] + ["Internet"])
+        return {"created": created, "chain": chain}
 
 
 fed_client = FederationClient()

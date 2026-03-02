@@ -32,7 +32,7 @@ WINSW_EXE   = CACHE_DIR / "winsw3.exe"
 
 # Official download URLs — keep in sync with Dockerfile.singbox SINGBOX_VERSION.
 # We pin the same version for both server (Linux) and Windows client.
-SINGBOX_VERSION = "1.10.3"
+SINGBOX_VERSION = "1.11.6"
 SINGBOX_ZIP_URL = (
     f"https://github.com/SagerNet/sing-box/releases/download/"
     f"v{SINGBOX_VERSION}/sing-box-{SINGBOX_VERSION}-windows-amd64.zip"

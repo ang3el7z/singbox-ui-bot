@@ -13,13 +13,16 @@ router = APIRouter()
 # For geo-based filtering use rule_set pointing to an .srs file.
 RuleKey = Literal["domain", "domain_suffix", "domain_keyword", "ip_cidr", "rule_set"]
 
-_BUILTIN_OUTBOUNDS = ["proxy", "direct", "block", "dns"]
+_BUILTIN_OUTBOUNDS = ["direct", "block"]
 
 
 class RuleCreate(BaseModel):
     rule_key: RuleKey
-    value: str   # comma-separated for domain/domain_suffix/domain_keyword/ip_cidr
-    outbound: str = "proxy"  # any valid outbound tag, including federation nodes
+    value: str        # comma-separated for domain/domain_suffix/domain_keyword/ip_cidr
+    outbound: str = "proxy"   # any valid outbound tag, including federation nodes
+    # rule_set-specific options (ignored for other rule types)
+    download_detour: str = "direct"    # "direct" or "proxy"
+    update_interval: str = "1d"        # "1h","6h","12h","1d","7d","30d"
 
 
 class RuleSetCreate(BaseModel):
@@ -58,7 +61,11 @@ async def list_rules(rule_key: str, auth: dict = Depends(require_any_auth)):
 @router.post("/rules")
 async def add_rule(body: RuleCreate, auth: dict = Depends(require_any_auth)):
     try:
-        singbox.add_route_rule(body.rule_key, body.value, body.outbound)
+        singbox.add_route_rule(
+            body.rule_key, body.value, body.outbound,
+            download_detour=body.download_detour,
+            update_interval=body.update_interval,
+        )
         await singbox.reload()
     except SingBoxError as e:
         raise HTTPException(status_code=500, detail=str(e))

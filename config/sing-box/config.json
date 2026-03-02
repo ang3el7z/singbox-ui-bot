@@ -8,7 +8,7 @@
     "servers": [
       {
         "tag": "dns_adguard",
-        "address": "udp://127.0.0.1",
+        "address": "udp://127.0.0.1:53",
         "strategy": "prefer_ipv4",
         "detour": "direct"
       },
@@ -21,7 +21,8 @@
     "rules": [
       {
         "outbound": "any",
-        "server": "dns_adguard"
+        "server": "dns_adguard",
+        "disable_cache": false
       }
     ],
     "final": "dns_adguard",
@@ -30,29 +31,22 @@
   "inbounds": [],
   "outbounds": [
     {
-      "tag": "proxy",
-      "type": "selector",
-      "outbounds": ["direct", "block"],
-      "default": "direct"
-    },
-    {
       "tag": "direct",
       "type": "direct"
     },
     {
       "tag": "block",
       "type": "block"
-    },
-    {
-      "tag": "dns-out",
-      "type": "dns"
     }
   ],
   "route": {
     "rules": [
       {
+        "action": "sniff"
+      },
+      {
         "protocol": "dns",
-        "outbound": "dns-out"
+        "action": "hijack-dns"
       },
       {
         "ip_is_private": true,
@@ -60,19 +54,10 @@
       }
     ],
     "rule_set": [],
-    "final": "proxy",
+    "final": "direct",
     "auto_detect_interface": true
   },
   "experimental": {
-    "v2ray_api": {
-      "listen": "127.0.0.1:8811",
-      "stats": {
-        "enabled": true,
-        "inbounds": [],
-        "outbounds": ["proxy", "direct", "block"],
-        "users": []
-      }
-    },
     "cache_file": {
       "enabled": true,
       "path": "/etc/sing-box/cache.db"
