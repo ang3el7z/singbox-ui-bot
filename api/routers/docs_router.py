@@ -10,14 +10,15 @@ from fastapi import Depends
 
 router = APIRouter()
 
-DOCS_DIR = Path(__file__).parent.parent.parent / "docs"
+DOCS_DIR = Path(__file__).parent.parent / "docs"
 
 DOC_META = {
-    "overview":   {"title": "📖 Overview / Обзор",          "file": "OVERVIEW.md"},
-    "install":    {"title": "🚀 Install / Установка",        "file": "INSTALL.md"},
-    "api":        {"title": "🔌 API Reference",              "file": "API.md"},
-    "federation": {"title": "🔗 Federation / Федерация",     "file": "FEDERATION.md"},
-    "webui":      {"title": "🌐 Web UI",                     "file": "WEB_UI.md"},
+    "overview":     {"title": "📖 Overview / Обзор",          "file": "OVERVIEW.md"},
+    "install":      {"title": "🚀 Install / Установка",        "file": "INSTALL.md"},
+    "api":          {"title": "🔌 API Reference",              "file": "API.md"},
+    "federation":   {"title": "🔗 Federation / Федерация",     "file": "FEDERATION.md"},
+    "webui":        {"title": "🌐 Web UI",                     "file": "WEB_UI.md"},
+    "maintenance":  {"title": "🔧 Maintenance / Обслуживание", "file": "MAINTENANCE.md"},
 }
 
 

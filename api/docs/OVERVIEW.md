@@ -196,7 +196,21 @@
 #### 👑 Admin
 - Управление Telegram-администраторами
 - Журнал аудита (кто что сделал и когда)
-- Создание резервной копии (config.json + app.db → ZIP)
+- Смена пароля Web UI
+
+#### ⚙️ Settings
+- Смена часового пояса (выбор из списка, без ввода вручную)
+- Смена языка бота (ru / en)
+- Статус автоперезапуска Docker и автообновления SSL
+
+#### 🔧 Maintenance (Обслуживание)
+- **Backup:** скачать/отправить ZIP (config.json + app.db), автобэкап по расписанию
+- **Logs:** скачать, очистить отдельный или все логи Nginx, авто-очистка по расписанию
+- **IP Ban:** ручная блокировка IP, автоанализ логов на подозрительные IP, массовый бан
+
+#### 📚 Docs (Документация)
+- Полная документация доступна прямо внутри бота и Web UI
+- Документы: Обзор, Установка, API Reference, Федерация, Web UI, Обслуживание
 
 ---
 
@@ -374,4 +388,18 @@ Both interfaces share **one backend (FastAPI)** and have **exactly the same func
 #### 👑 Admin
 - Manage Telegram administrators
 - Audit log (who did what and when)
-- Create backup (config.json + app.db → ZIP)
+- Change Web UI password
+
+#### ⚙️ Settings
+- Change timezone (select from list, no manual typing)
+- Change bot language (ru / en)
+- View Docker auto-restart and SSL auto-renewal status
+
+#### 🔧 Maintenance
+- **Backup:** download/send ZIP (config.json + app.db), scheduled auto-backup
+- **Logs:** download, clear individual or all Nginx logs, scheduled auto-cleanup
+- **IP Ban:** manual IP blocking, auto-analyze logs for suspicious IPs, bulk ban
+
+#### 📚 Docs
+- Full documentation accessible directly inside the bot and Web UI
+- Documents: Overview, Install, API Reference, Federation, Web UI, Maintenance

@@ -304,6 +304,45 @@ Master: vpn.example.com
 
 ---
 
+### Раздел: ⚙️ Settings
+
+**Timezone:**
+- Выпадающий список с часовыми поясами по группам (Европа, Азия, Америка и т.д.)
+- Изменение вступает в силу немедленно (без перезапуска контейнера на Linux)
+
+**Bot Language:**
+- Две кнопки: **Russian** / **English**
+
+**System Status:**
+- `restart: unless-stopped` — Docker автоматически поднимает контейнер при сбое
+- Certbot cron / renewal hook — статус авто-продления SSL
+
+---
+
+### Раздел: 🔧 Maintenance
+
+Три вкладки:
+
+#### 💾 Backup
+- **Download ZIP** — скачать бэкап (config.json + app.db) прямо в браузер
+- **Send to admins** — отослать ZIP всем Telegram-администраторам немедленно
+- **Auto-backup interval** — выпадающий список: Off / 6h / 12h / 24h / 48h / 7 days
+
+#### 📋 Logs
+- Список всех файлов `nginx/logs/*.log` с размером
+- Для каждого: кнопка `⬇️` скачать, кнопка `🗑` очистить
+- **Clear all** — очистить все логи сразу
+- **Auto-cleanup interval** — выпадающий список: Off / 24h / 3 days / 7 days / 30 days
+
+#### 🚫 IP Ban
+- Форма для ручного добавления IP + причины
+- **Scan logs** — анализ `access.log` на подозрительные IP (высокая частота + сканирующие паттерны)
+- **Ban all N IPs** — забанить всех найденных разом
+- Список текущих банов с типом (`✏️` ручной / `🤖` авто) и кнопкой Unban
+- **Clear auto-bans** — удалить только автоматически найденные записи
+
+---
+
 ### Сравнение: Telegram-бот vs Web UI
 
 | Функция | Telegram-бот | Web UI |
@@ -409,7 +448,10 @@ Change password: ☰ menu → top-right profile → **Change Password**
 | 🛡 AdGuard | Stats cards, toggle protection, manage DNS, filter rules, sync clients |
 | 🌐 Nginx | Override status, hidden paths, configure, SSL, upload/remove custom site, logs |
 | 🔗 Federation | Nodes table, add node, ping all, create bridge, view topology |
-| 👑 Admin | Admins list, audit log, download backup ZIP |
+| 👑 Admin | Admins list, audit log, change Web UI password |
+| ⚙️ Settings | Timezone dropdown, bot language buttons, system status |
+| 🔧 Maintenance | Backup (download/send/schedule), log management, IP ban with log analysis |
+| 📚 Docs | Built-in documentation browser with markdown rendering |
 
 ---
 
