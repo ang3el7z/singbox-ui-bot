@@ -467,10 +467,11 @@ curl -fsSL https://raw.githubusercontent.com/ang3el7z/singbox-ui-bot/main/script
 
 | Шаг | Поле | Где взять |
 |-----|------|-----------|
-| 1/2 | **Bot Token** | @BotFather → /newbot |
-| 2/2 | **SSH порт** | по умолчанию 22 |
+| 1/1 | **Bot Token** | @BotFather → /newbot |
 
 Всё остальное (домен, язык, timezone, ID администратора) — в мастере первого `/start`.
+
+> SSH порт — по умолчанию 22 открыт в firewall. Если у вас нестандартный порт, добавьте вручную: `ufw allow <порт>/tcp`.
 
 > Email для certbot **не нужен** — генерируется автоматически как `admin@{domain}` (как в vpnbot).
 
@@ -711,10 +712,11 @@ The installer asks **3 questions** — everything else is configured in the bot.
 
 | Step | Field | Where to get it |
 |------|-------|----------------|
-| 1/2 | **Bot Token** | @BotFather → /newbot |
-| 2/2 | **SSH port** | default is 22 |
+| 1/1 | **Bot Token** | @BotFather → /newbot |
 
 Everything else (domain, language, timezone, admin ID) is set in the first `/start` wizard.
+
+> SSH port — 22 is open in the firewall by default. If you use a non-standard port, add it manually: `ufw allow <port>/tcp`.
 
 > Email for certbot is **not required** — auto-generated as `admin@{domain}` (same approach as vpnbot).
 

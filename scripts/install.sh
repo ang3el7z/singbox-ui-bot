@@ -83,7 +83,7 @@ setup_firewall() {
     ufw --force reset
     ufw default deny incoming
     ufw default allow outgoing
-    ufw allow "$SSH_PORT/tcp"
+    ufw allow 22/tcp   # SSH — change manually if you use a non-standard port
     ufw allow 80/tcp
     ufw allow 443/tcp
     ufw allow 53/tcp
@@ -239,14 +239,9 @@ collect_input() {
     echo ""
 
     # ── Step 1: Telegram token ────────────────────────────────────────────────
-    prompt "Step 1/2 — Telegram Bot Token (from @BotFather):"
+    prompt "Step 1/1 — Telegram Bot Token (from @BotFather):"
     read -r BOT_TOKEN
     [[ -n "$BOT_TOKEN" ]] || error "BOT_TOKEN cannot be empty"
-
-    # ── Step 2: SSH port ──────────────────────────────────────────────────────
-    prompt "Step 2/2 — SSH port (press Enter for default 22):"
-    read -r SSH_PORT
-    SSH_PORT="${SSH_PORT:-22}"
 
     echo ""
     echo -e "${GREEN}[OK]${NC} Ready to install. Domain will be set via bot."
