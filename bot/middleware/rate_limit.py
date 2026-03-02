@@ -32,7 +32,9 @@ class RateLimitMiddleware(BaseMiddleware):
 
         if len(self._requests[user_id]) >= self.rate:
             if isinstance(event, CallbackQuery):
-                await event.answer("⏳ Слишком много запросов, подождите.", show_alert=True)
+                await event.answer("⏳ Too many requests, please wait.", show_alert=True)
+            elif isinstance(event, Message):
+                await event.answer("⏳ Too many requests. Please wait a moment.")
             return
 
         self._requests[user_id].append(now)

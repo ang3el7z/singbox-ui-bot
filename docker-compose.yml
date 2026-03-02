@@ -27,6 +27,7 @@ services:
       - ./nginx/htpasswd:/etc/nginx/htpasswd  # basic auth for 401 fallback
       - ./nginx:/app/nginx
       - ./subs:/app/subs
+      - ./nginx/logs:/app/nginx/logs:ro       # Read nginx access logs
       - app_data:/app/data                    # SQLite database
       - /var/run/docker.sock:/var/run/docker.sock  # for docker exec singbox reload
     environment:
@@ -83,6 +84,7 @@ services:
       - ./nginx/htpasswd:/etc/nginx/htpasswd:ro
       - ./nginx/certs:/etc/letsencrypt:ro
       - ./web:/var/www/web:ro                 # Serve web UI
+      - ./nginx/logs:/var/log/nginx           # Shared log dir (readable by app)
     networks:
       - singbox_net
     depends_on:

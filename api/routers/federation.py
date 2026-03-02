@@ -106,6 +106,7 @@ async def ping_all(db: AsyncSession = Depends(get_db), auth: dict = Depends(requ
 async def create_bridge(body: BridgeCreate, db: AsyncSession = Depends(get_db), auth: dict = Depends(require_any_auth)):
     if len(body.node_ids) < 1:
         raise HTTPException(status_code=400, detail="Need at least 1 remote node")
+    # fed_client.create_bridge requires at least 2 chained nodes; 1 node = simple exit
     nodes = []
     for nid in body.node_ids:
         node = await db.get(FederationNode, nid)

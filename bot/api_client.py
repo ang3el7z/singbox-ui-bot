@@ -3,12 +3,15 @@ HTTP client from Telegram bot → FastAPI backend.
 Authenticates with X-Internal-Token (shared secret, no JWT needed).
 All bot handlers use this instead of calling services directly.
 """
+import os
 import httpx
 from typing import Any, Optional
 
 from api.config import settings
 
-_BASE = "http://localhost:8080"
+# When bot and API run in the same process (same container), localhost is correct.
+# Override with API_BASE_URL env var if you ever split them into separate containers.
+_BASE = os.getenv("API_BASE_URL", "http://localhost:8080")
 _HEADERS = {"X-Internal-Token": settings.internal_token}
 
 
@@ -114,7 +117,7 @@ class RoutingAPI:
 class AdguardAPI:
     async def status(self):                   return await get("/api/adguard/status")
     async def stats(self):                    return await get("/api/adguard/stats")
-    async def toggle(self, enabled):          return await post("/api/adguard/protection", params={"enabled": enabled})
+    async def toggle(self, enabled):          return await post(f"/api/adguard/protection?enabled={str(enabled).lower()}")
     async def dns(self):                      return await get("/api/adguard/dns")
     async def add_upstream(self, u):          return await post("/api/adguard/dns/upstream", json={"upstream": u})
     async def del_upstream(self, u):          return await delete("/api/adguard/dns/upstream", upstream=u)

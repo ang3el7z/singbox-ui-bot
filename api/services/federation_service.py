@@ -127,7 +127,7 @@ async def fed_add_outbound(request: Request):
     if not outbound_data:
         raise HTTPException(status_code=400, detail="Missing outbound data")
     try:
-        await sui.save_outbound(outbound_data)
+        singbox.save_outbound(outbound_data)
         await singbox.reload()
         return {"success": True}
     except Exception as e:
@@ -208,10 +208,20 @@ class FederationClient:
         Set up a bridge chain: node_chain[0] → node_chain[1] → ... → Internet
         Each node gets an outbound pointing to the next node in the chain.
         """
-        if len(node_chain) < 2:
-            raise ValueError("Bridge requires at least 2 nodes")
+        if len(node_chain) < 1:
+            raise ValueError("Bridge requires at least 1 node")
 
-        # The final node (exit) doesn't need a new outbound
+        if len(node_chain) == 1:
+            # Single node: add local outbound pointing directly to that node
+            next_inbounds = await self.get_remote_inbounds(node_chain[0]["url"], node_chain[0]["secret"])
+            if not next_inbounds:
+                raise ValueError(f"Node {node_chain[0]['name']} has no available inbounds")
+            outbound = _build_outbound_for_inbound(next_inbounds[0], tag=f"exit_{node_chain[0]['name']}")
+            singbox.save_outbound(outbound)
+            await singbox.reload()
+            return True
+
+        # Multi-hop: The final node (exit) doesn't need a new outbound
         # Nodes from 0 to N-2 each need an outbound to the next
         for i in range(len(node_chain) - 1):
             current_node = node_chain[i]

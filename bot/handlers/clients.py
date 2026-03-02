@@ -9,7 +9,7 @@ from aiogram.fsm.state import State, StatesGroup
 
 from bot.api_client import clients_api, inbounds_api, APIError
 from bot.keyboards.main import kb_back, kb_clients_list, kb_client_detail
-from bot.utils import make_qr, fmt_bytes, paginate
+from bot.utils import make_qr, format_bytes, paginate
 
 router = Router()
 PAGE_SIZE = 8
@@ -52,8 +52,8 @@ async def cb_client_detail(cq: CallbackQuery):
     try:
         c = await clients_api.get(cid)
         enabled = "✅" if c.get("enable") else "❌"
-        up = fmt_bytes(c.get("upload", 0))
-        down = fmt_bytes(c.get("download", 0))
+        up = format_bytes(c.get("upload", 0))
+        down = format_bytes(c.get("download", 0))
         total = f"{c.get('total_gb', 0)} GB" if c.get('total_gb') else "∞"
         expiry = c.get("expiry_time")
         from datetime import datetime, timezone
@@ -93,13 +93,10 @@ async def cb_client_qr(cq: CallbackQuery):
     try:
         sub_cfg = await clients_api.subscription(cid)
         sub_json = json.dumps(sub_cfg, indent=2)
-        qr_buf = make_qr(sub_json)
-        if qr_buf:
-            await cq.message.answer_photo(
-                BufferedInputFile(qr_buf, filename="qr.png"),
-                caption=f"📱 Scan to import config",
-            )
-        else:
+        try:
+            qr_file = make_qr(sub_json)
+            await cq.message.answer_photo(qr_file, caption="📱 Scan to import config")
+        except Exception:
             await cq.message.answer("❌ Failed to generate QR")
     except APIError as e:
         await cq.message.answer(f"❌ {e.detail}")

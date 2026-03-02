@@ -9,10 +9,11 @@ When user uploads a site:
   GET / → try_files /index.html @auth → serves override/index.html
   /override/* → static assets the page may reference
 """
+import asyncio
 import hashlib
 import os
 import secrets
-import subprocess
+import shutil
 import zipfile
 import io
 from pathlib import Path
@@ -74,18 +75,26 @@ def ensure_htpasswd() -> None:
 
 
 def _regen_htpasswd() -> None:
-    import crypt  # Unix only; falls back to openssl on Linux servers
+    """
+    Generate .htpasswd with random credentials.
+    Uses openssl passwd (available on all Linux servers).
+    The crypt module was removed in Python 3.13, so we avoid it entirely.
+    """
+    import subprocess as sp
     user = "user"
-    password = secrets.token_hex(32)  # random, never shared
+    password = secrets.token_hex(32)  # random, never shared with anyone
     try:
-        hashed = crypt.crypt(password, crypt.mksalt(crypt.METHOD_SHA512))
-    except Exception:
-        # Fallback: use openssl passwd
-        result = subprocess.run(
+        result = sp.run(
             ["openssl", "passwd", "-6", password],
-            capture_output=True, text=True
+            capture_output=True, text=True, timeout=10,
         )
         hashed = result.stdout.strip()
+        if not hashed:
+            raise RuntimeError("openssl passwd returned empty output")
+    except Exception:
+        # Last resort: apr1 MD5 (widely supported, not as strong but fine for camouflage)
+        import base64
+        hashed = "$apr1$" + base64.b64encode(os.urandom(6)).decode()[:8] + "$" + secrets.token_hex(11)
     HTPASSWD_FILE.write_text(f"{user}:{hashed}\n", encoding="utf-8")
     HTPASSWD_FILE.chmod(0o640)
 
@@ -180,7 +189,6 @@ def remove_override() -> None:
 
 
 def _clear_override() -> None:
-    import shutil
     for item in OVERRIDE_DIR.iterdir():
         if item.is_dir():
             shutil.rmtree(item)
@@ -188,60 +196,60 @@ def _clear_override() -> None:
             item.unlink()
 
 
+# ─── Async subprocess helper ──────────────────────────────────────────────────
+
+async def _run(*cmd: str, timeout: int = 30) -> tuple[bool, str]:
+    """Run a command async without blocking the event loop."""
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.STDOUT,
+        )
+        stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=timeout)
+        return proc.returncode == 0, stdout.decode(errors="replace")
+    except asyncio.TimeoutError:
+        return False, "timeout"
+    except Exception as e:
+        return False, str(e)
+
+
 # ─── Nginx process management ─────────────────────────────────────────────────
 
 async def reload_nginx() -> tuple[bool, str]:
-    try:
-        result = subprocess.run(
-            ["docker", "exec", "singbox_nginx", "nginx", "-s", "reload"],
-            capture_output=True, text=True, timeout=10,
-        )
-        if result.returncode == 0:
-            return True, "OK"
-        # Fallback: direct call
-        result2 = subprocess.run(
-            ["nginx", "-s", "reload"],
-            capture_output=True, text=True, timeout=10,
-        )
-        return result2.returncode == 0, result2.stderr or result2.stdout
-    except Exception as e:
-        return False, str(e)
+    ok, out = await _run("docker", "exec", "singbox_nginx", "nginx", "-s", "reload")
+    if ok:
+        return True, "OK"
+    # Fallback: direct nginx call (if running without docker, e.g. in CI)
+    ok2, out2 = await _run("nginx", "-s", "reload", timeout=10)
+    return ok2, out2 or out
 
 
 async def test_nginx_config() -> tuple[bool, str]:
-    try:
-        result = subprocess.run(
-            ["docker", "exec", "singbox_nginx", "nginx", "-t"],
-            capture_output=True, text=True, timeout=10,
-        )
-        return result.returncode == 0, result.stderr or result.stdout
-    except Exception as e:
-        return False, str(e)
+    return await _run("docker", "exec", "singbox_nginx", "nginx", "-t")
 
 
 async def get_access_logs(lines: int = 50) -> str:
     log_path = LOGS_DIR / "access.log"
     if not log_path.exists():
-        return "Файл логов не найден."
+        return "Log file not found."
     try:
-        with open(log_path, "r", encoding="utf-8", errors="replace") as f:
-            all_lines = f.readlines()
-        return "".join(all_lines[-lines:])
+        # Use async file read to not block the event loop
+        import aiofiles
+        async with aiofiles.open(log_path, "r", encoding="utf-8", errors="replace") as f:
+            content = await f.read()
+        all_lines = content.splitlines()
+        return "\n".join(all_lines[-lines:])
     except Exception as e:
         return str(e)
 
 
 async def issue_ssl_cert(domain: str, email: str) -> tuple[bool, str]:
-    try:
-        result = subprocess.run(
-            [
-                "certbot", "certonly", "--nginx",
-                "-d", domain,
-                "--email", email,
-                "--agree-tos", "--non-interactive", "--quiet",
-            ],
-            capture_output=True, text=True, timeout=120,
-        )
-        return result.returncode == 0, result.stdout + result.stderr
-    except Exception as e:
-        return False, str(e)
+    """Issue Let's Encrypt certificate. Runs certbot non-blocking."""
+    return await _run(
+        "certbot", "certonly", "--nginx",
+        "-d", domain,
+        "--email", email,
+        "--agree-tos", "--non-interactive", "--quiet",
+        timeout=180,
+    )

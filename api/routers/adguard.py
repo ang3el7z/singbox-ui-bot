@@ -97,10 +97,7 @@ async def change_password(body: PasswordBody, auth: dict = Depends(require_any_a
 
 
 @router.post("/sync-clients")
-async def sync_clients(
-    db=None,
-    auth: dict = Depends(require_any_auth),
-):
+async def sync_clients(auth: dict = Depends(require_any_auth)):
     from api.database import async_session, Client
     from sqlalchemy import select
     async with async_session() as session:

@@ -6,7 +6,7 @@ from aiogram.filters import Command
 from bot.api_client import server_api, APIError
 from bot.keyboards.main import kb_back
 from bot.texts import t
-from bot.utils import fmt_uptime
+from bot.utils import format_uptime
 
 router = Router()
 

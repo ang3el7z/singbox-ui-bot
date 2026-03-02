@@ -50,8 +50,5 @@ class AdminAuthMiddleware(BaseMiddleware):
             return result.scalar_one_or_none() is not None
 
 
-async def log_action(user_id: int, action: str, details: str = None) -> None:
-    async with async_session() as session:
-        log = AuditLog(actor=f"tg:{user_id}", action=action, details=details)
-        session.add(log)
-        await session.commit()
+
+
