@@ -16,12 +16,9 @@ _CHUNK = 3800
 
 
 async def _get_lang() -> str:
-    """Return current bot language from settings (default: ru)."""
-    try:
-        result = await settings_api.get("bot_lang")
-        return result.get("value", "ru") if isinstance(result, dict) else "ru"
-    except Exception:
-        return "ru"
+    """Return current bot language — always set at install time via .env / Settings."""
+    result = await settings_api.get("bot_lang")
+    return result.get("value", "ru") if isinstance(result, dict) else "ru"
 
 
 def _split_md(text: str) -> list[str]:

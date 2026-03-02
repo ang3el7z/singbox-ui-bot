@@ -697,11 +697,9 @@ function docsComponent() {
         lang: "ru",
 
         async init() {
-            // Read user's chosen language from settings
-            try {
-                const s = await api.settingsAll();
-                this.lang = s.bot_lang || "ru";
-            } catch { this.lang = "ru"; }
+            // Language is always configured at install time (.env → DB)
+            const s = await api.settingsAll();
+            this.lang = s.bot_lang || "ru";
 
             this.loading = true;
             try {
