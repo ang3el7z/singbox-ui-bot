@@ -488,6 +488,21 @@ function nginxComponent() {
                 this.$dispatch("toast", { msg: e.message, type: "error" });
             }
         },
+
+        async toggleSite() {
+            const current = this.status?.site_enabled ?? false;
+            const next = !current;
+            const label = next ? "enable" : "disable";
+            if (!confirm(`${label.charAt(0).toUpperCase() + label.slice(1)} the public site? Nginx will be reloaded.`)) return;
+            this.loading = true;
+            try {
+                await api.nginxSiteToggle(next);
+                this.$dispatch("toast", { msg: `Site ${next ? "enabled" : "disabled"}`, type: "success" });
+                await this.load();
+            } catch (e) {
+                this.$dispatch("toast", { msg: e.message, type: "error" });
+            } finally { this.loading = false; }
+        },
     };
 }
 

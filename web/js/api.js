@@ -112,6 +112,7 @@ const api = {
     nginxPaths:      ()         => apiFetch("GET",  "/api/nginx/paths"),
     nginxLogs:       (n=50)     => apiFetch("GET",  `/api/nginx/logs?lines=${n}`),
     nginxDeleteOverride: ()     => apiFetch("DELETE", "/api/nginx/override"),
+    nginxSiteToggle: (enabled)  => apiFetch("POST",   `/api/nginx/site/toggle?enabled=${enabled}`),
 
     async nginxUpload(file) {
         const token = getToken();

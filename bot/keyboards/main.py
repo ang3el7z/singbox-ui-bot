@@ -218,7 +218,12 @@ def kb_adguard_rules() -> InlineKeyboardMarkup:
 
 # ─── Nginx ────────────────────────────────────────────────────────────────────
 
-def kb_nginx_menu() -> InlineKeyboardMarkup:
+def kb_nginx_menu(site_enabled: bool = False) -> InlineKeyboardMarkup:
+    site_btn = (
+        InlineKeyboardButton(text="🔴 Site: OFF → Turn ON",  callback_data="nginx_site_on")
+        if not site_enabled else
+        InlineKeyboardButton(text="🟢 Site: ON  → Turn OFF", callback_data="nginx_site_off")
+    )
     return _build(
         [InlineKeyboardButton(text="⚙️ Configure",       callback_data="nginx_configure"),
          InlineKeyboardButton(text="🔐 Issue SSL",       callback_data="nginx_ssl")],
@@ -226,6 +231,7 @@ def kb_nginx_menu() -> InlineKeyboardMarkup:
          InlineKeyboardButton(text="📋 Access logs",     callback_data="nginx_logs")],
         [InlineKeyboardButton(text="📤 Upload site",     callback_data="nginx_upload_site"),
          InlineKeyboardButton(text="🗑 Remove override", callback_data="nginx_delete_override")],
+        [site_btn],
         [InlineKeyboardButton(text="⬅️ Back",            callback_data="main_menu")],
     )
 

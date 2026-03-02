@@ -153,6 +153,7 @@ class NginxAPI:
     async def upload(self, filename, data):   return await upload("/api/nginx/override/upload", filename, data)
     async def delete_override(self):          return await delete("/api/nginx/override")
     async def override_status(self):          return await get("/api/nginx/override/status")
+    async def site_toggle(self, enabled: bool): return await post(f"/api/nginx/site/toggle?enabled={str(enabled).lower()}")
 
 
 class FederationAPI:

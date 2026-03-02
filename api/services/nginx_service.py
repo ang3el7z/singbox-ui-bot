@@ -22,14 +22,15 @@ from jinja2 import Environment, FileSystemLoader
 
 from api.config import settings
 
-BASE_DIR      = Path(__file__).parent.parent.parent
-NGINX_DIR     = BASE_DIR / "nginx"
-CONF_D_DIR    = NGINX_DIR / "conf.d"
-OVERRIDE_DIR  = NGINX_DIR / "override"      # mounted as /var/www/override in nginx
-HTPASSWD_DIR  = NGINX_DIR / "htpasswd"
-HTPASSWD_FILE = HTPASSWD_DIR / ".htpasswd"
-TEMPLATES_DIR = NGINX_DIR / "templates"
-LOGS_DIR      = NGINX_DIR / "logs"
+BASE_DIR           = Path(__file__).parent.parent.parent
+NGINX_DIR          = BASE_DIR / "nginx"
+CONF_D_DIR         = NGINX_DIR / "conf.d"
+OVERRIDE_DIR       = NGINX_DIR / "override"      # mounted as /var/www/override in nginx
+HTPASSWD_DIR       = NGINX_DIR / "htpasswd"
+HTPASSWD_FILE      = HTPASSWD_DIR / ".htpasswd"
+TEMPLATES_DIR      = NGINX_DIR / "templates"
+LOGS_DIR           = NGINX_DIR / "logs"
+SITE_ENABLED_MARKER = NGINX_DIR / ".site_enabled"   # presence = site ON, absence = site OFF
 
 # Ensure dirs exist on import
 for _d in (CONF_D_DIR, OVERRIDE_DIR, HTPASSWD_DIR, LOGS_DIR):
@@ -104,10 +105,13 @@ def _regen_htpasswd() -> None:
 def generate_config(
     domain: str = None,
     adguard_enabled: bool = True,
+    site_enabled: bool = None,
 ) -> str:
     domain = domain or settings.domain
     h = _secret_hash()
     ssl_cert, ssl_key = get_ssl_paths(domain)
+    if site_enabled is None:
+        site_enabled = get_site_enabled()
 
     env = Environment(loader=FileSystemLoader(str(TEMPLATES_DIR)))
     template = env.get_template("main.conf.j2")
@@ -117,6 +121,7 @@ def generate_config(
         ssl_cert=ssl_cert,
         ssl_key=ssl_key,
         adguard_enabled=adguard_enabled,
+        site_enabled=site_enabled,
     )
 
 
@@ -124,6 +129,24 @@ def write_config(config_text: str, filename: str = "singbox.conf") -> Path:
     path = CONF_D_DIR / filename
     path.write_text(config_text, encoding="utf-8")
     return path
+
+
+# ─── Site on/off toggle ───────────────────────────────────────────────────────
+
+def get_site_enabled() -> bool:
+    """
+    Returns whether the public site is enabled.
+    Enabled  → root '/' tries /override/index.html first, falls back to 401 stub.
+    Disabled → root '/' always shows 401 Basic Auth popup (default/safe state).
+    """
+    return SITE_ENABLED_MARKER.exists()
+
+
+def set_site_enabled(enabled: bool) -> None:
+    if enabled:
+        SITE_ENABLED_MARKER.touch()
+    else:
+        SITE_ENABLED_MARKER.unlink(missing_ok=True)
 
 
 # ─── Override site management ─────────────────────────────────────────────────

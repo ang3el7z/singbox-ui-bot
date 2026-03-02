@@ -17,7 +17,8 @@ MAX_UPLOAD_BYTES = 20 * 1024 * 1024
 async def nginx_status(auth: dict = Depends(require_any_auth)):
     override = nginx_service.override_status()
     paths = nginx_service.get_hidden_paths()
-    return {"override": override, "paths": paths}
+    site_enabled = nginx_service.get_site_enabled()
+    return {"override": override, "paths": paths, "site_enabled": site_enabled}
 
 
 @router.post("/configure")
@@ -95,3 +96,25 @@ async def delete_override(auth: dict = Depends(require_any_auth)):
 @router.get("/override/status")
 async def override_status(auth: dict = Depends(require_any_auth)):
     return nginx_service.override_status()
+
+
+@router.post("/site/toggle")
+async def site_toggle(enabled: bool, auth: dict = Depends(require_any_auth)):
+    """
+    Enable or disable the public site.
+    enabled=true  → root '/' serves the uploaded override (or falls back to 401 popup).
+    enabled=false → root '/' always shows the 401 Basic Auth camouflage popup.
+    Regenerates nginx config and reloads nginx automatically.
+    """
+    from api.config import settings
+    nginx_service.set_site_enabled(enabled)
+    config_text = nginx_service.generate_config(domain=settings.domain, site_enabled=enabled)
+    nginx_service.write_config(config_text)
+    ok, msg = await nginx_service.test_nginx_config()
+    if not ok:
+        # Rollback
+        nginx_service.set_site_enabled(not enabled)
+        raise HTTPException(status_code=500, detail=f"Config error: {msg}")
+    await nginx_service.reload_nginx()
+    await audit(auth["actor"], "nginx_site_toggle", f"enabled={enabled}")
+    return {"site_enabled": enabled}

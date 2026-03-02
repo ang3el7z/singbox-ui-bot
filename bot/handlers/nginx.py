@@ -10,17 +10,27 @@ from bot.keyboards.main import kb_back, kb_nginx_menu
 router = Router()
 
 
-@router.callback_query(F.data == "menu_nginx")
-async def cb_nginx_menu(cq: CallbackQuery):
+async def _nginx_menu_text_and_kb(cq: CallbackQuery):
+    """Fetch nginx status and return (text, keyboard)."""
     try:
         st = await nginx_api.status()
         override = st.get("override", {})
         has_override = override.get("active", False)
-        ovr_str = f"Custom site: {'✅' if has_override else '❌ (using 401 popup)'}"
-        text = f"🌐 <b>Nginx</b>\n{ovr_str}"
+        site_enabled = st.get("site_enabled", False)
+        ovr_str = f"Custom site: {'✅ uploaded' if has_override else '❌ not uploaded'}"
+        site_str = f"Site visibility: {'🟢 ON' if site_enabled else '🔴 OFF (401 stub)'}"
+        text = f"🌐 <b>Nginx</b>\n{ovr_str}\n{site_str}"
+        kb = kb_nginx_menu(site_enabled=site_enabled)
     except APIError as e:
         text = f"❌ {e.detail}"
-    await cq.message.edit_text(text, reply_markup=kb_nginx_menu(), parse_mode="HTML")
+        kb = kb_nginx_menu()
+    return text, kb
+
+
+@router.callback_query(F.data == "menu_nginx")
+async def cb_nginx_menu(cq: CallbackQuery):
+    text, kb = await _nginx_menu_text_and_kb(cq)
+    await cq.message.edit_text(text, reply_markup=kb, parse_mode="HTML")
 
 
 @router.callback_query(F.data == "nginx_configure")
@@ -103,6 +113,20 @@ async def handle_site_upload(msg: Message):
     except APIError as e:
         text = f"❌ {e.detail}"
     await msg.answer(text, reply_markup=kb_back("menu_nginx"))
+
+
+@router.callback_query(F.data.in_({"nginx_site_on", "nginx_site_off"}))
+async def cb_nginx_site_toggle(cq: CallbackQuery):
+    enable = cq.data == "nginx_site_on"
+    await cq.answer("Updating…")
+    try:
+        await nginx_api.site_toggle(enable)
+    except APIError as e:
+        await cq.answer(f"❌ {e.detail}", show_alert=True)
+        return
+    # Refresh the menu with updated state
+    text, kb = await _nginx_menu_text_and_kb(cq)
+    await cq.message.edit_text(text, reply_markup=kb, parse_mode="HTML")
 
 
 @router.callback_query(F.data == "nginx_delete_override")
