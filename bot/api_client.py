@@ -165,7 +165,9 @@ class AdguardAPI:
 class NginxAPI:
     async def status(self):                   return await get("/api/nginx/status")
     async def configure(self):                return await post("/api/nginx/configure")
-    async def ssl(self):                      return await post("/api/nginx/ssl")
+    async def ssl(self, email: str = ""):
+        body = {"email": email} if email else {}
+        return await post("/api/nginx/ssl", json=body)
     async def paths(self):                    return await get("/api/nginx/paths")
     async def logs(self, n=50):               return await get("/api/nginx/logs", lines=n)
     async def upload(self, filename, data):   return await upload("/api/nginx/override/upload", filename, data)

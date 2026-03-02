@@ -3,11 +3,24 @@ from aiogram import Router, F
 from aiogram.types import CallbackQuery, Message, Document
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
+from aiogram.utils.keyboard import InlineKeyboardBuilder
+from aiogram.types import InlineKeyboardButton
 
 from bot.api_client import nginx_api, APIError
 from bot.keyboards.main import kb_back, kb_nginx_menu
 
 router = Router()
+
+
+class SslFSM(StatesGroup):
+    email = State()
+
+
+def _kb_ssl_email_skip():
+    builder = InlineKeyboardBuilder()
+    builder.row(InlineKeyboardButton(text="⏭️ Skip (use auto)", callback_data="ssl_email_skip"))
+    builder.row(InlineKeyboardButton(text="⬅️ Cancel", callback_data="menu_nginx"))
+    return builder.as_markup()
 
 
 async def _nginx_menu_text_and_kb(cq: CallbackQuery):
@@ -48,14 +61,46 @@ async def cb_nginx_configure(cq: CallbackQuery):
 
 
 @router.callback_query(F.data == "nginx_ssl")
-async def cb_nginx_ssl(cq: CallbackQuery):
-    await cq.answer("Issuing SSL certificate…")
+async def cb_nginx_ssl(cq: CallbackQuery, state: FSMContext):
+    """Ask for optional email before issuing SSL. Default = admin@{domain}."""
+    await state.set_state(SslFSM.email)
+    await cq.message.answer(
+        "🔒 <b>Issue SSL certificate</b>\n\n"
+        "Enter your email for Let's Encrypt expiry notifications,\n"
+        "or skip to use <code>admin@{your_domain}</code> automatically.",
+        reply_markup=_kb_ssl_email_skip(),
+        parse_mode="HTML",
+    )
+    await cq.answer()
+
+
+@router.callback_query(SslFSM.email, F.data == "ssl_email_skip")
+async def cb_ssl_skip_email(cq: CallbackQuery, state: FSMContext):
+    await state.clear()
+    await cq.answer("⏳ Issuing SSL…")
+    await cq.message.edit_text("⏳ <b>Issuing SSL certificate...</b>\nThis may take up to 60 seconds.", parse_mode="HTML")
     try:
         await nginx_api.ssl()
-        text = "✅ SSL certificate issued"
+        text = "✅ <b>SSL certificate issued!</b>"
     except APIError as e:
         text = f"❌ {e.detail}"
-    await cq.message.answer(text, reply_markup=kb_back("menu_nginx"))
+    await cq.message.edit_text(text, reply_markup=kb_back("menu_nginx"), parse_mode="HTML")
+
+
+@router.message(SslFSM.email)
+async def fsm_ssl_email(msg: Message, state: FSMContext):
+    email = msg.text.strip() if msg.text else ""
+    await state.clear()
+    if "@" not in email:
+        await msg.answer("❌ Invalid email format. Try again or go back.", reply_markup=kb_back("menu_nginx"))
+        return
+    await msg.answer("⏳ <b>Issuing SSL certificate...</b>\nThis may take up to 60 seconds.", parse_mode="HTML")
+    try:
+        await nginx_api.ssl(email=email)
+        text = f"✅ <b>SSL certificate issued!</b>\nNotifications → <code>{email}</code>"
+    except APIError as e:
+        text = f"❌ {e.detail}"
+    await msg.answer(text, reply_markup=kb_back("menu_nginx"), parse_mode="HTML")
 
 
 @router.callback_query(F.data == "nginx_paths")
