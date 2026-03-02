@@ -1,12 +1,13 @@
 """
 Documentation browser for the Telegram bot.
-Fetches markdown files from the API and sends them in readable chunks.
+Fetches content from the API (lang is read from user's bot_lang setting).
+Content is served in the user's chosen language — RU or EN only, not both.
 """
 from aiogram import Router, F
 from aiogram.types import CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
-from bot.api_client import docs_api
+from bot.api_client import docs_api, settings_api
 
 router = Router()
 
@@ -14,11 +15,17 @@ router = Router()
 _CHUNK = 3800
 
 
+async def _get_lang() -> str:
+    """Return current bot language from settings (default: ru)."""
+    try:
+        result = await settings_api.get("bot_lang")
+        return result.get("value", "ru") if isinstance(result, dict) else "ru"
+    except Exception:
+        return "ru"
+
+
 def _split_md(text: str) -> list[str]:
-    """
-    Split markdown text into Telegram-safe chunks.
-    Tries to break at paragraph boundaries (double newlines).
-    """
+    """Split markdown text into Telegram-safe chunks at paragraph boundaries."""
     chunks: list[str] = []
     current = ""
     for block in text.split("\n\n"):
@@ -28,7 +35,6 @@ def _split_md(text: str) -> list[str]:
         else:
             if current:
                 chunks.append(current.strip())
-            # Block itself might be too long — hard split
             while len(block) > _CHUNK:
                 chunks.append(block[:_CHUNK])
                 block = block[_CHUNK:]
@@ -38,7 +44,7 @@ def _split_md(text: str) -> list[str]:
     return chunks or ["(empty)"]
 
 
-def _kb_doc_list(docs: list) -> InlineKeyboardMarkup:
+def _kb_doc_list(docs: list, lang: str) -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
     for d in docs:
         builder.row(InlineKeyboardButton(
@@ -69,14 +75,18 @@ def _kb_page(doc_id: str, page: int, total: int) -> InlineKeyboardMarkup:
 
 @router.callback_query(F.data == "menu_docs")
 async def cb_docs_menu(cq: CallbackQuery):
+    lang = await _get_lang()
     try:
-        docs = await docs_api.list()
+        docs = await docs_api.list(lang=lang)
     except Exception as e:
         await cq.answer(f"Error: {e}", show_alert=True)
         return
+
+    header = "📚 <b>Документация</b>" if lang == "ru" else "📚 <b>Documentation</b>"
+    hint   = "Выберите тему:" if lang == "ru" else "Select a topic:"
     await cq.message.edit_text(
-        "📚 <b>Documentation</b>\n\nSelect a topic:",
-        reply_markup=_kb_doc_list(docs),
+        f"{header}\n\n{hint}",
+        reply_markup=_kb_doc_list(docs, lang),
         parse_mode="HTML",
     )
 
@@ -90,8 +100,9 @@ async def cb_docs_page(cq: CallbackQuery):
     doc_id = parts[2]
     page = int(parts[3])
 
+    lang = await _get_lang()
     try:
-        content = await docs_api.get(doc_id)
+        content = await docs_api.get(doc_id, lang=lang)
     except Exception as e:
         await cq.answer(f"Error: {e}", show_alert=True)
         return
@@ -101,8 +112,7 @@ async def cb_docs_page(cq: CallbackQuery):
     page = max(0, min(page, total - 1))
     text = chunks[page]
 
-    header = f"📄 Page {page + 1}/{total}\n\n"
-    # Send as plain text (no HTML parse — markdown headers use # which is fine)
+    header = f"📄 {page + 1}/{total}\n\n"
     try:
         await cq.message.edit_text(
             header + text,
@@ -110,7 +120,6 @@ async def cb_docs_page(cq: CallbackQuery):
             parse_mode=None,
         )
     except Exception:
-        # Message unchanged — just close the loading spinner
         await cq.answer()
         return
     await cq.answer()

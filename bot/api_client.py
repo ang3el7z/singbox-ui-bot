@@ -173,8 +173,10 @@ class SettingsAPI:
 
 
 class DocsAPI:
-    async def list(self):              return await get("/api/docs/")
-    async def get(self, doc_id: str):  return await get_text(f"/api/docs/{doc_id}")
+    async def list(self, lang: str = "ru"):
+        return await get("/api/docs/", lang=lang)
+    async def get(self, doc_id: str, lang: str = "ru"):
+        return await get_text(f"/api/docs/{doc_id}", lang=lang)
 
 
 class AdminAPI:

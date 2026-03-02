@@ -141,9 +141,9 @@ const api = {
     settingsGet:  (key)         => apiFetch("GET",  `/api/settings/${key}`),
     settingsSet:  (key, value)  => apiFetch("POST", `/api/settings/${key}`, { value }),
 
-    // Docs
-    docsList: ()           => apiFetch("GET", "/api/docs/"),
-    docGet:   (id)         => apiFetch("GET", `/api/docs/${id}`),
+    // Docs  (lang = "ru" | "en", passed as query param)
+    docsList: (lang="ru")       => apiFetch("GET", `/api/docs/?lang=${lang}`),
+    docGet:   (id, lang="ru")   => apiFetch("GET", `/api/docs/${id}?lang=${lang}`),
 
     // Maintenance
     maintStatus:          ()        => apiFetch("GET",  "/api/maintenance/status"),

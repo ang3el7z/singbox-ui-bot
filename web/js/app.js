@@ -694,11 +694,18 @@ function docsComponent() {
         content: "",
         loading: false,
         loadingDoc: false,
+        lang: "ru",
 
         async init() {
+            // Read user's chosen language from settings
+            try {
+                const s = await api.settingsAll();
+                this.lang = s.bot_lang || "ru";
+            } catch { this.lang = "ru"; }
+
             this.loading = true;
             try {
-                this.docs = await api.docsList();
+                this.docs = await api.docsList(this.lang);
             } catch (e) {
                 this.$dispatch("toast", { msg: e.message, type: "error" });
             } finally {
@@ -712,7 +719,7 @@ function docsComponent() {
             this.content = "";
             this.loadingDoc = true;
             try {
-                this.content = await api.docGet(doc.id);
+                this.content = await api.docGet(doc.id, this.lang);
             } catch (e) {
                 this.content = `Error: ${e.message}`;
             } finally {
@@ -726,7 +733,6 @@ function docsComponent() {
             if (typeof marked !== "undefined") {
                 return marked.parse(this.content);
             }
-            // Fallback: basic escaping + pre block
             return `<pre style="white-space:pre-wrap;word-break:break-word">${this.content.replace(/</g, "&lt;").replace(/>/g, "&gt;")}</pre>`;
         },
     };
