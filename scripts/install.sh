@@ -284,6 +284,29 @@ NGINXEOF
     info "Initial Nginx config written"
 }
 
+# ─── Interactive selection helpers ────────────────────────────────────────────
+
+# select_option <prompt_text> <option1> <option2> ...
+# Prints the chosen value to stdout, returns 0.
+select_option() {
+    local _prompt="$1"; shift
+    local _options=("$@")
+    local _n=${#_options[@]}
+    echo -e "${BLUE}[SELECT]${NC} $_prompt" >&2
+    for i in "${!_options[@]}"; do
+        printf "  %2d) %s\n" "$((i+1))" "${_options[$i]}" >&2
+    done
+    while true; do
+        printf "  Enter number [1-%d]: " "$_n" >&2
+        read -r _choice
+        if [[ "$_choice" =~ ^[0-9]+$ ]] && (( _choice >= 1 && _choice <= _n )); then
+            echo "${_options[$((_choice-1))]}"
+            return 0
+        fi
+        echo -e "  ${RED}Invalid choice, try again.${NC}" >&2
+    done
+}
+
 # ─── Collect user input ───────────────────────────────────────────────────────
 
 collect_input() {
@@ -293,33 +316,66 @@ collect_input() {
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo ""
 
-    prompt "Telegram Bot Token (get from @BotFather):"
+    # ── Step 1: Telegram token ────────────────────────────────────────────────
+    prompt "Step 1/6 — Telegram Bot Token (get from @BotFather):"
     read -r BOT_TOKEN
     [[ -n "$BOT_TOKEN" ]] || error "BOT_TOKEN cannot be empty"
 
-    prompt "Your Telegram ID (admin, get from @userinfobot):"
+    # ── Step 2: Admin Telegram ID ─────────────────────────────────────────────
+    prompt "Step 2/6 — Your Telegram ID (get from @userinfobot):"
     read -r ADMIN_IDS
     [[ -n "$ADMIN_IDS" ]] || error "ADMIN_IDS cannot be empty"
 
-    prompt "Domain (e.g. vpn.example.com) — must have A-record pointing to this server:"
+    # ── Step 3: Domain ────────────────────────────────────────────────────────
+    prompt "Step 3/6 — Domain name (A-record must point to this server, e.g. example.com):"
     read -r DOMAIN
     [[ -n "$DOMAIN" ]] || error "DOMAIN cannot be empty"
 
-    prompt "Email for Let's Encrypt:"
+    # ── Step 4: Email ─────────────────────────────────────────────────────────
+    prompt "Step 4/6 — Email for Let's Encrypt SSL:"
     read -r EMAIL
     [[ -n "$EMAIL" ]] || error "EMAIL cannot be empty"
 
-    prompt "SSH port (default 22):"
+    # ── Step 5: SSH port ──────────────────────────────────────────────────────
+    prompt "Step 5/6 — SSH port (press Enter for default 22):"
     read -r SSH_PORT
     SSH_PORT="${SSH_PORT:-22}"
 
-    prompt "Timezone (e.g. Europe/Moscow, UTC):"
-    read -r TIMEZONE
-    TIMEZONE="${TIMEZONE:-UTC}"
+    # ── Step 6: Timezone — numbered list, no manual input ────────────────────
+    TIMEZONE=$(select_option "Step 6/6 — Select your timezone:" \
+        "Europe/Moscow" \
+        "Europe/Kyiv" \
+        "Europe/Minsk" \
+        "Europe/Berlin" \
+        "Europe/London" \
+        "Asia/Almaty" \
+        "Asia/Tashkent" \
+        "Asia/Baku" \
+        "Asia/Tbilisi" \
+        "Asia/Yerevan" \
+        "Asia/Novosibirsk" \
+        "Asia/Krasnoyarsk" \
+        "Asia/Irkutsk" \
+        "Asia/Vladivostok" \
+        "America/New_York" \
+        "America/Los_Angeles" \
+        "Asia/Shanghai" \
+        "UTC" \
+    )
 
-    prompt "Bot language [ru/en] (default ru):"
-    read -r BOT_LANG
-    BOT_LANG="${BOT_LANG:-ru}"
+    # ── Language — numbered list, no manual input ─────────────────────────────
+    _lang_choice=$(select_option "Bot interface language:" \
+        "ru — Russian" \
+        "en — English" \
+    )
+    [[ "$_lang_choice" == ru* ]] && BOT_LANG="ru" || BOT_LANG="en"
+
+    echo ""
+    echo -e "${GREEN}[OK]${NC} Configuration:"
+    echo "     Domain:   $DOMAIN"
+    echo "     Timezone: $TIMEZONE"
+    echo "     Language: $BOT_LANG"
+    echo ""
 }
 
 # ─── Deploy ───────────────────────────────────────────────────────────────────

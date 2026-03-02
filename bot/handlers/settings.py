@@ -1,71 +1,109 @@
 """
 Bot settings: timezone, language, system info (auto-restart / SSL renewal).
 Admin management is in admin.py — linked from here too.
+All inputs are selection-based to prevent typos.
 """
 import asyncio
 from aiogram import Router, F
 from aiogram.types import CallbackQuery, Message
 from aiogram.fsm.context import FSMContext
-from aiogram.fsm.state import State, StatesGroup
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
-from bot.api_client import settings_api, admin_api, APIError
+from bot.api_client import settings_api, APIError
 from bot.keyboards.main import kb_back
 
 router = Router()
 
-# Common timezones for quick-pick
-_TZ_PRESETS = [
-    ("🇷🇺 Moscow",   "Europe/Moscow"),
-    ("🇺🇦 Kyiv",     "Europe/Kyiv"),
-    ("🇰🇿 Almaty",   "Asia/Almaty"),
-    ("🌍 UTC",       "UTC"),
-    ("🇩🇪 Berlin",   "Europe/Berlin"),
-    ("🇬🇧 London",   "Europe/London"),
-    ("🇺🇸 New York", "America/New_York"),
-    ("🇺🇸 LA",       "America/Los_Angeles"),
-    ("🇨🇳 Shanghai", "Asia/Shanghai"),
-    ("✏️ Custom...",  "__custom__"),
-]
+# ─── Timezone catalog ─────────────────────────────────────────────────────────
+# Grouped: (display_label, iana_value)
+_TZ_GROUPS = {
+    "🇷🇺 Russia / СНГ": [
+        ("Moscow (UTC+3)",       "Europe/Moscow"),
+        ("Kyiv (UTC+2/+3)",      "Europe/Kyiv"),
+        ("Minsk (UTC+3)",        "Europe/Minsk"),
+        ("Almaty (UTC+5)",       "Asia/Almaty"),
+        ("Tashkent (UTC+5)",     "Asia/Tashkent"),
+        ("Baku (UTC+4)",         "Asia/Baku"),
+        ("Tbilisi (UTC+4)",      "Asia/Tbilisi"),
+        ("Yerevan (UTC+4)",      "Asia/Yerevan"),
+        ("Novosibirsk (UTC+7)",  "Asia/Novosibirsk"),
+        ("Krasnoyarsk (UTC+7)",  "Asia/Krasnoyarsk"),
+        ("Irkutsk (UTC+8)",      "Asia/Irkutsk"),
+        ("Vladivostok (UTC+10)", "Asia/Vladivostok"),
+    ],
+    "🌍 Europe": [
+        ("Berlin (UTC+1/+2)",    "Europe/Berlin"),
+        ("London (UTC+0/+1)",    "Europe/London"),
+        ("Paris (UTC+1/+2)",     "Europe/Paris"),
+        ("Amsterdam (UTC+1/+2)", "Europe/Amsterdam"),
+        ("Warsaw (UTC+1/+2)",    "Europe/Warsaw"),
+    ],
+    "🌎 Americas": [
+        ("New York (UTC-5/-4)",      "America/New_York"),
+        ("Los Angeles (UTC-8/-7)",   "America/Los_Angeles"),
+        ("Chicago (UTC-6/-5)",       "America/Chicago"),
+        ("Toronto (UTC-5/-4)",       "America/Toronto"),
+        ("São Paulo (UTC-3)",        "America/Sao_Paulo"),
+    ],
+    "🌏 Asia / Pacific": [
+        ("Shanghai (UTC+8)",     "Asia/Shanghai"),
+        ("Tokyo (UTC+9)",        "Asia/Tokyo"),
+        ("Seoul (UTC+9)",        "Asia/Seoul"),
+        ("Dubai (UTC+4)",        "Asia/Dubai"),
+        ("Singapore (UTC+8)",    "Asia/Singapore"),
+        ("Bangkok (UTC+7)",      "Asia/Bangkok"),
+        ("Kolkata (UTC+5:30)",   "Asia/Kolkata"),
+        ("Sydney (UTC+10/+11)",  "Australia/Sydney"),
+    ],
+    "🌐 Universal": [
+        ("UTC",                  "UTC"),
+    ],
+}
 
-
-class SettingsFSM(StatesGroup):
-    tz_custom = State()
-
-
-# ─── Keyboards ────────────────────────────────────────────────────────────────
 
 def _kb_settings_menu(tz: str, lang: str) -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
     builder.row(InlineKeyboardButton(
         text=f"🕐 Timezone: {tz}",
-        callback_data="settings_tz_menu",
+        callback_data="settings_tz_groups",
     ))
     lang_icon = "🇷🇺" if lang == "ru" else "🇬🇧"
     builder.row(InlineKeyboardButton(
         text=f"{lang_icon} Language: {lang}",
-        callback_data="settings_lang_toggle",
+        callback_data="settings_lang_choose",
     ))
-    builder.row(
-        InlineKeyboardButton(text="👑 Manage admins", callback_data="menu_admin"),
-    )
-    builder.row(
-        InlineKeyboardButton(text="ℹ️ System info",   callback_data="settings_system"),
-    )
-    builder.row(InlineKeyboardButton(text="⬅️ Back", callback_data="main_menu"))
+    builder.row(InlineKeyboardButton(text="👑 Manage admins", callback_data="menu_admin"))
+    builder.row(InlineKeyboardButton(text="ℹ️ System info",   callback_data="settings_system"))
+    builder.row(InlineKeyboardButton(text="⬅️ Back",           callback_data="main_menu"))
     return builder.as_markup()
 
 
-def _kb_tz_presets() -> InlineKeyboardMarkup:
+def _kb_tz_groups() -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
-    for label, tz in _TZ_PRESETS:
-        builder.row(InlineKeyboardButton(text=label, callback_data=f"settings_tz_set_{tz}"))
+    for group in _TZ_GROUPS:
+        builder.row(InlineKeyboardButton(text=group, callback_data=f"settings_tzg_{group}"))
     builder.row(InlineKeyboardButton(text="⬅️ Back", callback_data="menu_settings"))
     return builder.as_markup()
 
 
-# ─── Handlers ─────────────────────────────────────────────────────────────────
+def _kb_tz_list(group: str) -> InlineKeyboardMarkup:
+    builder = InlineKeyboardBuilder()
+    for label, iana in _TZ_GROUPS.get(group, []):
+        builder.row(InlineKeyboardButton(text=label, callback_data=f"settings_tz_{iana}"))
+    builder.row(InlineKeyboardButton(text="⬅️ Back", callback_data="settings_tz_groups"))
+    return builder.as_markup()
+
+
+def _kb_lang() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="🇷🇺 Russian",  callback_data="settings_lang_ru"),
+         InlineKeyboardButton(text="🇬🇧 English",  callback_data="settings_lang_en")],
+        [InlineKeyboardButton(text="⬅️ Back", callback_data="menu_settings")],
+    ])
+
+
+# ─── Entry point ──────────────────────────────────────────────────────────────
 
 @router.callback_query(F.data == "menu_settings")
 async def cb_settings_menu(cq: CallbackQuery, state: FSMContext):
@@ -77,61 +115,46 @@ async def cb_settings_menu(cq: CallbackQuery, state: FSMContext):
     except APIError:
         tz, lang = "UTC", "ru"
     await cq.message.edit_text(
-        "⚙️ <b>Settings</b>\n\nConfigure timezone, language, and admins.",
+        "⚙️ <b>Settings</b>",
         reply_markup=_kb_settings_menu(tz, lang),
         parse_mode="HTML",
     )
 
 
-# ── Timezone ──────────────────────────────────────────────────────────────────
+# ─── Timezone — group → list → save (no manual typing) ────────────────────────
 
-@router.callback_query(F.data == "settings_tz_menu")
-async def cb_tz_menu(cq: CallbackQuery):
+@router.callback_query(F.data == "settings_tz_groups")
+async def cb_tz_groups(cq: CallbackQuery):
     await cq.message.edit_text(
-        "🕐 <b>Select timezone</b>\n\nChoose a preset or enter a custom IANA timezone string.",
-        reply_markup=_kb_tz_presets(),
+        "🕐 <b>Select timezone region:</b>",
+        reply_markup=_kb_tz_groups(),
         parse_mode="HTML",
     )
 
 
-@router.callback_query(F.data.startswith("settings_tz_set_"))
-async def cb_tz_set(cq: CallbackQuery, state: FSMContext):
-    tz = cq.data[len("settings_tz_set_"):]
-    if tz == "__custom__":
-        await state.set_state(SettingsFSM.tz_custom)
-        await cq.message.answer(
-            "✏️ Enter IANA timezone string (e.g. <code>Europe/Moscow</code>, <code>Asia/Almaty</code>):",
-            parse_mode="HTML",
-            reply_markup=kb_back("settings_tz_menu"),
-        )
-        await cq.answer()
+@router.callback_query(F.data.startswith("settings_tzg_"))
+async def cb_tz_group(cq: CallbackQuery):
+    group = cq.data[len("settings_tzg_"):]
+    if group not in _TZ_GROUPS:
+        await cq.answer("Unknown group", show_alert=True)
         return
-    await _save_tz(cq, state, tz)
+    await cq.message.edit_text(
+        f"🕐 <b>{group}</b>\nSelect timezone:",
+        reply_markup=_kb_tz_list(group),
+        parse_mode="HTML",
+    )
 
 
-@router.message(SettingsFSM.tz_custom)
-async def fsm_tz_custom(msg: Message, state: FSMContext):
-    tz = msg.text.strip()
-    await state.clear()
+@router.callback_query(F.data.startswith("settings_tz_") & ~F.data.startswith("settings_tzg_"))
+async def cb_tz_set(cq: CallbackQuery):
+    # callback: settings_tz_<iana>  (iana may contain slashes — fine for callback_data)
+    iana = cq.data[len("settings_tz_"):]
     try:
-        r = await settings_api.set("tz", tz)
-        await msg.answer(
-            f"✅ Timezone set to <code>{r['value']}</code>",
-            parse_mode="HTML",
-            reply_markup=kb_back("menu_settings"),
-        )
-    except APIError as e:
-        await msg.answer(f"❌ {e.detail}", reply_markup=kb_back("menu_settings"))
-
-
-async def _save_tz(cq: CallbackQuery, state: FSMContext, tz: str):
-    await state.clear()
-    try:
-        r = await settings_api.set("tz", tz)
-        await cq.answer(f"✅ Timezone: {r['value']}")
+        r = await settings_api.set("tz", iana)
+        await cq.answer(f"✅ {r['value']}")
         s = await settings_api.get_all()
         await cq.message.edit_text(
-            "⚙️ <b>Settings</b>\n\nConfigure timezone, language, and admins.",
+            "⚙️ <b>Settings</b>",
             reply_markup=_kb_settings_menu(s.get("tz", "UTC"), s.get("bot_lang", "ru")),
             parse_mode="HTML",
         )
@@ -139,18 +162,26 @@ async def _save_tz(cq: CallbackQuery, state: FSMContext, tz: str):
         await cq.answer(f"❌ {e.detail}", show_alert=True)
 
 
-# ── Language ──────────────────────────────────────────────────────────────────
+# ─── Language — two-button choice ─────────────────────────────────────────────
 
-@router.callback_query(F.data == "settings_lang_toggle")
-async def cb_lang_toggle(cq: CallbackQuery):
+@router.callback_query(F.data == "settings_lang_choose")
+async def cb_lang_choose(cq: CallbackQuery):
+    await cq.message.edit_text(
+        "🌐 <b>Select bot language:</b>",
+        reply_markup=_kb_lang(),
+        parse_mode="HTML",
+    )
+
+
+@router.callback_query(F.data.in_({"settings_lang_ru", "settings_lang_en"}))
+async def cb_lang_set(cq: CallbackQuery):
+    lang = "ru" if cq.data == "settings_lang_ru" else "en"
     try:
-        current = (await settings_api.get("bot_lang"))["value"]
-        new_lang = "en" if current == "ru" else "ru"
-        r = await settings_api.set("bot_lang", new_lang)
+        r = await settings_api.set("bot_lang", lang)
         await cq.answer(f"✅ Language: {r['value']}")
         s = await settings_api.get_all()
         await cq.message.edit_text(
-            "⚙️ <b>Settings</b>\n\nConfigure timezone, language, and admins.",
+            "⚙️ <b>Settings</b>",
             reply_markup=_kb_settings_menu(s.get("tz", "UTC"), s.get("bot_lang", "ru")),
             parse_mode="HTML",
         )
@@ -158,13 +189,12 @@ async def cb_lang_toggle(cq: CallbackQuery):
         await cq.answer(f"❌ {e.detail}", show_alert=True)
 
 
-# ── System info ───────────────────────────────────────────────────────────────
+# ─── System info ──────────────────────────────────────────────────────────────
 
 @router.callback_query(F.data == "settings_system")
 async def cb_system_info(cq: CallbackQuery):
     await cq.answer()
 
-    # Check certbot cron
     cron_ok = False
     try:
         proc = await asyncio.create_subprocess_exec(
@@ -177,25 +207,18 @@ async def cb_system_info(cq: CallbackQuery):
     except Exception:
         pass
 
-    # Check renewal hook
-    hook_ok = False
-    try:
-        import os
-        hook_ok = os.path.exists("/etc/letsencrypt/renewal-hooks/deploy/copy-to-singbox.sh")
-    except Exception:
-        pass
+    import os
+    hook_ok = os.path.exists("/etc/letsencrypt/renewal-hooks/deploy/copy-to-singbox.sh")
 
     text = (
         "ℹ️ <b>System Info</b>\n\n"
         "<b>Auto-restart on server reboot:</b>\n"
-        "✅ All containers use <code>restart: unless-stopped</code>\n"
-        "   → If the server reboots, all containers start automatically.\n\n"
+        "✅ All containers: <code>restart: unless-stopped</code>\n"
+        "   → Containers start automatically after server reboot.\n\n"
         "<b>Auto SSL renewal:</b>\n"
-        f"{'✅' if cron_ok else '⚠️'} Certbot cron job: {'active' if cron_ok else 'not found'}\n"
-        f"{'✅' if hook_ok else '⚠️'} Renewal copy hook: {'active' if hook_ok else 'not found'}\n"
-        "   → Run <b>Nginx → Configure & Reload</b> after manual renewal.\n\n"
-        "<b>To add cron manually:</b>\n"
-        "<pre>crontab -e\n"
-        "0 3 * * * certbot renew --quiet</pre>"
+        f"{'✅' if cron_ok else '⚠️'} Certbot cron: {'active' if cron_ok else 'not found'}\n"
+        f"{'✅' if hook_ok else '⚠️'} Renewal hook: {'active' if hook_ok else 'not found'}\n\n"
+        "<b>After manual cert renewal:</b>\n"
+        "  🌐 Nginx → ⚙️ Configure & Reload"
     )
     await cq.message.answer(text, parse_mode="HTML", reply_markup=kb_back("menu_settings"))

@@ -616,25 +616,55 @@ function settingsComponent() {
     return {
         s: { tz: "", bot_lang: "" },
         loading: false,
-        saving: null,   // key currently being saved
-        tzPresets: [
-            { label: "🇷🇺 Moscow",   value: "Europe/Moscow" },
-            { label: "🇺🇦 Kyiv",     value: "Europe/Kyiv" },
-            { label: "🇰🇿 Almaty",   value: "Asia/Almaty" },
-            { label: "🌍 UTC",       value: "UTC" },
-            { label: "🇩🇪 Berlin",   value: "Europe/Berlin" },
-            { label: "🇬🇧 London",   value: "Europe/London" },
-            { label: "🇺🇸 New York", value: "America/New_York" },
-            { label: "🇺🇸 Los Angeles", value: "America/Los_Angeles" },
-            { label: "🇨🇳 Shanghai", value: "Asia/Shanghai" },
+        saving: null,
+        // Grouped timezones — same catalog as the bot
+        tzGroups: [
+            { group: "🇷🇺 Russia / СНГ", zones: [
+                { label: "Moscow (UTC+3)",       value: "Europe/Moscow" },
+                { label: "Kyiv (UTC+2/+3)",      value: "Europe/Kyiv" },
+                { label: "Minsk (UTC+3)",         value: "Europe/Minsk" },
+                { label: "Almaty (UTC+5)",        value: "Asia/Almaty" },
+                { label: "Tashkent (UTC+5)",      value: "Asia/Tashkent" },
+                { label: "Baku (UTC+4)",          value: "Asia/Baku" },
+                { label: "Tbilisi (UTC+4)",       value: "Asia/Tbilisi" },
+                { label: "Yerevan (UTC+4)",       value: "Asia/Yerevan" },
+                { label: "Novosibirsk (UTC+7)",   value: "Asia/Novosibirsk" },
+                { label: "Krasnoyarsk (UTC+7)",   value: "Asia/Krasnoyarsk" },
+                { label: "Irkutsk (UTC+8)",       value: "Asia/Irkutsk" },
+                { label: "Vladivostok (UTC+10)",  value: "Asia/Vladivostok" },
+            ]},
+            { group: "🌍 Europe", zones: [
+                { label: "Berlin (UTC+1/+2)",     value: "Europe/Berlin" },
+                { label: "London (UTC+0/+1)",     value: "Europe/London" },
+                { label: "Paris (UTC+1/+2)",      value: "Europe/Paris" },
+                { label: "Amsterdam (UTC+1/+2)",  value: "Europe/Amsterdam" },
+                { label: "Warsaw (UTC+1/+2)",     value: "Europe/Warsaw" },
+            ]},
+            { group: "🌎 Americas", zones: [
+                { label: "New York (UTC-5/-4)",   value: "America/New_York" },
+                { label: "Los Angeles (UTC-8/-7)", value: "America/Los_Angeles" },
+                { label: "Chicago (UTC-6/-5)",    value: "America/Chicago" },
+                { label: "Toronto (UTC-5/-4)",    value: "America/Toronto" },
+            ]},
+            { group: "🌏 Asia / Pacific", zones: [
+                { label: "Shanghai (UTC+8)",      value: "Asia/Shanghai" },
+                { label: "Tokyo (UTC+9)",         value: "Asia/Tokyo" },
+                { label: "Seoul (UTC+9)",         value: "Asia/Seoul" },
+                { label: "Dubai (UTC+4)",         value: "Asia/Dubai" },
+                { label: "Singapore (UTC+8)",     value: "Asia/Singapore" },
+                { label: "Bangkok (UTC+7)",       value: "Asia/Bangkok" },
+                { label: "Kolkata (UTC+5:30)",    value: "Asia/Kolkata" },
+                { label: "Sydney (UTC+10/+11)",   value: "Australia/Sydney" },
+            ]},
+            { group: "🌐 Universal", zones: [
+                { label: "UTC",                   value: "UTC" },
+            ]},
         ],
-        customTz: "",
 
         async init() {
             this.loading = true;
             try {
                 this.s = await api.settingsAll();
-                this.customTz = this.s.tz || "";
             } catch (e) {
                 this.$dispatch("toast", { msg: e.message, type: "error" });
             } finally { this.loading = false; }
@@ -650,11 +680,6 @@ function settingsComponent() {
             } catch (e) {
                 this.$dispatch("toast", { msg: e.message, type: "error" });
             } finally { this.saving = null; }
-        },
-
-        async toggleLang() {
-            const next = this.s.bot_lang === "ru" ? "en" : "ru";
-            await this.save("bot_lang", next);
         },
     };
 }
