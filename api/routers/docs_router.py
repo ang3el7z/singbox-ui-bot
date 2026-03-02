@@ -19,6 +19,7 @@ DOC_META = {
     "federation":   {"title": "🔗 Federation / Федерация",     "file": "FEDERATION.md"},
     "webui":        {"title": "🌐 Web UI",                     "file": "WEB_UI.md"},
     "maintenance":  {"title": "🔧 Maintenance / Обслуживание", "file": "MAINTENANCE.md"},
+    "cli":          {"title": "💻 CLI / Управление с сервера",  "file": "CLI.md"},
 }
 
 
