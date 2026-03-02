@@ -75,8 +75,22 @@ async def fsm_rule_key(cq: CallbackQuery, state: FSMContext):
 async def fsm_rule_value(msg: Message, state: FSMContext):
     await state.update_data(value=msg.text.strip())
     await state.set_state(AddRuleFSM.outbound)
+    try:
+        data = await routing_api.get_outbounds()
+        outbounds = data.get("outbounds", ["proxy", "direct", "block", "dns"])
+    except APIError:
+        outbounds = ["proxy", "direct", "block", "dns"]
     from bot.keyboards.main import kb_outbound_select
-    await msg.answer("Select action/outbound:", reply_markup=kb_outbound_select())
+    # Build hint about federation nodes
+    node_tags = [o for o in outbounds if o not in ("proxy", "direct", "block", "dns")]
+    hint = ""
+    if node_tags:
+        hint = f"\n\n📡 <i>Federation nodes available: {', '.join(node_tags)}</i>"
+    await msg.answer(
+        f"Select action/outbound:{hint}",
+        reply_markup=kb_outbound_select(outbounds),
+        parse_mode="HTML",
+    )
 
 
 @router.callback_query(AddRuleFSM.outbound, F.data.startswith("outbound_"))

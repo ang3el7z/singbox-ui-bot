@@ -299,10 +299,17 @@ function routingComponent() {
         ruleKeys: ["domain", "domain_suffix", "domain_keyword", "ip_cidr", "geosite", "geoip", "rule_set"],
         showAdd: false,
         form: { rule_key: "domain", value: "", outbound: "proxy" },
+        outbounds: ["proxy", "direct", "block", "dns"],
         loading: false,
         importing: false,
 
-        async init() { await this.loadRules(); },
+        async init() {
+            await this.loadRules();
+            try {
+                const data = await api.routeOutbounds();
+                this.outbounds = data.outbounds || this.outbounds;
+            } catch (e) { /* keep defaults */ }
+        },
 
         async loadRules() {
             this.loading = true;

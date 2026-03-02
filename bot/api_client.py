@@ -121,6 +121,7 @@ class InboundsAPI:
 
 class RoutingAPI:
     async def get_route(self):                return await get("/api/routing/")
+    async def get_outbounds(self):            return await get("/api/routing/outbounds")
     async def list_rules(self, key):          return await get(f"/api/routing/rules/{key}")
     async def add_rule(self, key, val, out):  return await post("/api/routing/rules", json={"rule_key": key, "value": val, "outbound": out})
     async def del_rule(self, key, val):       return await delete("/api/routing/rules", rule_key=key, value=val)

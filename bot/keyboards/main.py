@@ -179,14 +179,25 @@ def kb_rule_key_select(keys: dict) -> InlineKeyboardMarkup:
     return builder.as_markup()
 
 
-def kb_outbound_select() -> InlineKeyboardMarkup:
-    return _build(
-        [InlineKeyboardButton(text="🚀 Proxy",  callback_data="outbound_proxy"),
-         InlineKeyboardButton(text="🔒 Block",  callback_data="outbound_block")],
-        [InlineKeyboardButton(text="✅ Direct", callback_data="outbound_direct"),
-         InlineKeyboardButton(text="🔡 DNS",    callback_data="outbound_dns")],
-        [InlineKeyboardButton(text="⬅️ Cancel", callback_data="menu_routing")],
-    )
+_OUTBOUND_ICONS = {
+    "proxy":  "🚀",
+    "direct": "✅",
+    "block":  "🚫",
+    "dns":    "🔡",
+}
+
+
+def kb_outbound_select(outbounds: list[str] | None = None) -> InlineKeyboardMarkup:
+    """Build outbound selector. Includes built-ins + any federation/custom node outbounds."""
+    if not outbounds:
+        outbounds = ["proxy", "direct", "block", "dns"]
+    builder = InlineKeyboardBuilder()
+    for ob in outbounds:
+        icon = _OUTBOUND_ICONS.get(ob, "📡")
+        builder.button(text=f"{icon} {ob}", callback_data=f"outbound_{ob}")
+    builder.adjust(2)
+    builder.row(InlineKeyboardButton(text="⬅️ Cancel", callback_data="menu_routing"))
+    return builder.as_markup()
 
 
 # ─── AdGuard ──────────────────────────────────────────────────────────────────

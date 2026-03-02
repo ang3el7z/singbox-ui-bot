@@ -87,6 +87,7 @@ const api = {
     routeRules:    (key)        => apiFetch("GET",  `/api/routing/rules/${key}`),
     addRule:       (data)       => apiFetch("POST", "/api/routing/rules", data),
     deleteRule:    (key, val)   => apiFetch("DELETE", `/api/routing/rules?rule_key=${encodeURIComponent(key)}&value=${encodeURIComponent(val)}`),
+    routeOutbounds:()           => apiFetch("GET",  "/api/routing/outbounds"),
     exportRules:   ()           => apiFetch("GET",  "/api/routing/export"),
     importRules:   (data)       => apiFetch("POST", "/api/routing/import", data),
     addRuleSet:    (data)       => apiFetch("POST", "/api/routing/rule-sets", data),

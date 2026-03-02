@@ -1669,6 +1669,351 @@ Used only by the bot (same process as API).
 """,
 }
 
+_DOCS["routing"] = {
+    "title": {"ru": "🗺 Роутинг и ноды", "en": "🗺 Routing & Nodes"},
+    "ru": """
+# Роутинг, SRS-списки и маршрутизация через ноды
+
+---
+
+## Как работает роутинг в Sing-Box
+
+Правила хранятся в `config.json` → секция `route.rules`.  
+Sing-Box проверяет их **сверху вниз** и применяет первое совпавшее.  
+Если ни одно не сработало — трафик идёт через `final` (по умолчанию `proxy`).
+
+### Типы совпадений (rule_key)
+
+| Тип | Пример | Описание |
+|-----|--------|----------|
+| `domain` | `youtube.com` | Точный домен |
+| `domain_suffix` | `.youtube.com` | Домен и все поддомены |
+| `domain_keyword` | `youtube` | Любой домен, содержащий слово |
+| `ip_cidr` | `8.8.8.8/32` | IP-адрес или подсеть |
+| `geosite` | `ru`, `youtube`, `category-ads-all` | Набор сайтов из встроенной базы |
+| `geoip` | `ru`, `cn` | IP-диапазоны страны |
+| `rule_set` | URL на `.srs` файл | Внешний набор правил (скачивается автоматически) |
+
+### Действия (outbound)
+
+| Действие | Что происходит |
+|----------|---------------|
+| `proxy` | Через основной VPN outbound |
+| `direct` | Напрямую, без VPN |
+| `block` | Заблокировать |
+| `dns` | Перенаправить в DNS |
+| `exit_node-name` | ⭐ Через конкретную ноду федерации |
+| `bridge_to_name` | ⭐ Через мост (промежуточный хоп) |
+
+> **⭐ Ноды федерации** появляются в списке outbound автоматически после того, как ты создал bridge-подключение к ноде через меню Federation → Create Bridge.
+
+---
+
+## Сценарии использования
+
+### Сценарий 1: Рунет напрямую, остальное через VPN
+
+```
+geosite:ru  → direct   ← российские сайты без VPN
+geoip:ru    → direct   ← российские IP без VPN
+(default)   → proxy    ← весь остальной трафик через VPN
+```
+
+Добавить в боте:
+1. `🗺 Routing → ➕ Add rule`
+2. Тип: `geosite`, Значение: `ru`, Действие: `direct`
+3. Тип: `geoip`, Значение: `ru`, Действие: `direct`
+
+---
+
+### Сценарий 2: YouTube → российская нода, Twitch → европейский мост
+
+**Шаг 1 — Настройка Federation (один раз):**
+1. Убедись что на обоих серверах запущен singbox-ui-bot
+2. `/menu → 🔗 Federation → ➕ Add Node`
+   - Для YouTube-ноды: имя `ru-node`, URL сервера, `FEDERATION_SECRET` ноды, роль `node`
+   - Для Twitch-моста: имя `eu-bridge`, URL, secret, роль `bridge`
+3. `/menu → 🔗 Federation → 🌉 Create Bridge`
+   - Для YouTube: выбери `ru-node` (1 сервер = прямой хоп)
+   - Для Twitch: выбери `eu-bridge` (промежуточный) → и добавь exit-ноду
+
+После Create Bridge Sing-Box автоматически получит outbound-теги:
+- `exit_ru-node`
+- `bridge_to_eu-bridge`
+
+**Шаг 2 — Добавить правила роутинга:**
+1. `/menu → 🗺 Routing → ➕ Add rule`
+2. YouTube: Тип `geosite`, Значение `youtube`, Действие → выбери `exit_ru-node`
+3. Twitch: Тип `domain`, Значение `twitch.tv`, Действие → выбери `bridge_to_eu-bridge`
+4. Twitch stream: Тип `domain_suffix`, Значение `.twitch.tv`, то же действие
+
+Итог:
+```
+geosite:youtube     → exit_ru-node       ← YouTube через Россию
+domain:twitch.tv    → bridge_to_eu-bridge ← Twitch через мост в Европе
+.twitch.tv          → bridge_to_eu-bridge ← Twitch CDN тоже
+(default)           → proxy              ← остальное как обычно
+```
+
+---
+
+### Сценарий 3: Блокировка рекламы через rule_set
+
+Готовые SRS-списки для блокировки рекламы (формат `.srs`):
+
+```
+https://cdn.jsdelivr.net/gh/SagerNet/sing-geosite@rule-set/geosite-category-ads-all.srs
+```
+
+Добавить в боте:
+1. `🗺 Routing → ➕ Add rule`
+2. Тип: `rule_set`
+3. Значение: вставь URL выше
+4. Действие: `block`
+
+Sing-Box скачает файл и будет автоматически обновлять его.
+
+---
+
+### Сценарий 4: Конкретные сайты через определённую страну
+
+Хочешь чтобы Netflix шёл через американскую ноду:
+
+```
+domain:netflix.com         → exit_us-node
+domain_suffix:.netflix.com → exit_us-node
+domain_suffix:.nflximg.net → exit_us-node
+domain_suffix:.nflxvideo.net → exit_us-node
+```
+
+Или через geosite (если список есть):
+```
+geosite:netflix → exit_us-node
+```
+
+---
+
+## Полезные SRS-ссылки
+
+| Список | URL |
+|--------|-----|
+| Реклама и трекеры | `https://cdn.jsdelivr.net/gh/SagerNet/sing-geosite@rule-set/geosite-category-ads-all.srs` |
+| YouTube | `https://cdn.jsdelivr.net/gh/SagerNet/sing-geosite@rule-set/geosite-youtube.srs` |
+| Google | `https://cdn.jsdelivr.net/gh/SagerNet/sing-geosite@rule-set/geosite-google.srs` |
+| Telegram | `https://cdn.jsdelivr.net/gh/SagerNet/sing-geosite@rule-set/geosite-telegram.srs` |
+| Netflix | `https://cdn.jsdelivr.net/gh/SagerNet/sing-geosite@rule-set/geosite-netflix.srs` |
+| Twitch | `https://cdn.jsdelivr.net/gh/SagerNet/sing-geosite@rule-set/geosite-twitch.srs` |
+| Геообходной | `https://cdn.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@sing/geo/geosite/geolocation-!cn.srs` |
+
+> Список geosite тегов: [sing-geosite](https://github.com/SagerNet/sing-geosite/tree/rule-set)
+
+---
+
+## Добавление SRS в боте (пошагово)
+
+1. `/menu → 🗺 Routing → ➕ Add rule`
+2. Выбери тип: **Rule Set URL**
+3. Введи URL `.srs` файла
+4. Выбери действие: `block` / `direct` / `exit_нода`
+5. Sing-Box автоматически скачает файл и начнёт применять правила
+
+---
+
+## Экспорт и импорт
+
+- **Экспорт** (`📤 Export`) — скачивает `routing_rules.json` со всеми правилами и rule_set
+- **Импорт** (`📥 Import`) — загружает JSON, **добавляет** к существующим (не заменяет)
+
+Формат экспортного файла:
+```json
+{
+  "rules": [
+    {"outbound": "direct", "geosite": ["ru"]},
+    {"outbound": "exit_ru-node", "domain": ["youtube.com"]}
+  ],
+  "rule_set": [
+    {
+      "tag": "custom_0",
+      "type": "remote",
+      "format": "binary",
+      "url": "https://.../geosite-category-ads-all.srs",
+      "download_detour": "direct"
+    }
+  ]
+}
+```
+
+---
+
+## Важно знать
+
+- **Порядок важен**: правила проверяются сверху вниз. Более конкретные ставь выше.
+- **После добавления** Sing-Box перезагружается автоматически (graceful reload — соединения не рвутся).
+- **Ноды в outbound** появляются только после настройки Federation + Create Bridge.
+- **`dns`** — используй только для перенаправления DNS-запросов, не для обычного трафика.
+""",
+    "en": """
+# Routing, SRS Rule Sets and Node-based Routing
+
+---
+
+## How Sing-Box routing works
+
+Rules are stored in `config.json` → `route.rules` section.  
+Sing-Box checks them **top to bottom** and applies the first match.  
+If no rule matches — traffic goes via `final` (default: `proxy`).
+
+### Match types (rule_key)
+
+| Type | Example | Description |
+|------|---------|-------------|
+| `domain` | `youtube.com` | Exact domain match |
+| `domain_suffix` | `.youtube.com` | Domain and all subdomains |
+| `domain_keyword` | `youtube` | Any domain containing the word |
+| `ip_cidr` | `8.8.8.8/32` | IP address or subnet |
+| `geosite` | `ru`, `youtube`, `category-ads-all` | Site groups from built-in database |
+| `geoip` | `ru`, `cn` | Country IP ranges |
+| `rule_set` | URL to `.srs` file | External rule set (auto-downloaded) |
+
+### Actions (outbound)
+
+| Action | What happens |
+|--------|-------------|
+| `proxy` | Through the main VPN outbound |
+| `direct` | Directly, bypassing VPN |
+| `block` | Block the traffic |
+| `dns` | Forward to DNS resolver |
+| `exit_node-name` | ⭐ Through a specific federation node |
+| `bridge_to_name` | ⭐ Through a bridge (intermediate hop) |
+
+> **⭐ Federation nodes** appear in the outbound list automatically after you create a bridge connection to a node via Federation → Create Bridge.
+
+---
+
+## Use cases
+
+### Scenario 1: Russian sites direct, everything else through VPN
+
+```
+geosite:ru  → direct   ← Russian sites without VPN
+geoip:ru    → direct   ← Russian IP ranges without VPN
+(default)   → proxy    ← everything else through VPN
+```
+
+Add in bot:
+1. `🗺 Routing → ➕ Add rule`
+2. Type: `geosite`, Value: `ru`, Action: `direct`
+3. Type: `geoip`, Value: `ru`, Action: `direct`
+
+---
+
+### Scenario 2: YouTube → Russian node, Twitch → European bridge
+
+**Step 1 — Set up Federation (once):**
+1. Make sure both servers have singbox-ui-bot running
+2. `/menu → 🔗 Federation → ➕ Add Node`
+   - For YouTube node: name `ru-node`, server URL, node's `FEDERATION_SECRET`, role `node`
+   - For Twitch bridge: name `eu-bridge`, URL, secret, role `bridge`
+3. `/menu → 🔗 Federation → 🌉 Create Bridge`
+   - For YouTube: select `ru-node` (single hop = direct connection)
+   - For Twitch: select `eu-bridge` → then add exit node
+
+After Create Bridge, Sing-Box will have outbound tags:
+- `exit_ru-node`
+- `bridge_to_eu-bridge`
+
+**Step 2 — Add routing rules:**
+1. `/menu → 🗺 Routing → ➕ Add rule`
+2. YouTube: Type `geosite`, Value `youtube`, Action → select `exit_ru-node`
+3. Twitch: Type `domain`, Value `twitch.tv`, Action → select `bridge_to_eu-bridge`
+4. Twitch CDN: Type `domain_suffix`, Value `.twitch.tv`, same action
+
+Result:
+```
+geosite:youtube     → exit_ru-node        ← YouTube through Russia
+domain:twitch.tv    → bridge_to_eu-bridge ← Twitch through EU bridge
+.twitch.tv          → bridge_to_eu-bridge ← Twitch CDN too
+(default)           → proxy               ← everything else as usual
+```
+
+---
+
+### Scenario 3: Block ads via rule_set
+
+Ready-made SRS lists for ad blocking:
+
+```
+https://cdn.jsdelivr.net/gh/SagerNet/sing-geosite@rule-set/geosite-category-ads-all.srs
+```
+
+Add in bot:
+1. `🗺 Routing → ➕ Add rule`
+2. Type: `rule_set`
+3. Value: paste the URL above
+4. Action: `block`
+
+Sing-Box will download the file and apply rules automatically.
+
+---
+
+### Scenario 4: Specific sites through a specific country
+
+Route Netflix through a US node:
+
+```
+domain:netflix.com         → exit_us-node
+domain_suffix:.netflix.com → exit_us-node
+domain_suffix:.nflximg.net → exit_us-node
+```
+
+Or via geosite:
+```
+geosite:netflix → exit_us-node
+```
+
+---
+
+## Useful SRS links
+
+| List | URL |
+|------|-----|
+| Ads & trackers | `https://cdn.jsdelivr.net/gh/SagerNet/sing-geosite@rule-set/geosite-category-ads-all.srs` |
+| YouTube | `https://cdn.jsdelivr.net/gh/SagerNet/sing-geosite@rule-set/geosite-youtube.srs` |
+| Google | `https://cdn.jsdelivr.net/gh/SagerNet/sing-geosite@rule-set/geosite-google.srs` |
+| Telegram | `https://cdn.jsdelivr.net/gh/SagerNet/sing-geosite@rule-set/geosite-telegram.srs` |
+| Netflix | `https://cdn.jsdelivr.net/gh/SagerNet/sing-geosite@rule-set/geosite-netflix.srs` |
+| Twitch | `https://cdn.jsdelivr.net/gh/SagerNet/sing-geosite@rule-set/geosite-twitch.srs` |
+
+> Full geosite tag list: [sing-geosite](https://github.com/SagerNet/sing-geosite/tree/rule-set)
+
+---
+
+## Adding SRS in bot (step by step)
+
+1. `/menu → 🗺 Routing → ➕ Add rule`
+2. Select type: **Rule Set URL**
+3. Enter the `.srs` file URL
+4. Select action: `block` / `direct` / `exit_node`
+5. Sing-Box downloads the file and starts applying rules
+
+---
+
+## Export and Import
+
+- **Export** (`📤 Export`) — downloads `routing_rules.json` with all rules and rule_sets
+- **Import** (`📥 Import`) — uploads JSON, **adds** to existing rules (does not replace)
+
+---
+
+## Important notes
+
+- **Order matters**: rules are checked top to bottom. Put more specific rules first.
+- **After adding** — Sing-Box reloads automatically (graceful reload — no connection drops).
+- **Node outbounds** only appear after setting up Federation + Create Bridge.
+- **`dns`** — use only for DNS query forwarding, not for regular traffic.
+""",
+}
+
 _DOCS["federation"] = {
     "title": {"ru": "🔗 Федерация", "en": "🔗 Federation"},
     "ru": """

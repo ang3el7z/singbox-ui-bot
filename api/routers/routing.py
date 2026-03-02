@@ -10,13 +10,14 @@ from api.deps import require_any_auth, audit
 router = APIRouter()
 
 RuleKey = Literal["domain", "domain_suffix", "domain_keyword", "ip_cidr", "geosite", "geoip", "rule_set"]
-Action = Literal["direct", "proxy", "block", "dns"]
+
+_BUILTIN_OUTBOUNDS = ["proxy", "direct", "block", "dns"]
 
 
 class RuleCreate(BaseModel):
     rule_key: RuleKey
     value: str
-    outbound: Action = "proxy"
+    outbound: str = "proxy"  # any valid outbound tag, including federation nodes
 
 
 class RuleSetCreate(BaseModel):
@@ -24,6 +25,20 @@ class RuleSetCreate(BaseModel):
     url: str
     format: Literal["binary", "source"] = "binary"
     download_detour: str = "direct"
+
+
+@router.get("/outbounds")
+async def list_outbounds(auth: dict = Depends(require_any_auth)):
+    """Return all available outbound tags: built-ins + any federation/custom outbounds in config."""
+    tags: list[str] = list(_BUILTIN_OUTBOUNDS)
+    try:
+        for ob in singbox.get_outbounds():
+            tag = ob.get("tag", "")
+            if tag and tag not in tags:
+                tags.append(tag)
+    except Exception:
+        pass
+    return {"outbounds": tags}
 
 
 @router.get("/")

@@ -444,13 +444,15 @@ tailwind.config = {
                 <input type="text" x-model="form.value" class="form-input" required placeholder="example.com or 1.1.1.0/24"/>
               </div>
               <div>
-                <label class="text-slate-400 text-sm block mb-1">Action</label>
+                <label class="text-slate-400 text-sm block mb-1">Outbound / Action</label>
                 <select x-model="form.outbound" class="form-input">
-                  <option value="proxy">proxy</option>
-                  <option value="direct">direct</option>
-                  <option value="block">block</option>
-                  <option value="dns">dns</option>
+                  <template x-for="ob in outbounds" :key="ob">
+                    <option :value="ob" x-text="ob"></option>
+                  </template>
                 </select>
+                <p class="text-slate-500 text-xs mt-1" x-show="outbounds.length > 4">
+                  📡 Federation node outbounds are shown above — select one to route traffic through it.
+                </p>
               </div>
               <div class="flex gap-2 pt-2">
                 <button type="submit" class="btn btn-primary flex-1 justify-center">Add</button>
