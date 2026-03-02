@@ -282,8 +282,8 @@ class SingBoxService:
         Build a client-side sing-box config for a given client + inbound.
         Returns a dict ready to be serialized as JSON.
         """
-        from api.config import settings as cfg
-        domain = cfg.domain
+        from api.routers.settings_router import get_runtime
+        domain = get_runtime("domain")
 
         proto = inbound.get("type", "vless")
         port = inbound.get("listen_port", 443)
