@@ -1,13 +1,8 @@
-version: "3.9"
-
 networks:
   singbox_net:
     driver: bridge
 
 volumes:
-  singbox_config:
-  adguard_data:
-  nginx_certs:
   app_data:
 
 services:
@@ -27,7 +22,7 @@ services:
       - ./nginx/htpasswd:/etc/nginx/htpasswd  # basic auth for 401 fallback
       - ./nginx:/app/nginx
       - ./subs:/app/subs
-      - ./nginx/logs:/app/nginx/logs:ro       # Read nginx access logs
+      - ./nginx/logs:/app/nginx/logs:ro       # read nginx access logs
       - app_data:/app/data                    # SQLite database
       - /var/run/docker.sock:/var/run/docker.sock  # for docker exec singbox reload
     environment:
@@ -37,7 +32,6 @@ services:
       - singbox_net
     depends_on:
       - singbox
-      - adguard
 
   # ── Sing-Box ─────────────────────────────────────────────────────────────────
   singbox:
@@ -52,26 +46,29 @@ services:
     sysctls:
       - net.ipv4.ip_forward=1
       - net.ipv6.conf.all.forwarding=1
-    network_mode: host                        # need host network for VPN
-    # IMPORTANT: After changing config, app sends SIGHUP or restarts this container.
+    network_mode: host                        # need host network for VPN ports
 
-  # ── AdGuard Home ─────────────────────────────────────────────────────────────
+  # ── AdGuard Home (optional, use --profile adguard) ───────────────────────────
+  # Skip if you already have AdGuard or another DNS server on the host.
   adguard:
+    profiles: [adguard]
     image: adguard/adguardhome:latest
     container_name: singbox_adguard
     restart: unless-stopped
     volumes:
-      - adguard_data:/opt/adguardhome/work
-      - adguard_data:/opt/adguardhome/conf
+      - ./data/adguard/work:/opt/adguardhome/work
+      - ./data/adguard/conf:/opt/adguardhome/conf
     ports:
       - "53:53/tcp"
       - "53:53/udp"
-      - "3000:3000"   # AdGuard Web UI (internal only, proxied via Nginx)
+      - "3000:3000"   # AdGuard Web UI (proxied via Nginx)
     networks:
       - singbox_net
 
-  # ── Nginx ─────────────────────────────────────────────────────────────────────
+  # ── Nginx (optional, use --profile nginx) ─────────────────────────────────────
+  # Skip if you already have Nginx installed on the host.
   nginx:
+    profiles: [nginx]
     image: nginx:alpine
     container_name: singbox_nginx
     restart: unless-stopped
@@ -83,8 +80,8 @@ services:
       - ./nginx/override:/var/www/override:ro
       - ./nginx/htpasswd:/etc/nginx/htpasswd:ro
       - ./nginx/certs:/etc/letsencrypt:ro
-      - ./web:/var/www/web:ro                 # Serve web UI
-      - ./nginx/logs:/var/log/nginx           # Shared log dir (readable by app)
+      - ./web:/var/www/web:ro                 # serve web UI static files
+      - ./nginx/logs:/var/log/nginx           # shared log dir (readable by app)
     networks:
       - singbox_net
     depends_on:

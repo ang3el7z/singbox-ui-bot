@@ -239,17 +239,27 @@ async def _run(*cmd: str, timeout: int = 30) -> tuple[bool, str]:
 
 # ─── Nginx process management ─────────────────────────────────────────────────
 
+def _nginx_container() -> str:
+    """Name of the nginx Docker container; empty string means nginx runs on the host."""
+    return os.getenv("NGINX_CONTAINER", "singbox_nginx")
+
+
 async def reload_nginx() -> tuple[bool, str]:
-    ok, out = await _run("docker", "exec", "singbox_nginx", "nginx", "-s", "reload")
-    if ok:
-        return True, "OK"
-    # Fallback: direct nginx call (if running without docker, e.g. in CI)
+    container = _nginx_container()
+    if container:
+        ok, out = await _run("docker", "exec", container, "nginx", "-s", "reload")
+        if ok:
+            return True, "OK"
+    # Fallback / host nginx
     ok2, out2 = await _run("nginx", "-s", "reload", timeout=10)
-    return ok2, out2 or out
+    return ok2, out2
 
 
 async def test_nginx_config() -> tuple[bool, str]:
-    return await _run("docker", "exec", "singbox_nginx", "nginx", "-t")
+    container = _nginx_container()
+    if container:
+        return await _run("docker", "exec", container, "nginx", "-t")
+    return await _run("nginx", "-t", timeout=10)
 
 
 async def get_access_logs(lines: int = 50) -> str:
