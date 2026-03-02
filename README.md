@@ -44,12 +44,15 @@ See [docs/INSTALL.md](docs/INSTALL.md) for detailed instructions.
 
 ## Documentation
 
-| Document | Description |
-|----------|-------------|
-| [INSTALL.md](docs/INSTALL.md) | Installation, configuration, troubleshooting |
-| [API.md](docs/API.md) | Full REST API reference (all endpoints) |
-| [FEDERATION.md](docs/FEDERATION.md) | Multi-node federation setup |
-| [WEB_UI.md](docs/WEB_UI.md) | Web UI guide |
+All documentation is available in Russian 🇷🇺 and English 🇬🇧.
+
+| Document | RU | EN |
+|----------|----|----|
+| [OVERVIEW.md](docs/OVERVIEW.md) | Архитектура, компоненты, безопасность, функционал | Architecture, components, security, features |
+| [INSTALL.md](docs/INSTALL.md) | Установка, настройка, решение проблем | Installation, configuration, troubleshooting |
+| [API.md](docs/API.md) | Полный справочник REST API | Full REST API reference |
+| [FEDERATION.md](docs/FEDERATION.md) | Объединение серверов, multi-hop VPN | Multi-node federation, multi-hop VPN |
+| [WEB_UI.md](docs/WEB_UI.md) | Руководство по веб-интерфейсу | Web UI guide |
 
 ## Architecture
 
