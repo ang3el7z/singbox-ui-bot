@@ -45,3 +45,10 @@ Thumbs.db
 
 # Certificates (managed by certbot/Let's Encrypt)
 data/certs/
+nginx/certs/
+
+# Subscriptions (generated at runtime)
+subs/
+
+# Sing-Box cache
+config/sing-box/cache.db

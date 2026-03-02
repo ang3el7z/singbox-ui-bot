@@ -1,0 +1,683 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Singbox UI</title>
+
+<!-- Alpine.js (defer) -->
+<script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+<!-- Tailwind CDN -->
+<script src="https://cdn.tailwindcss.com"></script>
+
+<link rel="stylesheet" href="/web/css/style.css"/>
+<script type="module" src="/web/js/app.js"></script>
+
+<script>
+tailwind.config = {
+    theme: {
+        extend: {
+            colors: { accent: '#6366f1' }
+        }
+    }
+};
+</script>
+</head>
+
+<body class="h-full flex flex-col" x-data="appRoot()"
+      @login-success.window="page = 'dashboard'; username = $event.detail.username"
+      @toast.window="showToast($event.detail.msg, $event.detail.type)">
+
+<!-- ── TOAST ─────────────────────────────────────────────────────────────── -->
+<div x-show="toast" x-transition class="toast"
+     :class="toast?.type === 'error' ? 'toast-error' : 'toast-success'"
+     x-text="toast?.msg"></div>
+
+<!-- ── LOGIN SCREEN ──────────────────────────────────────────────────────── -->
+<div x-show="page === 'login'" x-cloak
+     class="min-h-screen flex items-center justify-center p-4">
+  <div class="card w-full max-w-sm" x-data="loginComponent()">
+    <div class="flex items-center gap-3 mb-6">
+      <div class="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center text-xl">🔐</div>
+      <div>
+        <h1 class="text-lg font-bold text-white">Singbox UI</h1>
+        <p class="text-slate-400 text-sm">Admin panel</p>
+      </div>
+    </div>
+
+    <form @submit.prevent="submit" class="flex flex-col gap-4">
+      <div>
+        <label class="text-slate-400 text-sm block mb-1">Username</label>
+        <input type="text" x-model="username" class="form-input" placeholder="admin" autocomplete="username"/>
+      </div>
+      <div>
+        <label class="text-slate-400 text-sm block mb-1">Password</label>
+        <input type="password" x-model="password" class="form-input" placeholder="••••••••" autocomplete="current-password"/>
+      </div>
+      <p x-show="error" class="text-red-400 text-sm" x-text="error"></p>
+      <button type="submit" class="btn btn-primary w-full justify-center" :disabled="loading">
+        <span x-show="loading" class="spinner"></span>
+        <span>Sign In</span>
+      </button>
+    </form>
+  </div>
+</div>
+
+<!-- ── MAIN APP ───────────────────────────────────────────────────────────── -->
+<div x-show="page !== 'login'" x-cloak class="flex h-full min-h-screen">
+
+  <!-- Sidebar -->
+  <aside class="sidebar flex-shrink-0 flex flex-col h-screen sticky top-0">
+    <div class="flex items-center gap-3 p-4 border-b border-slate-700">
+      <div class="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center text-sm">SB</div>
+      <span class="font-bold text-white text-sm">Singbox UI</span>
+    </div>
+
+    <nav class="flex-1 p-3 flex flex-col gap-1 overflow-y-auto">
+      <div class="sidebar-item" :class="page==='dashboard' && 'active'" @click="navigate('dashboard')">
+        📊 Dashboard
+      </div>
+      <div class="sidebar-item" :class="page==='server' && 'active'" @click="navigate('server')">
+        🖥 Server
+      </div>
+      <div class="sidebar-item" :class="page==='clients' && 'active'" @click="navigate('clients')">
+        👥 Clients
+      </div>
+      <div class="sidebar-item" :class="page==='inbounds' && 'active'" @click="navigate('inbounds')">
+        🔌 Inbounds
+      </div>
+      <div class="sidebar-item" :class="page==='routing' && 'active'" @click="navigate('routing')">
+        🗺 Routing
+      </div>
+      <div class="sidebar-item" :class="page==='adguard' && 'active'" @click="navigate('adguard')">
+        🛡 AdGuard
+      </div>
+      <div class="sidebar-item" :class="page==='nginx' && 'active'" @click="navigate('nginx')">
+        🌐 Nginx
+      </div>
+      <div class="sidebar-item" :class="page==='federation' && 'active'" @click="navigate('federation')">
+        🔗 Federation
+      </div>
+      <div class="sidebar-item" :class="page==='admin' && 'active'" @click="navigate('admin')">
+        👑 Admin
+      </div>
+    </nav>
+
+    <div class="p-3 border-t border-slate-700">
+      <div class="sidebar-item" @click="logout()">🚪 Logout (<span x-text="username"></span>)</div>
+    </div>
+  </aside>
+
+  <!-- Main content -->
+  <main class="flex-1 overflow-y-auto">
+
+    <!-- DASHBOARD -->
+    <section x-show="page==='dashboard'" x-data="dashboard()" x-init="init()">
+      <div class="p-6">
+        <h2 class="text-xl font-bold text-white mb-4">Dashboard</h2>
+        <div x-show="loading" class="flex gap-2 items-center text-slate-400"><span class="spinner"></span> Loading…</div>
+
+        <div x-show="!loading" class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+          <div class="card">
+            <p class="text-slate-400 text-sm mb-1">Sing-Box</p>
+            <div class="text-2xl font-bold">
+              <span x-show="status?.running" class="badge-green stat-badge">🟢 Running</span>
+              <span x-show="!status?.running" class="badge-red stat-badge">🔴 Stopped</span>
+            </div>
+          </div>
+          <div class="card">
+            <p class="text-slate-400 text-sm mb-1">Clients</p>
+            <p class="text-2xl font-bold text-white" x-text="clients.length"></p>
+          </div>
+          <div class="card">
+            <p class="text-slate-400 text-sm mb-1">Inbounds</p>
+            <p class="text-2xl font-bold text-white" x-text="inbounds.length"></p>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div class="card">
+            <h3 class="font-semibold text-white mb-3">Recent Clients</h3>
+            <table class="data-table">
+              <thead><tr><th>Name</th><th>Protocol</th><th>Status</th></tr></thead>
+              <tbody>
+                <template x-for="c in clients.slice(0,5)" :key="c.id">
+                  <tr>
+                    <td x-text="c.name"></td>
+                    <td><code x-text="c.protocol"></code></td>
+                    <td>
+                      <span :class="c.enable ? 'badge-green' : 'badge-red'" class="stat-badge"
+                            x-text="c.enable ? 'Active' : 'Disabled'"></span>
+                    </td>
+                  </tr>
+                </template>
+              </tbody>
+            </table>
+          </div>
+          <div class="card">
+            <h3 class="font-semibold text-white mb-3">Inbounds</h3>
+            <table class="data-table">
+              <thead><tr><th>Tag</th><th>Type</th><th>Port</th></tr></thead>
+              <tbody>
+                <template x-for="ib in inbounds" :key="ib.tag">
+                  <tr>
+                    <td x-text="ib.tag"></td>
+                    <td><code x-text="ib.type"></code></td>
+                    <td x-text="ib.listen_port"></td>
+                  </tr>
+                </template>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SERVER -->
+    <section x-show="page==='server'" x-data="serverSection()" x-init="init()">
+      <div class="p-6">
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="text-xl font-bold text-white">Server</h2>
+          <div class="flex gap-2">
+            <button class="btn btn-secondary" @click="loadStatus()">🔄 Refresh</button>
+            <button class="btn btn-primary"  @click="reload()" :disabled="loading">↺ Reload config</button>
+            <button class="btn btn-danger"   @click="restart()" :disabled="loading">♻ Restart</button>
+          </div>
+        </div>
+
+        <div class="card mb-4" x-show="status">
+          <div class="flex items-center gap-3">
+            <span :class="status?.running ? 'badge-green' : 'badge-red'" class="stat-badge text-lg"
+                  x-text="status?.running ? '🟢 Running' : '🔴 Stopped'"></span>
+            <span class="text-slate-400 text-sm" x-text="status?.container"></span>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="flex items-center justify-between mb-3">
+            <h3 class="font-semibold text-white">Logs</h3>
+            <button class="btn btn-ghost btn-sm text-sm" @click="loadLogs()">Load logs</button>
+          </div>
+          <div class="log-box" x-show="logs.length" x-text="logs.join('\n')"></div>
+          <p class="text-slate-500 text-sm" x-show="!logs.length">Click "Load logs" to view</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- CLIENTS -->
+    <section x-show="page==='clients'" x-data="clientsSection()" x-init="init()">
+      <div class="p-6">
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="text-xl font-bold text-white">Clients <span class="text-slate-400 font-normal text-base" x-text="'('+clients.length+')'"></span></h2>
+          <button class="btn btn-primary" @click="showAdd=true">➕ Add Client</button>
+        </div>
+
+        <div class="card mb-4">
+          <input type="text" x-model="search" class="form-input" placeholder="Search by name…"/>
+        </div>
+
+        <div class="card">
+          <table class="data-table">
+            <thead><tr><th>Name</th><th>Protocol</th><th>Inbound</th><th>Traffic</th><th>Expires</th><th>Status</th><th></th></tr></thead>
+            <tbody>
+              <template x-for="c in filtered" :key="c.id">
+                <tr @click="select(c)" style="cursor:pointer">
+                  <td class="font-medium text-white" x-text="c.name"></td>
+                  <td><code x-text="c.protocol"></code></td>
+                  <td><code x-text="c.inbound_tag"></code></td>
+                  <td class="text-slate-400 text-xs">
+                    ↑<span x-text="formatBytes(c.upload)"></span> / ↓<span x-text="formatBytes(c.download)"></span>
+                  </td>
+                  <td class="text-slate-400 text-xs" x-text="c.expiry_time ? new Date(c.expiry_time).toLocaleDateString() : '∞'"></td>
+                  <td>
+                    <span :class="c.enable ? 'badge-green' : 'badge-red'" class="stat-badge"
+                          x-text="c.enable ? 'Active' : 'Disabled'"></span>
+                  </td>
+                  <td>
+                    <button class="btn btn-ghost text-xs" @click.stop="toggleEnable(c)"
+                            x-text="c.enable ? 'Disable' : 'Enable'"></button>
+                  </td>
+                </tr>
+              </template>
+              <tr x-show="!filtered.length">
+                <td colspan="7" class="text-center text-slate-500 py-4">No clients found</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Client detail modal -->
+        <div class="modal-overlay" x-show="selected" @click.self="selected=null">
+          <div class="modal-box" x-show="selected">
+            <div class="flex items-center justify-between mb-4">
+              <h3 class="font-bold text-white text-lg" x-text="selected?.name"></h3>
+              <button class="text-slate-400 hover:text-white" @click="selected=null">✕</button>
+            </div>
+            <table class="data-table mb-4">
+              <tbody>
+                <tr><td class="text-slate-400">Protocol</td><td><code x-text="selected?.protocol"></code></td></tr>
+                <tr><td class="text-slate-400">Inbound</td><td><code x-text="selected?.inbound_tag"></code></td></tr>
+                <tr x-show="selected?.uuid"><td class="text-slate-400">UUID</td><td><code x-text="selected?.uuid" class="text-xs"></code></td></tr>
+                <tr x-show="selected?.password"><td class="text-slate-400">Password</td><td><code x-text="selected?.password" class="text-xs"></code></td></tr>
+                <tr><td class="text-slate-400">Sub ID</td><td><code x-text="selected?.sub_id"></code></td></tr>
+                <tr><td class="text-slate-400">Traffic</td><td>↑<span x-text="formatBytes(selected?.upload)"></span> / ↓<span x-text="formatBytes(selected?.download)"></span></td></tr>
+              </tbody>
+            </table>
+            <div class="flex gap-2 flex-wrap">
+              <button class="btn btn-primary" @click="downloadSub(selected)">📄 Download config</button>
+              <button class="btn btn-secondary" @click="resetStats(selected)">📊 Reset stats</button>
+              <button class="btn btn-danger" @click="deleteClient(selected)">🗑 Delete</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Add client modal -->
+        <div class="modal-overlay" x-show="showAdd" @click.self="showAdd=false">
+          <div class="modal-box">
+            <h3 class="font-bold text-white text-lg mb-4">Add Client</h3>
+            <form @submit.prevent="create()" class="flex flex-col gap-3">
+              <div>
+                <label class="text-slate-400 text-sm block mb-1">Name</label>
+                <input type="text" x-model="form.name" class="form-input" required placeholder="John Doe"/>
+              </div>
+              <div>
+                <label class="text-slate-400 text-sm block mb-1">Inbound</label>
+                <select x-model="form.inbound_tag" class="form-input" required>
+                  <template x-for="ib in inbounds" :key="ib.tag">
+                    <option :value="ib.tag" x-text="`[${ib.type}] ${ib.tag} :${ib.listen_port}`"></option>
+                  </template>
+                </select>
+              </div>
+              <div class="grid grid-cols-2 gap-3">
+                <div>
+                  <label class="text-slate-400 text-sm block mb-1">Traffic limit (GB, 0=∞)</label>
+                  <input type="number" x-model.number="form.total_gb" class="form-input" min="0" step="0.1"/>
+                </div>
+                <div>
+                  <label class="text-slate-400 text-sm block mb-1">Expire (days, 0=∞)</label>
+                  <input type="number" x-model.number="form.expire_days" class="form-input" min="0"/>
+                </div>
+              </div>
+              <div class="flex gap-2 pt-2">
+                <button type="submit" class="btn btn-primary flex-1 justify-center" :disabled="loading">Create</button>
+                <button type="button" class="btn btn-ghost" @click="showAdd=false">Cancel</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- INBOUNDS -->
+    <section x-show="page==='inbounds'" x-data="inboundsSection()" x-init="init()">
+      <div class="p-6">
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="text-xl font-bold text-white">Inbounds</h2>
+          <button class="btn btn-primary" @click="showAdd=true">➕ Add Inbound</button>
+        </div>
+
+        <div class="card">
+          <table class="data-table">
+            <thead><tr><th>Tag</th><th>Protocol</th><th>Port</th><th>Users</th><th></th></tr></thead>
+            <tbody>
+              <template x-for="ib in inbounds" :key="ib.tag">
+                <tr>
+                  <td class="font-medium text-white" x-text="ib.tag"></td>
+                  <td><code x-text="ib.type"></code></td>
+                  <td x-text="ib.listen_port"></td>
+                  <td x-text="(ib.users || []).length"></td>
+                  <td>
+                    <button class="btn btn-danger text-xs" @click="deleteInbound(ib)">Delete</button>
+                  </td>
+                </tr>
+              </template>
+              <tr x-show="!inbounds.length">
+                <td colspan="5" class="text-center text-slate-500 py-4">No inbounds configured</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Add inbound modal -->
+        <div class="modal-overlay" x-show="showAdd" @click.self="showAdd=false">
+          <div class="modal-box">
+            <h3 class="font-bold text-white text-lg mb-4">Add Inbound</h3>
+            <form @submit.prevent="create()" class="flex flex-col gap-3">
+              <div>
+                <label class="text-slate-400 text-sm block mb-1">Protocol</label>
+                <select x-model="form.protocol" class="form-input">
+                  <template x-for="p in protocols" :key="p">
+                    <option :value="p" x-text="p.replace(/_/g,' ').toUpperCase()"></option>
+                  </template>
+                </select>
+              </div>
+              <div>
+                <label class="text-slate-400 text-sm block mb-1">Tag (unique name)</label>
+                <input type="text" x-model="form.tag" class="form-input" required placeholder="vless-in"/>
+              </div>
+              <div>
+                <label class="text-slate-400 text-sm block mb-1">Listen Port</label>
+                <input type="number" x-model.number="form.listen_port" class="form-input" min="1" max="65535" required/>
+              </div>
+              <div class="flex gap-2 pt-2">
+                <button type="submit" class="btn btn-primary flex-1 justify-center" :disabled="loading">Create</button>
+                <button type="button" class="btn btn-ghost" @click="showAdd=false">Cancel</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ROUTING -->
+    <section x-show="page==='routing'" x-data="routingSection()" x-init="init()">
+      <div class="p-6">
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="text-xl font-bold text-white">Routing Rules</h2>
+          <div class="flex gap-2">
+            <button class="btn btn-secondary" @click="exportRules()">📤 Export</button>
+            <button class="btn btn-primary" @click="showAdd=true">➕ Add Rule</button>
+          </div>
+        </div>
+
+        <!-- Rule key tabs -->
+        <div class="flex gap-2 flex-wrap mb-4">
+          <template x-for="key in ruleKeys" :key="key">
+            <button class="btn btn-ghost text-sm"
+                    :class="selectedKey===key && 'btn-primary'"
+                    @click="selectKey(key)"
+                    x-text="key.replace(/_/g,' ')"></button>
+          </template>
+        </div>
+
+        <div class="card">
+          <div x-show="loading" class="text-slate-400 py-4"><span class="spinner"></span></div>
+          <table class="data-table" x-show="!loading">
+            <thead><tr><th>Value</th><th>Outbound</th><th></th></tr></thead>
+            <tbody>
+              <template x-for="r in (rules[selectedKey] || [])" :key="r.value">
+                <tr>
+                  <td><code x-text="r.value"></code></td>
+                  <td><span :class="{'badge-blue':'proxy','badge-red':'block','badge-green':'direct'}[r.outbound] || 'badge-yellow'"
+                            class="stat-badge" x-text="r.outbound"></span></td>
+                  <td><button class="btn btn-danger text-xs" @click="deleteRule(r)">Delete</button></td>
+                </tr>
+              </template>
+              <tr x-show="!(rules[selectedKey]||[]).length && !loading">
+                <td colspan="3" class="text-center text-slate-500 py-4">No rules</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Add rule modal -->
+        <div class="modal-overlay" x-show="showAdd" @click.self="showAdd=false">
+          <div class="modal-box">
+            <h3 class="font-bold text-white text-lg mb-4">Add Rule</h3>
+            <form @submit.prevent="addRule()" class="flex flex-col gap-3">
+              <div>
+                <label class="text-slate-400 text-sm block mb-1">Rule Type</label>
+                <select x-model="form.rule_key" class="form-input">
+                  <template x-for="k in ruleKeys" :key="k">
+                    <option :value="k" x-text="k.replace(/_/g,' ')"></option>
+                  </template>
+                </select>
+              </div>
+              <div>
+                <label class="text-slate-400 text-sm block mb-1">Value</label>
+                <input type="text" x-model="form.value" class="form-input" required placeholder="example.com or 1.1.1.0/24"/>
+              </div>
+              <div>
+                <label class="text-slate-400 text-sm block mb-1">Action</label>
+                <select x-model="form.outbound" class="form-input">
+                  <option value="proxy">proxy</option>
+                  <option value="direct">direct</option>
+                  <option value="block">block</option>
+                  <option value="dns">dns</option>
+                </select>
+              </div>
+              <div class="flex gap-2 pt-2">
+                <button type="submit" class="btn btn-primary flex-1 justify-center">Add</button>
+                <button type="button" class="btn btn-ghost" @click="showAdd=false">Cancel</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ADGUARD -->
+    <section x-show="page==='adguard'" x-data="adguardSection()" x-init="init()">
+      <div class="p-6">
+        <h2 class="text-xl font-bold text-white mb-4">AdGuard Home</h2>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+          <div class="card">
+            <p class="text-slate-400 text-sm mb-1">Status</p>
+            <span :class="status?.protection_enabled ? 'badge-green' : 'badge-red'" class="stat-badge"
+                  x-text="status?.protection_enabled ? '🟢 Protection on' : '🔴 Protection off'"></span>
+            <div class="flex gap-2 mt-3">
+              <button class="btn btn-success text-xs" @click="toggle(true)">Enable</button>
+              <button class="btn btn-danger text-xs"  @click="toggle(false)">Disable</button>
+            </div>
+          </div>
+          <div class="card">
+            <p class="text-slate-400 text-sm mb-1">DNS Queries (24h)</p>
+            <p class="text-2xl font-bold text-white" x-text="stats?.dns_queries || 0"></p>
+          </div>
+          <div class="card">
+            <p class="text-slate-400 text-sm mb-1">Blocked (24h)</p>
+            <p class="text-2xl font-bold text-red-400" x-text="stats?.blocked_filtering || 0"></p>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div class="card">
+            <h3 class="font-semibold text-white mb-3">Upstream DNS</h3>
+            <ul class="flex flex-col gap-1 mb-3">
+              <template x-for="u in (dns?.upstream_dns || [])" :key="u">
+                <li class="flex items-center justify-between text-sm">
+                  <code x-text="u"></code>
+                </li>
+              </template>
+            </ul>
+            <div class="flex gap-2">
+              <input type="text" x-model="newUpstream" class="form-input text-sm" placeholder="8.8.8.8"/>
+              <button class="btn btn-primary text-sm" @click="addUpstream()">Add</button>
+            </div>
+          </div>
+          <div class="card">
+            <h3 class="font-semibold text-white mb-3">Filter Rules <span class="text-slate-400 font-normal" x-text="'('+rules.length+')'"></span></h3>
+            <div class="flex gap-2 mb-3">
+              <input type="text" x-model="newRule" class="form-input text-sm" placeholder="||example.com^"/>
+              <button class="btn btn-primary text-sm" @click="addFilterRule()">Add</button>
+            </div>
+            <ul class="flex flex-col gap-1 max-h-40 overflow-y-auto">
+              <template x-for="r in rules.slice(0,20)" :key="r">
+                <li class="text-xs text-slate-400"><code x-text="r"></code></li>
+              </template>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- NGINX -->
+    <section x-show="page==='nginx'" x-data="nginxSection()" x-init="init()">
+      <div class="p-6">
+        <h2 class="text-xl font-bold text-white mb-4">Nginx</h2>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+          <div class="card">
+            <h3 class="font-semibold text-white mb-3">Actions</h3>
+            <div class="flex flex-col gap-2">
+              <button class="btn btn-primary w-full" @click="configure()" :disabled="loading">⚙️ Configure & Reload</button>
+              <button class="btn btn-success w-full" @click="issueSSL()" :disabled="loading">🔐 Issue SSL Certificate</button>
+              <button class="btn btn-secondary w-full" @click="loadLogs()">📋 Load Access Logs</button>
+            </div>
+          </div>
+          <div class="card">
+            <h3 class="font-semibold text-white mb-3">Custom Site Override</h3>
+            <p class="text-slate-400 text-sm mb-3">
+              Default: 401 Basic Auth popup. Upload HTML or ZIP to override.
+            </p>
+            <div x-show="status?.override?.active" class="badge-green stat-badge mb-3">✅ Custom site active</div>
+            <label class="btn btn-secondary w-full cursor-pointer text-center">
+              📤 Upload HTML / ZIP
+              <input type="file" class="hidden" accept=".html,.htm,.zip" @change="uploadSite($event)"/>
+            </label>
+            <button class="btn btn-danger w-full mt-2" x-show="status?.override?.active" @click="removeOverride()">
+              🗑 Remove override
+            </button>
+          </div>
+        </div>
+
+        <div class="card mb-4" x-show="paths">
+          <h3 class="font-semibold text-white mb-3">🔒 Hidden Paths</h3>
+          <table class="data-table">
+            <tbody>
+              <template x-for="[k,v] in Object.entries(paths || {})" :key="k">
+                <tr x-show="v">
+                  <td class="text-slate-400 w-1/3" x-text="k"></td>
+                  <td><code x-text="v"></code></td>
+                </tr>
+              </template>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="card" x-show="logs">
+          <h3 class="font-semibold text-white mb-2">Access Logs</h3>
+          <div class="log-box" x-text="logs"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- FEDERATION -->
+    <section x-show="page==='federation'" x-data="federationSection()" x-init="init()">
+      <div class="p-6">
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="text-xl font-bold text-white">Federation</h2>
+          <div class="flex gap-2">
+            <button class="btn btn-secondary" @click="pingAll()" :disabled="loading">📡 Ping All</button>
+            <button class="btn btn-primary"   @click="showAdd=true">➕ Add Node</button>
+          </div>
+        </div>
+
+        <div class="card mb-4">
+          <table class="data-table">
+            <thead><tr><th>Name</th><th>Role</th><th>URL</th><th>Status</th><th></th></tr></thead>
+            <tbody>
+              <template x-for="n in nodes" :key="n.id">
+                <tr>
+                  <td class="font-medium text-white" x-text="n.name"></td>
+                  <td><span class="badge-blue stat-badge" x-text="n.role"></span></td>
+                  <td class="text-slate-400 text-xs"><code x-text="n.url"></code></td>
+                  <td>
+                    <span :class="n.is_active ? 'badge-green' : 'badge-red'" class="stat-badge"
+                          x-text="n.is_active ? '🟢 Online' : '🔴 Offline'"></span>
+                  </td>
+                  <td>
+                    <button class="btn btn-danger text-xs" @click="deleteNode(n)">Delete</button>
+                  </td>
+                </tr>
+              </template>
+              <tr x-show="!nodes.length">
+                <td colspan="5" class="text-center text-slate-500 py-4">No nodes configured</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Add node modal -->
+        <div class="modal-overlay" x-show="showAdd" @click.self="showAdd=false">
+          <div class="modal-box">
+            <h3 class="font-bold text-white text-lg mb-4">Add Federation Node</h3>
+            <form @submit.prevent="addNode()" class="flex flex-col gap-3">
+              <div>
+                <label class="text-slate-400 text-sm block mb-1">Node Name</label>
+                <input type="text" x-model="form.name" class="form-input" required placeholder="node-eu"/>
+              </div>
+              <div>
+                <label class="text-slate-400 text-sm block mb-1">URL</label>
+                <input type="url" x-model="form.url" class="form-input" required placeholder="https://node.example.com"/>
+              </div>
+              <div>
+                <label class="text-slate-400 text-sm block mb-1">Shared Secret</label>
+                <input type="text" x-model="form.secret" class="form-input" required/>
+              </div>
+              <div>
+                <label class="text-slate-400 text-sm block mb-1">Role</label>
+                <select x-model="form.role" class="form-input">
+                  <option value="node">Node</option>
+                  <option value="bridge">Bridge</option>
+                </select>
+              </div>
+              <div class="flex gap-2 pt-2">
+                <button type="submit" class="btn btn-primary flex-1 justify-center" :disabled="loading">Add</button>
+                <button type="button" class="btn btn-ghost" @click="showAdd=false">Cancel</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ADMIN -->
+    <section x-show="page==='admin'" x-data="adminSection()" x-init="init()">
+      <div class="p-6">
+        <h2 class="text-xl font-bold text-white mb-4">Admin Panel</h2>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+          <div class="card">
+            <h3 class="font-semibold text-white mb-3">Telegram Admins</h3>
+            <div class="flex gap-2 mb-3">
+              <input type="text" x-model="newAdminId" class="form-input text-sm" placeholder="Telegram ID"/>
+              <button class="btn btn-primary text-sm" @click="addAdmin()">Add</button>
+            </div>
+            <table class="data-table">
+              <tbody>
+                <template x-for="a in admins" :key="a.telegram_id">
+                  <tr>
+                    <td x-text="a.telegram_id"></td>
+                    <td class="text-slate-400">@<span x-text="a.username || 'N/A'"></span></td>
+                    <td><button class="btn btn-danger text-xs" @click="deleteAdmin(a)">Remove</button></td>
+                  </tr>
+                </template>
+              </tbody>
+            </table>
+          </div>
+          <div class="card">
+            <div class="flex items-center justify-between mb-3">
+              <h3 class="font-semibold text-white">Quick Actions</h3>
+            </div>
+            <div class="flex flex-col gap-2">
+              <button class="btn btn-secondary w-full" @click="backup()">💾 Download Backup</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <h3 class="font-semibold text-white mb-3">Audit Log</h3>
+          <table class="data-table">
+            <thead><tr><th>Time</th><th>Actor</th><th>Action</th><th>Details</th></tr></thead>
+            <tbody>
+              <template x-for="l in auditLog" :key="l.id">
+                <tr>
+                  <td class="text-slate-400 text-xs" x-text="l.created_at.slice(0,16).replace('T',' ')"></td>
+                  <td><code class="text-xs" x-text="l.actor"></code></td>
+                  <td class="font-medium text-sm" x-text="l.action"></td>
+                  <td class="text-slate-400 text-xs" x-text="l.details||''"></td>
+                </tr>
+              </template>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+</body>
+</html>

@@ -1,7 +1,7 @@
-{% set sui_path = '/' + secret_hash[:12] + '/panel' %}
-{% set sub_path = '/' + secret_hash[12:24] + '/sub' %}
+{% set web_path  = '/' + secret_hash[:12] + '/web' %}
+{% set sub_path  = '/' + secret_hash[12:24] + '/sub' %}
 {% set adguard_path = '/' + secret_hash[24:36] + '/adg' %}
-{% set fed_path = '/' + secret_hash[36:48] + '/api' %}
+{% set api_path  = '/' + secret_hash[36:48] + '/api' %}
 
 # Redirect HTTP → HTTPS
 server {
@@ -58,15 +58,29 @@ server {
     # htpasswd contains a random hash — real login is impossible (camouflage)
     location @auth {
         auth_basic           "Restricted Content";
-        auth_basic_user_file /etc/nginx/.htpasswd;
+        auth_basic_user_file /etc/nginx/htpasswd/.htpasswd;
         try_files            /dev/null =403;
     }
 
-    # ── Hidden service paths (hash-based) ─────────────────────────────────────
+    # ── Web UI ────────────────────────────────────────────────────────────────
+    location /web/ {
+        alias /var/www/web/;
+        try_files $uri $uri/ /web/index.html;
+    }
 
-    # s-ui panel
-    location {{ sui_path }}/ {
-        proxy_pass         http://sui:2095/;
+    # ── API (hidden path) ────────────────────────────────────────────────────
+    location {{ api_path }}/ {
+        proxy_pass         http://app:8080/api/;
+        proxy_http_version 1.1;
+        proxy_set_header   Host $host;
+        proxy_set_header   X-Real-IP $remote_addr;
+        proxy_set_header   X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header   X-Forwarded-Proto $scheme;
+    }
+
+    # Public API (needed by web UI at /api/*)
+    location /api/ {
+        proxy_pass         http://app:8080/api/;
         proxy_http_version 1.1;
         proxy_set_header   Upgrade $http_upgrade;
         proxy_set_header   Connection "upgrade";
@@ -74,12 +88,20 @@ server {
         proxy_set_header   X-Real-IP $remote_addr;
         proxy_set_header   X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header   X-Forwarded-Proto $scheme;
-        proxy_read_timeout 86400;
+        proxy_read_timeout 120;
+    }
+
+    # Webhook
+    location /webhook {
+        proxy_pass         http://app:8080/webhook;
+        proxy_set_header   Host $host;
+        proxy_set_header   X-Real-IP $remote_addr;
+        proxy_read_timeout 120;
     }
 
     # Subscriptions
     location {{ sub_path }}/ {
-        proxy_pass         http://sui:2096/sub/;
+        proxy_pass         http://app:8080/api/clients/;
         proxy_set_header   Host $host;
         proxy_set_header   X-Real-IP $remote_addr;
         proxy_set_header   X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -100,9 +122,9 @@ server {
     }
     {% endif %}
 
-    # Federation API
-    location {{ fed_path }}/ {
-        proxy_pass         http://bot:8080/federation/;
+    # Federation HMAC API
+    location /federation/ {
+        proxy_pass         http://app:8080/federation/;
         proxy_set_header   Host $host;
         proxy_set_header   X-Real-IP $remote_addr;
         proxy_set_header   X-Forwarded-For $proxy_add_x_forwarded_for;

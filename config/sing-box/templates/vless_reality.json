@@ -1,0 +1,30 @@
+{
+  "type": "vless",
+  "tag": "vless-in",
+  "listen": "0.0.0.0",
+  "listen_port": 443,
+  "users": [],
+  "tls": {
+    "enabled": true,
+    "server_name": "www.microsoft.com",
+    "reality": {
+      "enabled": true,
+      "handshake": {
+        "server": "www.microsoft.com",
+        "server_port": 443
+      },
+      "private_key": "REPLACE_WITH_PRIVATE_KEY",
+      "public_key": "REPLACE_WITH_PUBLIC_KEY",
+      "short_id": ["REPLACE_WITH_SHORT_ID"]
+    }
+  },
+  "multiplex": {
+    "enabled": true,
+    "padding": true,
+    "brutal": {
+      "enabled": false,
+      "up_mbps": 100,
+      "down_mbps": 100
+    }
+  }
+}

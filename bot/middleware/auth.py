@@ -4,8 +4,8 @@ from aiogram.types import TelegramObject, Message, CallbackQuery
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
-from bot.config import settings
-from bot.database import async_session, Admin, AuditLog
+from api.config import settings
+from api.database import async_session, Admin, AuditLog
 
 
 class AdminAuthMiddleware(BaseMiddleware):
@@ -52,6 +52,6 @@ class AdminAuthMiddleware(BaseMiddleware):
 
 async def log_action(user_id: int, action: str, details: str = None) -> None:
     async with async_session() as session:
-        log = AuditLog(telegram_id=user_id, action=action, details=details)
+        log = AuditLog(actor=f"tg:{user_id}", action=action, details=details)
         session.add(log)
         await session.commit()

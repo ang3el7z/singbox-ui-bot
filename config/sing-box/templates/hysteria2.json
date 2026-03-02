@@ -1,0 +1,15 @@
+{
+  "type": "hysteria2",
+  "tag": "hysteria2-in",
+  "listen": "0.0.0.0",
+  "listen_port": 10443,
+  "users": [],
+  "tls": {
+    "enabled": true,
+    "certificate_path": "/etc/letsencrypt/live/DOMAIN/fullchain.pem",
+    "key_path": "/etc/letsencrypt/live/DOMAIN/privkey.pem"
+  },
+  "up_mbps": 200,
+  "down_mbps": 200,
+  "ignore_client_bandwidth": false
+}

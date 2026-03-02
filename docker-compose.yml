@@ -1,77 +1,89 @@
 version: "3.9"
 
+networks:
+  singbox_net:
+    driver: bridge
+
+volumes:
+  singbox_config:
+  adguard_data:
+  nginx_certs:
+  app_data:
+
 services:
-  bot:
+
+  # ── App (FastAPI + aiogram bot) ──────────────────────────────────────────────
+  app:
     build: .
-    container_name: singbox_bot
+    container_name: singbox_app
     restart: unless-stopped
     env_file: .env
-    volumes:
-      - ./data:/app/data
-      - ./nginx:/app/nginx        # includes conf.d, override, htpasswd, logs
-      - ./configs:/app/configs
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-      - /etc/letsencrypt:/etc/letsencrypt:ro
     ports:
-      - "8080:8080"
-    depends_on:
-      - sui
-      - adguard
+      - "8080:8080"       # FastAPI / bot webhook
+    volumes:
+      - ./config/sing-box:/etc/sing-box       # shared with singbox container
+      - ./nginx/templates:/app/nginx/templates
+      - ./nginx/override:/var/www/override    # user-uploaded site
+      - ./nginx/htpasswd:/etc/nginx/htpasswd  # basic auth for 401 fallback
+      - ./nginx:/app/nginx
+      - ./subs:/app/subs
+      - app_data:/app/data                    # SQLite database
+      - /var/run/docker.sock:/var/run/docker.sock  # for docker exec singbox reload
+    environment:
+      - SINGBOX_CONFIG_PATH=/etc/sing-box/config.json
+      - SINGBOX_CONTAINER=singbox_core
     networks:
       - singbox_net
+    depends_on:
+      - singbox
+      - adguard
 
-  sui:
-    image: alireza7/s-ui:latest
-    container_name: singbox_sui
+  # ── Sing-Box ─────────────────────────────────────────────────────────────────
+  singbox:
+    image: ghcr.io/sagernet/sing-box:latest
+    container_name: singbox_core
     restart: unless-stopped
     volumes:
-      - ./data/sui:/app/db
-      - ./data/certs:/app/cert
-    ports:
-      - "2095:2095"
-      - "2096:2096"
-    networks:
-      - singbox_net
+      - ./config/sing-box:/etc/sing-box:ro    # config written by app, read by singbox
+    command: run -c /etc/sing-box/config.json
+    cap_add:
+      - NET_ADMIN
+    sysctls:
+      - net.ipv4.ip_forward=1
+      - net.ipv6.conf.all.forwarding=1
+    network_mode: host                        # need host network for VPN
+    # IMPORTANT: After changing config, app sends SIGHUP or restarts this container.
 
+  # ── AdGuard Home ─────────────────────────────────────────────────────────────
   adguard:
     image: adguard/adguardhome:latest
     container_name: singbox_adguard
     restart: unless-stopped
     volumes:
-      - ./data/adguard/work:/opt/adguardhome/work
-      - ./data/adguard/conf:/opt/adguardhome/conf
+      - adguard_data:/opt/adguardhome/work
+      - adguard_data:/opt/adguardhome/conf
     ports:
-      - "3000:3000"
       - "53:53/tcp"
       - "53:53/udp"
+      - "3000:3000"   # AdGuard Web UI (internal only, proxied via Nginx)
     networks:
       - singbox_net
 
+  # ── Nginx ─────────────────────────────────────────────────────────────────────
   nginx:
     image: nginx:alpine
     container_name: singbox_nginx
     restart: unless-stopped
-    volumes:
-      - ./nginx/conf.d:/etc/nginx/conf.d
-      # User-uploaded override site (index.html + assets)
-      - ./nginx/override:/var/www/override:ro
-      # htpasswd with random creds — makes 401 popup appear but login always fails
-      - ./nginx/htpasswd/.htpasswd:/etc/nginx/.htpasswd:ro
-      - ./data/certs:/etc/nginx/certs:ro
-      - /etc/letsencrypt:/etc/letsencrypt:ro
-      - ./nginx/logs:/var/log/nginx
     ports:
       - "80:80"
       - "443:443"
-    depends_on:
-      - sui
-      - bot
+    volumes:
+      - ./nginx/conf.d:/etc/nginx/conf.d
+      - ./nginx/override:/var/www/override:ro
+      - ./nginx/htpasswd:/etc/nginx/htpasswd:ro
+      - ./nginx/certs:/etc/letsencrypt:ro
+      - ./web:/var/www/web:ro                 # Serve web UI
     networks:
       - singbox_net
-
-networks:
-  singbox_net:
-    driver: bridge
-    ipam:
-      config:
-        - subnet: 172.20.0.0/16
+    depends_on:
+      - app

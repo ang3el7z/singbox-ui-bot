@@ -108,26 +108,37 @@ generate_env() {
     SECRET_KEY=$(openssl rand -hex 32)
     FED_SECRET=$(openssl rand -hex 32)
 
+    INTERNAL_TOKEN=$(openssl rand -hex 32)
+    JWT_SECRET=$(openssl rand -hex 32)
+    WEB_PASS=$(openssl rand -hex 12)
+    AG_PASS=$(openssl rand -hex 12)
+
     cat > "$INSTALL_DIR/.env" <<EOF
 # Telegram Bot
 BOT_TOKEN=$BOT_TOKEN
 ADMIN_IDS=$ADMIN_IDS
 
-# s-ui API
-SUI_URL=http://sui:2095
-SUI_USERNAME=admin
-SUI_PASSWORD=$(openssl rand -hex 12)
-SUI_TOKEN=
+# API Auth
+INTERNAL_TOKEN=$INTERNAL_TOKEN
+JWT_SECRET=$JWT_SECRET
+JWT_EXPIRE_MINUTES=10080
+
+# Web UI
+WEB_ADMIN_USER=admin
+WEB_ADMIN_PASSWORD=$WEB_PASS
+
+# Sing-Box
+SINGBOX_CONFIG_PATH=/etc/sing-box/config.json
+SINGBOX_CONTAINER=singbox_core
 
 # AdGuard Home
 ADGUARD_URL=http://adguard:3000
 ADGUARD_USER=admin
-ADGUARD_PASSWORD=$(openssl rand -hex 12)
+ADGUARD_PASSWORD=$AG_PASS
 
 # Nginx & SSL
 DOMAIN=$DOMAIN
 EMAIL=$EMAIL
-STUB_THEME=default
 
 # Federation
 FEDERATION_SECRET=$FED_SECRET
@@ -136,13 +147,9 @@ BOT_PUBLIC_URL=https://$DOMAIN
 # Security
 SECRET_KEY=$SECRET_KEY
 
-# Timezone
+# App
 TZ=$TIMEZONE
-
-# Bot language
 BOT_LANG=$BOT_LANG
-
-# Webhook (via nginx)
 WEBHOOK_HOST=https://$DOMAIN
 WEBHOOK_PATH=/webhook
 WEBHOOK_PORT=8080
@@ -165,12 +172,12 @@ server {
         root /var/www/certbot;
     }
     location /webhook {
-        proxy_pass http://bot:8080/webhook;
+        proxy_pass http://app:8080/webhook;
         proxy_set_header Host \$host;
         proxy_set_header X-Real-IP \$remote_addr;
     }
     location / {
-        root /var/www/stubs/default;
+        return 401;
         index index.html;
     }
 }
@@ -180,8 +187,9 @@ NGINXEOF
 # ─── Data dirs ────────────────────────────────────────────────────────────────
 
 setup_dirs() {
-    mkdir -p "$INSTALL_DIR/data/sui"
+    mkdir -p "$INSTALL_DIR/data"
     mkdir -p "$INSTALL_DIR/data/certs"
+    mkdir -p "$INSTALL_DIR/config/sing-box/templates"
     mkdir -p "$INSTALL_DIR/data/adguard/work"
     mkdir -p "$INSTALL_DIR/data/adguard/conf"
     chmod -R 755 "$INSTALL_DIR/data"

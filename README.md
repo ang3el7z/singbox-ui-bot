@@ -1,172 +1,101 @@
 # Singbox UI Bot
 
-Telegram-бот для управления Sing-Box VPN серверами. Поддерживает AdGuard Home, гибкую маршрутизацию, Nginx с сайтами-заглушками, и федерацию ботов для построения многоуровневых VPN-цепочек.
+A Telegram bot + Web UI for managing [Sing-Box](https://github.com/SagerNet/sing-box) VPN servers.
 
-## Возможности
+No s-ui. No duplicate logic. One FastAPI backend, two thin clients.
 
-| Раздел | Функции |
-|--------|---------|
-| 🖥 **Сервер** | Статус, рестарт, логи Sing-Box |
-| 👥 **Клиенты** | CRUD, QR-коды, подписки (Sing-Box/Clash), статистика трафика |
-| 📡 **Inbounds** | Все протоколы: VLESS Reality/WS, VMess, Shadowsocks, Trojan, Hysteria2, TUIC |
-| 🔀 **Маршрутизация** | Домены, IP/CIDR, GeoSite, GeoIP, Rule Sets, импорт/экспорт |
-| 🛡 **AdGuard Home** | Управление DNS, правила фильтрации, статистика, синхронизация клиентов |
-| 🌐 **Nginx** | Конфигурация, SSL Let's Encrypt, сайты-заглушки, скрытые пути |
-| 🔗 **Федерация** | Соединение ботов в цепочки (Bridge/Node), HMAC-авторизация |
-| ⚙️ **Настройки** | Администраторы, бэкап, audit-лог |
+```
+┌──────────────┐   X-Internal-Token   ┌──────────────────────────────┐
+│  Telegram    │──────────────────────▶│   api/ — FastAPI backend     │
+│  bot/        │                       │   All business logic here     │
+└──────────────┘                       │                              │
+                                       │   ┌──────────────────────┐  │
+┌──────────────┐   JWT Bearer          │   │ api/services/        │  │
+│  Web UI      │──────────────────────▶│   │   singbox.py         │  │
+│  web/        │                       │   │   adguard_api.py     │  │
+└──────────────┘                       │   │   nginx_service.py   │  │
+                                       │   │   federation_service │  │
+                                       │   └──────────────────────┘  │
+                                       └──────────────────────────────┘
+                                                      │
+                              ┌───────────────────────┼───────────────┐
+                          config.json             AdGuard           Nginx
+                          (Sing-Box)              REST API          templates
+```
 
-## Быстрая установка
+## Features
+
+- 🖥 **Server**: Sing-Box status, logs, graceful reload, restart
+- 👥 **Clients**: Add, delete, enable/disable, QR code, subscription config download
+- 🔌 **Inbounds**: VLESS Reality/WS, VMess, Trojan, Shadowsocks, Hysteria2, TUIC
+- 🗺 **Routing**: Domain/IP/GeoSite/GeoIP/RuleSet rules — add, delete, import/export
+- 🛡 **AdGuard Home**: Protection toggle, DNS, filter rules, client sync
+- 🌐 **Nginx**: Auto-configure, SSL (Let's Encrypt), custom stub site upload
+- 🔗 **Federation**: Link multiple bot instances — bridge chains, topology view
+- 👑 **Admin**: Multi-admin support, audit log, backup
+
+## Quick Start
 
 ```bash
-# На сервере Debian 12 / Ubuntu 24.04
-git clone https://github.com/ang3el7z/singbox-ui-bot.git /opt/singbox-ui-bot
-sudo bash /opt/singbox-ui-bot/scripts/install.sh
+curl -fsSL https://raw.githubusercontent.com/ang3el7z/singbox-ui-bot/main/scripts/install.sh | bash
 ```
 
-Скрипт автоматически:
-1. Установит Docker, certbot, UFW
-2. Спросит домен, токен бота, email
-3. Получит SSL-сертификат Let's Encrypt
-4. Сгенерирует безопасный `.env`
-5. Запустит все контейнеры
+See [docs/INSTALL.md](docs/INSTALL.md) for detailed instructions.
 
-## Ручная установка
+## Documentation
 
-```bash
-# 1. Клонировать репозиторий
-git clone https://github.com/ang3el7z/singbox-ui-bot.git
-cd singbox-ui-bot
+| Document | Description |
+|----------|-------------|
+| [INSTALL.md](docs/INSTALL.md) | Installation, configuration, troubleshooting |
+| [API.md](docs/API.md) | Full REST API reference (all endpoints) |
+| [FEDERATION.md](docs/FEDERATION.md) | Multi-node federation setup |
+| [WEB_UI.md](docs/WEB_UI.md) | Web UI guide |
 
-# 2. Создать .env из примера
-cp .env.example .env
-nano .env   # Заполнить BOT_TOKEN, ADMIN_IDS, DOMAIN, EMAIL
-
-# 3. Запустить
-docker compose up -d --build
-```
-
-## Архитектура
-
-```
-┌─────────────────────────────────────────────┐
-│              Docker Compose                  │
-│                                             │
-│  ┌─────────┐  ┌──────────┐  ┌───────────┐  │
-│  │  nginx  │  │   bot    │  │    sui    │  │
-│  │  :80    │──│  :8080   │──│  :2095   │  │
-│  │  :443   │  │ (aiogram │  │ (Sing-Box │  │
-│  └────┬────┘  │  +FastAPI│  │  Panel)  │  │
-│       │       └──────────┘  └───────────┘  │
-│       │       ┌──────────┐                 │
-│       └───────│ adguard  │                 │
-│               │  :3000   │                 │
-│               └──────────┘                 │
-└─────────────────────────────────────────────┘
-```
-
-## Федерация ботов
-
-Позволяет соединять несколько серверов в цепочки:
-
-```
-Пользователь → Нод A → Нод B → Интернет
-                ↓ (bridge)
-             Нод C (альтернативный выход)
-```
-
-**Добавление ноды:**
-1. На ноде B: убедитесь что `FEDERATION_SECRET` установлен
-2. В боте ноды A: Федерация → Добавить ноду → URL + секрет ноды B
-3. Федерация → Создать Bridge → выбрать ноды в нужном порядке
-
-## Nginx и сайт-заглушка
-
-Nginx настраивается с **скрытыми путями** (hash-based URLs):
-
-| Сервис | Путь |
-|--------|------|
-| Панель s-ui | `/{hash12}/panel/` |
-| Подписки | `/{hash12}/sub/` |
-| AdGuard | `/{hash12}/adg/` |
-| Federation API | `/{hash12}/api/` |
-
-Корневой URL `/` отображает сайт-заглушку. Доступные темы:
-- `default` — минималистичный тёмный
-- `business` — страница технических работ
-- `blog` — имитация личного блога
-- `custom` — загрузите свой HTML через бота
-
-## Конфигурация (.env)
-
-```env
-BOT_TOKEN=токен_от_botfather
-ADMIN_IDS=123456789          # Telegram ID администраторов через запятую
-DOMAIN=vpn.example.com
-EMAIL=admin@example.com
-STUB_THEME=default            # Тема заглушки
-FEDERATION_SECRET=секрет_32+  # Общий секрет для HMAC
-BOT_LANG=ru                   # Язык: ru / en
-```
-
-## Безопасность
-
-- Доступ к боту только для whitelist Telegram ID
-- s-ui API: Bearer-токены, не пароли
-- Federation API: HMAC-SHA256 подпись + 5-минутное окно временной метки
-- Nginx: скрытые пути через sha256 от SECRET_KEY
-- Audit Log: все действия администраторов сохраняются в БД
-- Rate limiting: 30 запросов / 60 сек на пользователя
-- Секреты только в `.env` (chmod 600), не в коде
-
-## Обновление
-
-```bash
-sudo bash /opt/singbox-ui-bot/scripts/update.sh
-```
-
-## Структура проекта
+## Architecture
 
 ```
 singbox-ui-bot/
-├── bot/
-│   ├── main.py                 # Точка входа (aiogram + FastAPI)
-│   ├── config.py               # Настройки из .env
-│   ├── database.py             # SQLAlchemy модели (SQLite)
-│   ├── texts.py                # i18n строки (RU/EN)
-│   ├── utils.py                # Утилиты (QR, форматирование)
-│   ├── handlers/               # Telegram хэндлеры
-│   │   ├── start.py            # /start, главное меню
-│   │   ├── server.py           # Статус, логи, рестарт
-│   │   ├── clients.py          # Управление клиентами
-│   │   ├── inbounds.py         # Управление inbounds
-│   │   ├── routing.py          # Правила маршрутизации
-│   │   ├── adguard.py          # AdGuard Home
-│   │   ├── nginx.py            # Nginx + заглушки
-│   │   ├── federation.py       # Федерация ботов
-│   │   └── admin.py            # Администраторы, бэкап
-│   ├── keyboards/              # Inline клавиатуры
-│   ├── services/
-│   │   ├── sui_api.py          # HTTP-клиент s-ui API
-│   │   ├── adguard_api.py      # HTTP-клиент AdGuard API
-│   │   ├── nginx_service.py    # Генерация конфигов Nginx
-│   │   └── federation_service.py # HMAC API + inter-bot
-│   └── middleware/
-│       ├── auth.py             # Admin whitelist check
-│       └── rate_limit.py       # Rate limiting
-├── nginx/
-│   ├── templates/              # Jinja2 шаблоны конфигов
-│   └── stubs/                  # HTML сайты-заглушки
-├── scripts/
-│   ├── install.sh              # Автоматическая установка
-│   └── update.sh               # Обновление
-├── configs/
-│   └── singbox_templates/      # Шаблоны конфигов Sing-Box
-├── docker-compose.yml
-├── Dockerfile
-├── requirements.txt
-└── .env.example
+├── api/                  ← FastAPI (all business logic)
+│   ├── main.py           ← FastAPI app + lifespan
+│   ├── config.py         ← pydantic-settings
+│   ├── database.py       ← SQLAlchemy models
+│   ├── deps.py           ← JWT + internal token auth
+│   ├── routers/          ← REST endpoints
+│   └── services/         ← singbox, adguard, nginx, federation
+│
+├── bot/                  ← Telegram bot (thin UI client)
+│   ├── main.py           ← aiogram + uvicorn in same process
+│   ├── api_client.py     ← HTTP client → /api/*
+│   ├── handlers/         ← aiogram handlers (FSM, menus)
+│   ├── keyboards/        ← InlineKeyboardMarkup builders
+│   └── middleware/       ← auth, rate limit
+│
+├── web/                  ← Web UI (Alpine.js SPA, no build step)
+│   ├── index.html        ← full SPA
+│   ├── js/               ← api.js, app.js
+│   └── css/              ← style.css
+│
+├── config/sing-box/      ← Sing-Box config + templates
+├── nginx/                ← Nginx templates, generated configs, override
+├── docs/                 ← documentation
+└── docker-compose.yml    ← 4 services: app, singbox, adguard, nginx
 ```
 
-## Лицензия
+## Stack
 
-MIT
+- **Python 3.11** — FastAPI 0.115 + aiogram 3.13 + SQLAlchemy 2.0 (async)
+- **Database**: SQLite (aiosqlite)
+- **VPN core**: Sing-Box (direct config.json management)
+- **DNS**: AdGuard Home (REST API)
+- **Reverse proxy**: Nginx (Jinja2 templates, auto-configure)
+- **Auth**: JWT (web UI) + HMAC-SHA256 (federation)
+- **Frontend**: Alpine.js 3 + Tailwind CSS (no build)
+- **Containers**: Docker Compose
+
+## License
+
+MIT — see [LICENSE](LICENSE)
+
+## Repository
+
+https://github.com/ang3el7z/singbox-ui-bot

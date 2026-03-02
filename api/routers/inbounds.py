@@ -1,0 +1,172 @@
+import json
+import secrets
+import uuid as uuid_lib
+from typing import Optional
+
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from api.database import get_db, Inbound
+from api.services.singbox import singbox, SingBoxError
+from api.deps import require_any_auth, audit
+
+router = APIRouter()
+
+PROTOCOL_TEMPLATES = {
+    "vless_reality": {
+        "type": "vless", "listen": "0.0.0.0",
+        "users": [],
+        "tls": {"enabled": True, "server_name": "www.microsoft.com",
+                "reality": {"enabled": True,
+                            "handshake": {"server": "www.microsoft.com", "server_port": 443},
+                            "private_key": "", "short_id": [""]}},
+        "multiplex": {"enabled": True, "padding": True},
+    },
+    "vless_ws": {
+        "type": "vless", "listen": "0.0.0.0", "users": [],
+        "transport": {"type": "ws", "path": "/vless"},
+    },
+    "vmess_ws": {
+        "type": "vmess", "listen": "0.0.0.0", "users": [],
+        "transport": {"type": "ws", "path": "/vmess"},
+    },
+    "shadowsocks": {
+        "type": "shadowsocks", "listen": "0.0.0.0",
+        "method": "aes-256-gcm", "password": "",
+        "users": [], "multiplex": {"enabled": True},
+    },
+    "trojan": {
+        "type": "trojan", "listen": "0.0.0.0", "users": [],
+        "tls": {"enabled": True},
+        "transport": {"type": "ws", "path": "/trojan"},
+    },
+    "hysteria2": {
+        "type": "hysteria2", "listen": "0.0.0.0",
+        "users": [], "tls": {"enabled": True},
+        "up_mbps": 100, "down_mbps": 100,
+    },
+    "tuic": {
+        "type": "tuic", "listen": "0.0.0.0",
+        "users": [], "tls": {"enabled": True},
+        "congestion_control": "bbr",
+    },
+}
+
+
+class InboundCreate(BaseModel):
+    tag: str
+    protocol: str       # key from PROTOCOL_TEMPLATES
+    listen_port: int
+    custom_config: Optional[dict] = None  # override template fields
+
+
+def _format(ib: Inbound) -> dict:
+    return {
+        "id": ib.id,
+        "tag": ib.tag,
+        "protocol": ib.protocol,
+        "listen_port": ib.listen_port,
+        "enable": ib.enable,
+        "config": json.loads(ib.config_json),
+        "created_at": ib.created_at.isoformat() if ib.created_at else None,
+    }
+
+
+@router.get("/")
+async def list_inbounds(db: AsyncSession = Depends(get_db), auth: dict = Depends(require_any_auth)):
+    # Return from live config (source of truth)
+    inbounds = singbox.get_inbounds()
+    return inbounds
+
+
+@router.post("/", status_code=201)
+async def create_inbound(
+    body: InboundCreate,
+    db: AsyncSession = Depends(get_db),
+    auth: dict = Depends(require_any_auth),
+):
+    if body.protocol not in PROTOCOL_TEMPLATES:
+        raise HTTPException(status_code=400, detail=f"Unknown protocol: {body.protocol}. Choose from {list(PROTOCOL_TEMPLATES)}")
+
+    template = dict(PROTOCOL_TEMPLATES[body.protocol])
+    if body.custom_config:
+        template.update(body.custom_config)
+
+    template["tag"] = body.tag
+    template["listen_port"] = body.listen_port
+
+    # For Reality, auto-generate keypair
+    if body.protocol == "vless_reality":
+        kp = await singbox.generate_reality_keypair()
+        short_id = await singbox.generate_short_id()
+        if kp.get("private_key"):
+            template["tls"]["reality"]["private_key"] = kp["private_key"]
+            template["tls"]["reality"]["public_key"] = kp.get("public_key", "")
+            template["tls"]["reality"]["short_id"] = [short_id]
+
+    # For SS, auto-generate password
+    if body.protocol == "shadowsocks" and not template.get("password"):
+        template["password"] = secrets.token_hex(16)
+
+    try:
+        singbox.save_inbound(template)
+        await singbox.reload()
+    except SingBoxError as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+    # Mirror in DB for metadata
+    ib = Inbound(
+        tag=body.tag,
+        protocol=body.protocol,
+        listen_port=body.listen_port,
+        enable=True,
+        config_json=json.dumps(template),
+    )
+    db.add(ib)
+    await db.commit()
+    await audit(auth["actor"], "create_inbound", f"tag={body.tag} proto={body.protocol} port={body.listen_port}")
+    return template
+
+
+@router.get("/{tag}")
+async def get_inbound(tag: str, auth: dict = Depends(require_any_auth)):
+    ib = singbox.get_inbound(tag)
+    if not ib:
+        raise HTTPException(status_code=404, detail="Inbound not found")
+    return ib
+
+
+@router.patch("/{tag}")
+async def update_inbound(
+    tag: str,
+    update: dict,
+    db: AsyncSession = Depends(get_db),
+    auth: dict = Depends(require_any_auth),
+):
+    ib = singbox.get_inbound(tag)
+    if not ib:
+        raise HTTPException(status_code=404, detail="Inbound not found")
+    ib.update(update)
+    ib["tag"] = tag  # ensure tag not overwritten
+    try:
+        singbox.save_inbound(ib)
+        await singbox.reload()
+    except SingBoxError as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    await audit(auth["actor"], "update_inbound", f"tag={tag}")
+    return ib
+
+
+@router.delete("/{tag}")
+async def delete_inbound(
+    tag: str,
+    db: AsyncSession = Depends(get_db),
+    auth: dict = Depends(require_any_auth),
+):
+    ok = singbox.delete_inbound(tag)
+    if not ok:
+        raise HTTPException(status_code=404, detail="Inbound not found")
+    await singbox.reload()
+    await audit(auth["actor"], "delete_inbound", f"tag={tag}")
+    return {"detail": "Deleted"}

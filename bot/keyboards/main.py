@@ -1,61 +1,283 @@
+"""
+All bot keyboards. Callback data patterns match bot/handlers/*.
+"""
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.utils.keyboard import InlineKeyboardBuilder
-from bot.texts import t
+from typing import List
 
 
-def main_menu_kb() -> InlineKeyboardMarkup:
-    builder = InlineKeyboardBuilder()
-    builder.row(
-        InlineKeyboardButton(text="🖥 " + ("Сервер" if True else "Server"), callback_data="menu:server"),
-        InlineKeyboardButton(text="👥 " + ("Клиенты" if True else "Clients"), callback_data="menu:clients"),
-    )
-    builder.row(
-        InlineKeyboardButton(text="📡 Inbounds", callback_data="menu:inbounds"),
-        InlineKeyboardButton(text="🔀 " + ("Маршрутизация" if True else "Routing"), callback_data="menu:routing"),
-    )
-    builder.row(
-        InlineKeyboardButton(text="🛡 AdGuard", callback_data="menu:adguard"),
-        InlineKeyboardButton(text="🌐 Nginx", callback_data="menu:nginx"),
-    )
-    builder.row(
-        InlineKeyboardButton(text="🔗 " + ("Федерация" if True else "Federation"), callback_data="menu:federation"),
-        InlineKeyboardButton(text="⚙️ " + ("Настройки" if True else "Settings"), callback_data="menu:admin"),
-    )
-    return builder.as_markup()
+# ─── Generic helpers ──────────────────────────────────────────────────────────
 
-
-def back_kb(callback: str = "menu:main") -> InlineKeyboardMarkup:
+def kb_back(callback: str = "main_menu") -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[[
-        InlineKeyboardButton(text=t("back"), callback_data=callback)
+        InlineKeyboardButton(text="⬅️ Back", callback_data=callback)
     ]])
 
 
-def confirm_delete_kb(confirm_cb: str, cancel_cb: str) -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(inline_keyboard=[[
-        InlineKeyboardButton(text=t("delete"), callback_data=confirm_cb),
-        InlineKeyboardButton(text=t("cancel"), callback_data=cancel_cb),
-    ]])
+def _build(*rows: List[InlineKeyboardButton]) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(inline_keyboard=list(rows))
 
 
-def paginate_kb(
-    items: list,
-    page: int,
-    total_pages: int,
-    callback_prefix: str,
-    back_cb: str = "menu:main",
-) -> InlineKeyboardMarkup:
+# ─── Main menu ────────────────────────────────────────────────────────────────
+
+def kb_main_menu() -> InlineKeyboardMarkup:
+    return _build(
+        [InlineKeyboardButton(text="🖥 Server",       callback_data="menu_server"),
+         InlineKeyboardButton(text="👥 Clients",      callback_data="menu_clients")],
+        [InlineKeyboardButton(text="🔌 Inbounds",    callback_data="menu_inbounds"),
+         InlineKeyboardButton(text="🗺 Routing",      callback_data="menu_routing")],
+        [InlineKeyboardButton(text="🛡 AdGuard",      callback_data="menu_adguard"),
+         InlineKeyboardButton(text="🌐 Nginx",        callback_data="menu_nginx")],
+        [InlineKeyboardButton(text="🔗 Federation",  callback_data="menu_federation"),
+         InlineKeyboardButton(text="👑 Admin",        callback_data="menu_admin")],
+    )
+
+
+# ─── Server ───────────────────────────────────────────────────────────────────
+
+def kb_server() -> InlineKeyboardMarkup:
+    return _build(
+        [InlineKeyboardButton(text="📊 Status",  callback_data="server_status"),
+         InlineKeyboardButton(text="📋 Logs",    callback_data="server_logs")],
+        [InlineKeyboardButton(text="🔄 Reload",  callback_data="server_reload"),
+         InlineKeyboardButton(text="♻️ Restart", callback_data="server_restart")],
+        [InlineKeyboardButton(text="⬅️ Back",    callback_data="main_menu")],
+    )
+
+
+# ─── Clients ──────────────────────────────────────────────────────────────────
+
+def kb_clients_list(clients: list, page: int = 0, page_size: int = 8) -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
-    for item in items:
+    start = page * page_size
+    end = start + page_size
+    page_clients = clients[start:end]
+
+    for c in page_clients:
+        icon = "✅" if c.get("enable") else "❌"
         builder.row(InlineKeyboardButton(
-            text=item["label"],
-            callback_data=item["callback_data"],
+            text=f"{icon} {c['name']} [{c.get('protocol', '?')}]",
+            callback_data=f"client_detail_{c['id']}",
         ))
+
     nav = []
-    if page > 1:
-        nav.append(InlineKeyboardButton(text=t("prev"), callback_data=f"{callback_prefix}:page:{page-1}"))
-    if page < total_pages:
-        nav.append(InlineKeyboardButton(text=t("next"), callback_data=f"{callback_prefix}:page:{page+1}"))
+    if page > 0:
+        nav.append(InlineKeyboardButton(text="◀️", callback_data=f"clients_page_{page-1}"))
+    if end < len(clients):
+        nav.append(InlineKeyboardButton(text="▶️", callback_data=f"clients_page_{page+1}"))
     if nav:
         builder.row(*nav)
-    builder.row(InlineKeyboardButton(text=t("back"), callback_data=back_cb))
+
+    builder.row(
+        InlineKeyboardButton(text="➕ Add",   callback_data="client_add"),
+        InlineKeyboardButton(text="⬅️ Back",  callback_data="main_menu"),
+    )
     return builder.as_markup()
+
+
+def kb_client_detail(client_id: int) -> InlineKeyboardMarkup:
+    return _build(
+        [InlineKeyboardButton(text="🔀 Toggle",      callback_data=f"client_toggle_{client_id}"),
+         InlineKeyboardButton(text="📊 Reset stats", callback_data=f"client_reset_stats_{client_id}")],
+        [InlineKeyboardButton(text="📱 QR",          callback_data=f"client_qr_{client_id}"),
+         InlineKeyboardButton(text="📄 Sub config",  callback_data=f"client_sub_{client_id}")],
+        [InlineKeyboardButton(text="🗑 Delete",       callback_data=f"client_delete_{client_id}"),
+         InlineKeyboardButton(text="⬅️ Back",         callback_data="menu_clients")],
+    )
+
+
+def kb_inbound_select(inbounds: list, prefix: str) -> InlineKeyboardMarkup:
+    builder = InlineKeyboardBuilder()
+    for ib in inbounds:
+        tag = ib.get("tag", "?")
+        proto = ib.get("type", "?")
+        port = ib.get("listen_port", "?")
+        builder.row(InlineKeyboardButton(
+            text=f"[{proto}] {tag} :{port}",
+            callback_data=f"{prefix}_inbound_{tag}",
+        ))
+    builder.row(InlineKeyboardButton(text="⬅️ Cancel", callback_data="menu_clients"))
+    return builder.as_markup()
+
+
+# ─── Inbounds ─────────────────────────────────────────────────────────────────
+
+def kb_inbounds_list(inbounds: list) -> InlineKeyboardMarkup:
+    builder = InlineKeyboardBuilder()
+    for ib in inbounds:
+        tag = ib.get("tag", "?")
+        proto = ib.get("type", "?")
+        port = ib.get("listen_port", "?")
+        builder.row(InlineKeyboardButton(
+            text=f"[{proto}:{port}] {tag}",
+            callback_data=f"inbound_detail_{tag}",
+        ))
+    builder.row(
+        InlineKeyboardButton(text="➕ Add",   callback_data="inbound_add"),
+        InlineKeyboardButton(text="⬅️ Back",  callback_data="main_menu"),
+    )
+    return builder.as_markup()
+
+
+def kb_inbound_detail(tag: str) -> InlineKeyboardMarkup:
+    return _build(
+        [InlineKeyboardButton(text="🗑 Delete", callback_data=f"inbound_delete_{tag}"),
+         InlineKeyboardButton(text="⬅️ Back",   callback_data="menu_inbounds")],
+    )
+
+
+def kb_protocol_select(protocols: list, prefix: str) -> InlineKeyboardMarkup:
+    builder = InlineKeyboardBuilder()
+    for proto in protocols:
+        builder.row(InlineKeyboardButton(
+            text=proto.replace("_", " ").title(),
+            callback_data=f"{prefix}_proto_{proto}",
+        ))
+    builder.row(InlineKeyboardButton(text="⬅️ Cancel", callback_data="menu_inbounds"))
+    return builder.as_markup()
+
+
+# ─── Routing ──────────────────────────────────────────────────────────────────
+
+def kb_routing_menu() -> InlineKeyboardMarkup:
+    return _build(
+        [InlineKeyboardButton(text="🌐 Domains",    callback_data="routing_view_domain"),
+         InlineKeyboardButton(text="🔠 Suffixes",   callback_data="routing_view_domain_suffix")],
+        [InlineKeyboardButton(text="🔍 Keywords",   callback_data="routing_view_domain_keyword"),
+         InlineKeyboardButton(text="📍 IP CIDRs",   callback_data="routing_view_ip_cidr")],
+        [InlineKeyboardButton(text="🗺 GeoSite",    callback_data="routing_view_geosite"),
+         InlineKeyboardButton(text="🌍 GeoIP",      callback_data="routing_view_geoip")],
+        [InlineKeyboardButton(text="📦 Rule Sets",  callback_data="routing_view_rule_set")],
+        [InlineKeyboardButton(text="➕ Add rule",   callback_data="routing_add"),
+         InlineKeyboardButton(text="📤 Export",     callback_data="routing_export")],
+        [InlineKeyboardButton(text="📥 Import",     callback_data="routing_import"),
+         InlineKeyboardButton(text="⬅️ Back",       callback_data="main_menu")],
+    )
+
+
+def kb_routing_rules_list(rules: list, rule_key: str) -> InlineKeyboardMarkup:
+    builder = InlineKeyboardBuilder()
+    for r in rules[:20]:
+        val = r.get("value", "?")
+        out = r.get("outbound", "?")
+        builder.row(InlineKeyboardButton(
+            text=f"{val} → {out}",
+            callback_data=f"routing_del_{rule_key}_{val[:30]}",
+        ))
+    builder.row(InlineKeyboardButton(text="⬅️ Back", callback_data="menu_routing"))
+    return builder.as_markup()
+
+
+def kb_rule_key_select(keys: dict) -> InlineKeyboardMarkup:
+    builder = InlineKeyboardBuilder()
+    for key, label in keys.items():
+        builder.row(InlineKeyboardButton(text=label, callback_data=f"rulekey_{key}"))
+    builder.row(InlineKeyboardButton(text="⬅️ Cancel", callback_data="menu_routing"))
+    return builder.as_markup()
+
+
+def kb_outbound_select() -> InlineKeyboardMarkup:
+    return _build(
+        [InlineKeyboardButton(text="🚀 Proxy",  callback_data="outbound_proxy"),
+         InlineKeyboardButton(text="🔒 Block",  callback_data="outbound_block")],
+        [InlineKeyboardButton(text="✅ Direct", callback_data="outbound_direct"),
+         InlineKeyboardButton(text="🔡 DNS",    callback_data="outbound_dns")],
+        [InlineKeyboardButton(text="⬅️ Cancel", callback_data="menu_routing")],
+    )
+
+
+# ─── AdGuard ──────────────────────────────────────────────────────────────────
+
+def kb_adguard_menu() -> InlineKeyboardMarkup:
+    return _build(
+        [InlineKeyboardButton(text="📊 Stats",        callback_data="adguard_stats"),
+         InlineKeyboardButton(text="🌐 DNS",          callback_data="adguard_dns")],
+        [InlineKeyboardButton(text="🟢 Enable",       callback_data="adguard_protection_on"),
+         InlineKeyboardButton(text="🔴 Disable",      callback_data="adguard_protection_off")],
+        [InlineKeyboardButton(text="🚫 Filter rules", callback_data="adguard_rules"),
+         InlineKeyboardButton(text="🔄 Sync clients", callback_data="adguard_sync")],
+        [InlineKeyboardButton(text="🔑 Change pass",  callback_data="adguard_change_password"),
+         InlineKeyboardButton(text="⬅️ Back",         callback_data="main_menu")],
+    )
+
+
+def kb_adguard_dns() -> InlineKeyboardMarkup:
+    return _build(
+        [InlineKeyboardButton(text="➕ Add upstream",    callback_data="adguard_add_upstream")],
+        [InlineKeyboardButton(text="⬅️ Back",            callback_data="menu_adguard")],
+    )
+
+
+def kb_adguard_rules() -> InlineKeyboardMarkup:
+    return _build(
+        [InlineKeyboardButton(text="➕ Add rule",   callback_data="adguard_add_rule")],
+        [InlineKeyboardButton(text="⬅️ Back",       callback_data="menu_adguard")],
+    )
+
+
+# ─── Nginx ────────────────────────────────────────────────────────────────────
+
+def kb_nginx_menu() -> InlineKeyboardMarkup:
+    return _build(
+        [InlineKeyboardButton(text="⚙️ Configure",       callback_data="nginx_configure"),
+         InlineKeyboardButton(text="🔐 Issue SSL",       callback_data="nginx_ssl")],
+        [InlineKeyboardButton(text="🔒 Hidden paths",    callback_data="nginx_paths"),
+         InlineKeyboardButton(text="📋 Access logs",     callback_data="nginx_logs")],
+        [InlineKeyboardButton(text="📤 Upload site",     callback_data="nginx_upload_site"),
+         InlineKeyboardButton(text="🗑 Remove override", callback_data="nginx_delete_override")],
+        [InlineKeyboardButton(text="⬅️ Back",            callback_data="main_menu")],
+    )
+
+
+# ─── Federation ───────────────────────────────────────────────────────────────
+
+def kb_federation_menu(nodes: list = None) -> InlineKeyboardMarkup:
+    builder = InlineKeyboardBuilder()
+    if nodes:
+        for n in nodes:
+            icon = "🟢" if n.get("is_active") else "🔴"
+            builder.row(
+                InlineKeyboardButton(text=f"{icon} {n['name']}", callback_data=f"fed_ping_{n['id']}"),
+                InlineKeyboardButton(text="🗑", callback_data=f"fed_delete_{n['id']}"),
+            )
+    builder.row(
+        InlineKeyboardButton(text="➕ Add node",      callback_data="federation_add"),
+        InlineKeyboardButton(text="📡 Ping all",      callback_data="federation_ping_all"),
+    )
+    builder.row(
+        InlineKeyboardButton(text="🗺 Topology",      callback_data="federation_topology"),
+        InlineKeyboardButton(text="⬅️ Back",          callback_data="main_menu"),
+    )
+    return builder.as_markup()
+
+
+def kb_nodes_list(nodes: list) -> InlineKeyboardMarkup:
+    builder = InlineKeyboardBuilder()
+    for n in nodes:
+        icon = "🟢" if n.get("is_active") else "🔴"
+        builder.row(InlineKeyboardButton(
+            text=f"{icon} {n['name']} [{n['role']}]",
+            callback_data=f"fed_ping_{n['id']}",
+        ))
+    builder.row(InlineKeyboardButton(text="⬅️ Back", callback_data="menu_federation"))
+    return builder.as_markup()
+
+
+def kb_node_role() -> InlineKeyboardMarkup:
+    return _build(
+        [InlineKeyboardButton(text="🔗 Node",   callback_data="noderole_node"),
+         InlineKeyboardButton(text="🌉 Bridge", callback_data="noderole_bridge")],
+        [InlineKeyboardButton(text="⬅️ Cancel", callback_data="menu_federation")],
+    )
+
+
+# ─── Admin ────────────────────────────────────────────────────────────────────
+
+def kb_admin_menu() -> InlineKeyboardMarkup:
+    return _build(
+        [InlineKeyboardButton(text="👥 Admins",      callback_data="admin_list"),
+         InlineKeyboardButton(text="➕ Add admin",   callback_data="admin_add")],
+        [InlineKeyboardButton(text="📋 Audit log",   callback_data="admin_audit_log"),
+         InlineKeyboardButton(text="💾 Backup",      callback_data="admin_backup")],
+        [InlineKeyboardButton(text="⬅️ Back",        callback_data="main_menu")],
+    )
