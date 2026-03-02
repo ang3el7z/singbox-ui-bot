@@ -38,36 +38,13 @@ async def lifespan(app: FastAPI):
 async def _seed_and_apply_settings() -> None:
     """
     Runtime settings (domain, tz, bot_lang) live ONLY in the AppSetting table.
-    .env never contains these values.
-
-    First startup: install.sh writes data/init.json with the values collected
-    during interactive setup.  We read that file, seed the DB, then delete it.
-    Subsequent startups: just re-apply whatever is already in the DB.
+    They are collected via the bot setup wizard on first /start — never from .env.
+    On every startup we re-apply whatever is in the DB to the running process.
     """
-    import json
-    from pathlib import Path
     from api.database import AppSetting, async_session
     from api.routers.settings_router import _apply_setting_sync
 
-    seed_file = Path(__file__).parent.parent / "data" / "init.json"
-
     async with async_session() as session:
-        # ── First-run: import seed file into DB ────────────────────────────────
-        if seed_file.exists():
-            try:
-                seed: dict = json.loads(seed_file.read_text())
-                for key, value in seed.items():
-                    if value:  # skip empty strings
-                        row = await session.get(AppSetting, key)
-                        if row is None:
-                            session.add(AppSetting(key=key, value=str(value)))
-                await session.commit()
-                seed_file.unlink()  # one-time use — delete after seeding
-            except Exception as exc:
-                import logging
-                logging.getLogger(__name__).warning("Failed to read data/init.json: %s", exc)
-
-        # ── Every startup: re-apply DB settings to the running process ─────────
         for key in ("tz", "bot_lang", "domain"):
             row = await session.get(AppSetting, key)
             if row and row.value:

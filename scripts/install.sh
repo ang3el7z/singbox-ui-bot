@@ -107,48 +107,6 @@ setup_dirs() {
     chmod -R 755 "$INSTALL_DIR/data" "$INSTALL_DIR/nginx"
 }
 
-# ─── SSL Certificate ──────────────────────────────────────────────────────────
-
-issue_ssl() {
-    info "Obtaining SSL certificate for $DOMAIN..."
-    # Stop nginx if running to free port 80
-    systemctl stop nginx 2>/dev/null || true
-
-    certbot certonly --standalone \
-        -d "$DOMAIN" \
-        --email "$EMAIL" \
-        --agree-tos \
-        --non-interactive \
-        --quiet \
-        && {
-            # Symlink/copy certs into nginx/certs so the nginx container can read them
-            CERT_SRC="/etc/letsencrypt/live/$DOMAIN"
-            CERT_DST="$INSTALL_DIR/nginx/certs/live/$DOMAIN"
-            mkdir -p "$CERT_DST"
-            # Use bind-mount friendly copies (certbot produces symlinks; resolve them)
-            cp -L "$CERT_SRC/fullchain.pem" "$CERT_DST/fullchain.pem"
-            cp -L "$CERT_SRC/privkey.pem"   "$CERT_DST/privkey.pem"
-            chmod 644 "$CERT_DST/fullchain.pem"
-            chmod 600 "$CERT_DST/privkey.pem"
-            info "SSL certificate saved to $CERT_DST"
-
-            # Add renewal hook to re-copy after renewal
-            mkdir -p /etc/letsencrypt/renewal-hooks/deploy
-            cat > /etc/letsencrypt/renewal-hooks/deploy/copy-to-singbox.sh <<HOOK
-#!/bin/bash
-CERT_SRC="/etc/letsencrypt/live/$DOMAIN"
-CERT_DST="$INSTALL_DIR/nginx/certs/live/$DOMAIN"
-mkdir -p "\$CERT_DST"
-cp -L "\$CERT_SRC/fullchain.pem" "\$CERT_DST/fullchain.pem"
-cp -L "\$CERT_SRC/privkey.pem"   "\$CERT_DST/privkey.pem"
-chmod 644 "\$CERT_DST/fullchain.pem"
-chmod 600 "\$CERT_DST/privkey.pem"
-docker exec singbox_nginx nginx -s reload 2>/dev/null || true
-HOOK
-            chmod +x /etc/letsencrypt/renewal-hooks/deploy/copy-to-singbox.sh
-        } || warn "certbot failed. Check DNS A-record and port 80 availability. You can issue SSL later via the bot."
-}
-
 # ─── .env generation ──────────────────────────────────────────────────────────
 
 generate_env() {
@@ -188,78 +146,48 @@ ADGUARD_URL=http://adguard:3000
 ADGUARD_USER=admin
 ADGUARD_PASSWORD=$AG_PASS
 
-# ── SSL ───────────────────────────────────────────────────────────────────────
+# ── SSL email (certbot notification only) ─────────────────────────────────────
 EMAIL=$EMAIL
 
 # ── Federation ────────────────────────────────────────────────────────────────
 FEDERATION_SECRET=$FED_SECRET
-BOT_PUBLIC_URL=https://$DOMAIN
+BOT_PUBLIC_URL=
 
 # ── Security ──────────────────────────────────────────────────────────────────
 SECRET_KEY=$SECRET_KEY
 
-# ── Webhook ───────────────────────────────────────────────────────────────────
-WEBHOOK_HOST=https://$DOMAIN
+# ── Webhook (empty = polling mode; set after domain is configured) ────────────
+WEBHOOK_HOST=
 WEBHOOK_PATH=/webhook
 WEBHOOK_PORT=8080
 
 # ── NOTE ──────────────────────────────────────────────────────────────────────
 # Domain, timezone and bot language are stored ONLY in the database.
-# Change them anytime via the bot (⚙️ Settings) or Web UI (Settings page).
+# Set them via the /start wizard in the bot — no .env changes needed.
 EOF
     chmod 600 "$INSTALL_DIR/.env"
     info ".env created"
 }
 
-# ─── Initial settings seed (domain / tz / lang → DB) ─────────────────────────
-
-generate_init_json() {
-    local init_file="$INSTALL_DIR/data/init.json"
-    if [[ -f "$init_file" ]]; then
-        info "data/init.json already exists (settings already seeded), skipping"
-        return
-    fi
-    info "Writing initial settings seed to data/init.json..."
-    # Only domain is seeded here — tz and bot_lang are collected via the bot wizard on first /start
-    cat > "$init_file" <<EOF
-{
-  "domain": "$DOMAIN"
-}
-EOF
-    chmod 600 "$init_file"
-    info "data/init.json written — will be imported to DB on first startup and deleted"
-}
-
-# ─── Initial Nginx config ─────────────────────────────────────────────────────
+# ─── Initial Nginx config (IP-only, no domain, no SSL) ────────────────────────
+#
+# This bootstrap config keeps the app reachable over plain HTTP on port 80.
+# When the user sets a domain via the bot wizard, nginx_service.py regenerates
+# this file with the proper server_name, SSL, and secret paths.
 
 setup_nginx_init() {
-    # Only write if a full config does not yet exist
     if [[ -f "$INSTALL_DIR/nginx/conf.d/singbox.conf" ]]; then
         info "Nginx config already exists, skipping init"
         return
     fi
-    info "Writing initial Nginx config..."
+    info "Writing bootstrap Nginx config (HTTP, IP-based)..."
 
-    # Check if SSL cert is available
-    CERT_DST="$INSTALL_DIR/nginx/certs/live/$DOMAIN"
-    if [[ -f "$CERT_DST/fullchain.pem" ]]; then
-        SSL_CERT="/etc/letsencrypt/live/$DOMAIN/fullchain.pem"
-        SSL_KEY="/etc/letsencrypt/live/$DOMAIN/privkey.pem"
-        PROTOCOL="ssl http2"
-        SSL_BLOCK="ssl_certificate     $CERT_DST/fullchain.pem;
-    ssl_certificate_key $CERT_DST/privkey.pem;
-    ssl_protocols       TLSv1.2 TLSv1.3;
-    ssl_ciphers         HIGH:!aNULL:!MD5;"
-    else
-        PROTOCOL=""
-        SSL_BLOCK=""
-    fi
-
-    cat > "$INSTALL_DIR/nginx/conf.d/singbox.conf" <<NGINXEOF
+    cat > "$INSTALL_DIR/nginx/conf.d/singbox.conf" <<'NGINXEOF'
+# Bootstrap config — replaced automatically when domain is set via the bot.
 server {
-    listen 80;
-    listen [::]:80;
-    server_name $DOMAIN;
+    listen 80 default_server;
+    listen [::]:80 default_server;
+    server_name _;
     server_tokens off;
 
     location /.well-known/acme-challenge/ {
@@ -269,64 +197,35 @@ server {
     location /api/ {
         proxy_pass http://app:8080/api/;
         proxy_http_version 1.1;
-        proxy_set_header Host \$host;
-        proxy_set_header X-Real-IP \$remote_addr;
-        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto \$scheme;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
     }
 
     location /webhook {
         proxy_pass http://app:8080/webhook;
-        proxy_set_header Host \$host;
-        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
     }
 
     location /web/ {
         alias /var/www/web/;
-        try_files \$uri \$uri/ /web/index.html;
+        try_files $uri $uri/ /web/index.html;
     }
 
     location /federation/ {
         proxy_pass http://app:8080/federation/;
-        proxy_set_header Host \$host;
-        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
     }
 
-    location = / {
-        try_files /index.html @auth;
-    }
-
-    location @auth {
-        auth_basic           "Restricted Content";
-        auth_basic_user_file /etc/nginx/htpasswd/.htpasswd;
-        try_files            /dev/null =403;
+    location / {
+        return 401;
     }
 }
 NGINXEOF
-    info "Initial Nginx config written"
-}
-
-# ─── Interactive selection helpers ────────────────────────────────────────────
-
-# select_option <prompt_text> <option1> <option2> ...
-# Prints the chosen value to stdout, returns 0.
-select_option() {
-    local _prompt="$1"; shift
-    local _options=("$@")
-    local _n=${#_options[@]}
-    echo -e "${BLUE}[SELECT]${NC} $_prompt" >&2
-    for i in "${!_options[@]}"; do
-        printf "  %2d) %s\n" "$((i+1))" "${_options[$i]}" >&2
-    done
-    while true; do
-        printf "  Enter number [1-%d]: " "$_n" >&2
-        read -r _choice
-        if [[ "$_choice" =~ ^[0-9]+$ ]] && (( _choice >= 1 && _choice <= _n )); then
-            echo "${_options[$((_choice-1))]}"
-            return 0
-        fi
-        echo -e "  ${RED}Invalid choice, try again.${NC}" >&2
-    done
+    info "Bootstrap Nginx config written"
 }
 
 # ─── Collect user input ───────────────────────────────────────────────────────
@@ -337,34 +236,28 @@ collect_input() {
     echo "     Singbox UI Bot — Installation"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo ""
-    echo "  ℹ️  After installation, send /start to"
-    echo "     your bot — it will ask for language,"
-    echo "     timezone, and register you as admin."
+    echo "  That's all we need from you here."
+    echo "  Domain, timezone and language are"
+    echo "  configured via the bot on first /start."
     echo ""
 
     # ── Step 1: Telegram token ────────────────────────────────────────────────
-    prompt "Step 1/4 — Telegram Bot Token (get from @BotFather):"
+    prompt "Step 1/3 — Telegram Bot Token (from @BotFather):"
     read -r BOT_TOKEN
     [[ -n "$BOT_TOKEN" ]] || error "BOT_TOKEN cannot be empty"
 
-    # ── Step 2: Domain ────────────────────────────────────────────────────────
-    prompt "Step 2/4 — Domain name (A-record must point to this server, e.g. example.com):"
-    read -r DOMAIN
-    [[ -n "$DOMAIN" ]] || error "DOMAIN cannot be empty"
-
-    # ── Step 3: Email ─────────────────────────────────────────────────────────
-    prompt "Step 3/4 — Email for Let's Encrypt SSL:"
+    # ── Step 2: Email for Let's Encrypt (certbot notifications) ───────────────
+    prompt "Step 2/3 — Email for SSL notifications (Let's Encrypt):"
     read -r EMAIL
     [[ -n "$EMAIL" ]] || error "EMAIL cannot be empty"
 
-    # ── Step 4: SSH port ──────────────────────────────────────────────────────
-    prompt "Step 4/4 — SSH port (press Enter for default 22):"
+    # ── Step 3: SSH port ──────────────────────────────────────────────────────
+    prompt "Step 3/3 — SSH port (press Enter for default 22):"
     read -r SSH_PORT
     SSH_PORT="${SSH_PORT:-22}"
 
     echo ""
-    echo -e "${GREEN}[OK]${NC} Configuration:"
-    echo "     Domain:   $DOMAIN"
+    echo -e "${GREEN}[OK]${NC} Ready to install. Domain will be set via bot."
     echo ""
 }
 
@@ -390,22 +283,30 @@ install_cli() {
     info "Installing management CLI → /usr/local/bin/singbox-ui-bot"
     cp "$INSTALL_DIR/scripts/manage.sh" /usr/local/bin/singbox-ui-bot
     chmod +x /usr/local/bin/singbox-ui-bot
-    success() { echo -e "${GREEN}[OK]${NC} $*"; }
-    success "You can now run: singbox-ui-bot"
+    info "You can now run: singbox-ui-bot"
 }
 
 post_install() {
-    # Show generated credentials
     WEB_PASS_SHOWN=$(grep WEB_ADMIN_PASSWORD "$INSTALL_DIR/.env" | cut -d= -f2)
-    AG_PASS_SHOWN=$(grep ADGUARD_PASSWORD "$INSTALL_DIR/.env" | cut -d= -f2)
+    AG_PASS_SHOWN=$(grep ADGUARD_PASSWORD   "$INSTALL_DIR/.env" | cut -d= -f2)
+
+    # Try to detect the server's public IP for the hint
+    SERVER_IP=$(curl -s --max-time 5 https://api.ipify.org 2>/dev/null || hostname -I | awk '{print $1}')
 
     echo ""
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo -e "${GREEN}  ✅ Installation complete!${NC}"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo ""
-    echo "  📱 Telegram: find your bot and send /start → setup wizard will run"
-    echo "  🌐 Web UI:   https://$DOMAIN/web/"
+    echo "  📱 Find your bot in Telegram and send /start"
+    echo "     The setup wizard will run automatically:"
+    echo "       → Choose language"
+    echo "       → Choose timezone"
+    echo "       → Set domain (or use ${SERVER_IP} with nip.io)"
+    echo "     You will be registered as admin."
+    echo ""
+    echo "  🌐 Web UI will be available after domain is set."
+    echo "     (temporary: http://${SERVER_IP}/web/)"
     echo ""
     echo "  🔑 Credentials (save these!):"
     echo "     Web UI login:  admin / $WEB_PASS_SHOWN"
@@ -425,23 +326,13 @@ post_install() {
     echo "    singbox-ui-bot uninstall  — clean server"
     echo "  ─────────────────────────────────────────"
     echo ""
-    echo "  ⚠️  Next steps:"
-    echo "    1. Send /start to your bot → language + timezone wizard → you become admin"
-    echo "    2. Send /menu to your bot → Inbounds → Add inbound (e.g. VLESS Reality)"
-    echo "    3. Add clients → download config → import in Sing-Box app"
-    echo "    4. Web UI: https://$DOMAIN/web/ — same features in browser"
-    echo ""
-    echo "  Config file:  $INSTALL_DIR/.env"
-    echo "  Sing-Box cfg: $INSTALL_DIR/config/sing-box/config.json"
+    echo "  Config: $INSTALL_DIR/.env"
     echo ""
 }
 
 # ─── Main ─────────────────────────────────────────────────────────────────────
 
 main() {
-    # When the script is run via "curl | bash", stdin is the pipe carrying the
-    # script body, so read(1) gets EOF immediately. Reconnect stdin to the
-    # controlling terminal so interactive prompts work correctly.
     exec < /dev/tty
 
     check_root
@@ -451,9 +342,8 @@ main() {
     setup_repo
     setup_dirs
     generate_env
-    generate_init_json
-    issue_ssl
     setup_nginx_init
+    setup_firewall
     setup_cron
     deploy
     install_cli
