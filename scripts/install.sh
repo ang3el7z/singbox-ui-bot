@@ -2,11 +2,9 @@
 # ============================================================
 # Singbox UI Bot — Full Installation Script
 # Supports: Debian 11/12/13, Ubuntu 22.04/24.04
-# Usage:
-#   curl -fsSL https://raw.githubusercontent.com/ang3el7z/singbox-ui-bot/main/scripts/install.sh | bash
-#   OR:
-#   git clone https://github.com/ang3el7z/singbox-ui-bot /opt/singbox-ui-bot
-#   bash /opt/singbox-ui-bot/scripts/install.sh
+# Usage (non-interactive only — token required):
+#   curl -fsSL https://raw.githubusercontent.com/ang3el7z/singbox-ui-bot/main/scripts/install.sh | bash -s -- YOUR_BOT_TOKEN
+#   Or: BOT_TOKEN=123:ABC bash install.sh
 # ============================================================
 
 set -e
@@ -24,6 +22,9 @@ prompt() { echo -e "${BLUE}[INPUT]${NC} $*"; }
 
 REPO_URL="https://github.com/ang3el7z/singbox-ui-bot.git"
 INSTALL_DIR="/opt/singbox-ui-bot"
+
+# Token from first argument or from environment (required)
+[[ -n "${1:-}" ]] && export BOT_TOKEN="$1"
 
 # ─── Checks ───────────────────────────────────────────────────────────────────
 
@@ -80,10 +81,15 @@ install_packages() {
 
 setup_firewall() {
     info "Configuring UFW firewall..."
+    SSH_PORT=22
+    if [[ -f "$INSTALL_DIR/data/ssh_port" ]] && [[ -r "$INSTALL_DIR/data/ssh_port" ]]; then
+        read -r SSH_PORT < "$INSTALL_DIR/data/ssh_port" || true
+        [[ "$SSH_PORT" =~ ^[0-9]+$ ]] && [[ "$SSH_PORT" -ge 1 ]] && [[ "$SSH_PORT" -le 65535 ]] || SSH_PORT=22
+    fi
     ufw --force reset
     ufw default deny incoming
     ufw default allow outgoing
-    ufw allow 22/tcp   # SSH — change manually if you use a non-standard port
+    ufw allow "${SSH_PORT}/tcp"   # SSH — change via bot (Server → SSH port), then run: singbox-ui-bot firewall
     ufw allow 80/tcp
     ufw allow 443/tcp
     ufw allow 53/tcp
@@ -228,24 +234,10 @@ NGINXEOF
 # ─── Collect user input ───────────────────────────────────────────────────────
 
 collect_input() {
-    echo ""
-    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo "     Singbox UI Bot — Installation"
-    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo ""
-    echo "  That's all we need from you here."
-    echo "  Domain, timezone and language are"
-    echo "  configured via the bot on first /start."
-    echo ""
-
-    # ── Step 1: Telegram token ────────────────────────────────────────────────
-    prompt "Step 1/1 — Telegram Bot Token (from @BotFather):"
-    read -r BOT_TOKEN
-    [[ -n "$BOT_TOKEN" ]] || error "BOT_TOKEN cannot be empty"
-
-    echo ""
-    echo -e "${GREEN}[OK]${NC} Ready to install. Domain will be set via bot."
-    echo ""
+    if [[ -z "${BOT_TOKEN:-}" ]]; then
+        error "BOT_TOKEN is required. Run:\n  curl -fsSL https://raw.githubusercontent.com/ang3el7z/singbox-ui-bot/main/scripts/install.sh | bash -s -- YOUR_BOT_TOKEN\nOr: BOT_TOKEN=your_token bash install.sh"
+    fi
+    info "Using BOT_TOKEN from argument or environment"
 }
 
 # ─── Kernel / sysctl ──────────────────────────────────────────────────────────
@@ -347,8 +339,6 @@ post_install() {
 # ─── Main ─────────────────────────────────────────────────────────────────────
 
 main() {
-    exec < /dev/tty
-
     check_root
     check_os
     collect_input

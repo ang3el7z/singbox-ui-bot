@@ -45,6 +45,7 @@ def kb_server() -> InlineKeyboardMarkup:
          InlineKeyboardButton(text="📋 Logs",    callback_data="server_logs")],
         [InlineKeyboardButton(text="🔄 Reload",  callback_data="server_reload"),
          InlineKeyboardButton(text="♻️ Restart", callback_data="server_restart")],
+        [InlineKeyboardButton(text="🔐 SSH port", callback_data="server_ssh_port")],
         [InlineKeyboardButton(text="⬅️ Back",    callback_data="main_menu")],
     )
 

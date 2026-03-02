@@ -808,7 +808,7 @@ function adminComponent() {
 
 function settingsComponent() {
     return {
-        s: { tz: "", bot_lang: "", domain: "" },
+        s: { tz: "", bot_lang: "", domain: "", ssh_port: "22" },
         domainInput: "",
         domainNote: "",
         loading: false,
@@ -868,7 +868,15 @@ function settingsComponent() {
         },
 
         async save(key, value) {
-            if (!value) return;
+            if (value === undefined || value === null) return;
+            if (key === "ssh_port") {
+                const p = parseInt(String(value).trim(), 10);
+                if (isNaN(p) || p < 1 || p > 65535) {
+                    this.$dispatch("toast", { msg: "SSH port must be 1–65535", type: "error" });
+                    return;
+                }
+                value = String(p);
+            }
             this.saving = key;
             try {
                 const r = await api.settingsSet(key, value);

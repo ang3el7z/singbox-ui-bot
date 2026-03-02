@@ -47,6 +47,25 @@ DC() {
     fi
 }
 
+# ── Firewall (apply SSH port from bot/app) ────────────────────────────────────
+cmd_firewall() {
+    header "Apply firewall (SSH port)"
+    PORT_FILE="$INSTALL_DIR/data/ssh_port"
+    if [[ -r "$PORT_FILE" ]]; then
+        read -r SSH_PORT < "$PORT_FILE" || true
+    fi
+    [[ "$SSH_PORT" =~ ^[0-9]+$ ]] && [[ "$SSH_PORT" -ge 1 ]] && [[ "$SSH_PORT" -le 65535 ]] || SSH_PORT=22
+
+    info "Allowing SSH on port $SSH_PORT/tcp..."
+    ufw allow "${SSH_PORT}/tcp"
+    if [[ "$SSH_PORT" != "22" ]]; then
+        info "Removing default SSH port 22 from UFW..."
+        ufw delete allow 22/tcp 2>/dev/null || true
+    fi
+    ufw --force enable
+    success "Firewall updated. SSH port: $SSH_PORT"
+}
+
 # ── Status ────────────────────────────────────────────────────────────────────
 cmd_status() {
     header "Status"
@@ -280,7 +299,8 @@ show_menu() {
     echo -e "  ${BOLD}4)${RESET} 🔄 Restart"
     echo -e "  ${BOLD}5)${RESET} ⬆️  Update"
     echo -e "  ${BOLD}6)${RESET} 🧹 Clear logs"
-    echo -e "  ${BOLD}7)${RESET} 🗑  Uninstall (cleanup server)"
+    echo -e "  ${BOLD}7)${RESET} 🔐 Apply firewall (SSH port from bot)"
+    echo -e "  ${BOLD}8)${RESET} 🗑  Uninstall (cleanup server)"
     echo -e "  ${BOLD}0)${RESET} Exit"
     echo
 }
@@ -294,10 +314,11 @@ main() {
             logs)      cmd_logs ;;
             restart)   cmd_restart ;;
             update)    cmd_update ;;
+            firewall)  cmd_firewall ;;
             uninstall) cmd_uninstall ;;
             *)
                 error "Unknown command: $1"
-                echo "Usage: singbox-ui-bot [status|backup|logs|restart|update|uninstall]"
+                echo "Usage: singbox-ui-bot [status|backup|logs|restart|update|firewall|uninstall]"
                 exit 1
                 ;;
         esac
@@ -315,7 +336,8 @@ main() {
             4) cmd_restart ;;
             5) cmd_update ;;
             6) cmd_clear_logs ;;
-            7) cmd_uninstall ;;
+            7) cmd_firewall ;;
+            8) cmd_uninstall ;;
             0) echo; info "Bye!"; exit 0 ;;
             *) warn "Invalid option: $CHOICE" ;;
         esac

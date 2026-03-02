@@ -23,6 +23,10 @@ TEXTS = {
         "server_logs": "📜 Логи",
         "server_restarting": "⏳ Перезапуск Sing-Box...",
         "server_restarted": "✅ Sing-Box перезапущен",
+        "server_ssh_port": "🔐 SSH порт",
+        "ssh_port_current": "Текущий SSH порт в UFW: <b>{port}</b>.\nВведите новый порт (1–65535) или нажмите Отмена:",
+        "ssh_port_saved": "✅ SSH порт сохранён: <b>{port}</b>.\n\nЧтобы применить на сервере, выполните по SSH:\n<code>singbox-ui-bot firewall</code>",
+        "ssh_port_invalid": "Нужно число от 1 до 65535. Попробуйте снова:",
         "server_status_tpl": (
             "🖥 <b>Статус сервера</b>\n\n"
             "▪ Sing-Box: {status}\n"
@@ -160,6 +164,10 @@ TEXTS = {
         "server_logs": "📜 Logs",
         "server_restarting": "⏳ Restarting Sing-Box...",
         "server_restarted": "✅ Sing-Box restarted",
+        "server_ssh_port": "🔐 SSH port",
+        "ssh_port_current": "Current SSH port in UFW: <b>{port}</b>.\nEnter new port (1–65535) or press Cancel:",
+        "ssh_port_saved": "✅ SSH port saved: <b>{port}</b>.\n\nTo apply on the server, run over SSH:\n<code>singbox-ui-bot firewall</code>",
+        "ssh_port_invalid": "Must be a number from 1 to 65535. Try again:",
         "server_status_tpl": (
             "🖥 <b>Server Status</b>\n\n"
             "▪ Sing-Box: {status}\n"

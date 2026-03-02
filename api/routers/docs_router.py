@@ -455,23 +455,16 @@ _DOCS["install"] = {
 
 ### Быстрая установка (одной командой)
 
+Установка **только неинтерактивная**: токен бота обязателен (передаётся в команде).
+
 ```bash
-curl -fsSL https://raw.githubusercontent.com/ang3el7z/singbox-ui-bot/main/scripts/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/ang3el7z/singbox-ui-bot/main/scripts/install.sh | bash -s -- YOUR_BOT_TOKEN
 ```
+Замените `YOUR_BOT_TOKEN` на токен от @BotFather. Или: `BOT_TOKEN=токен bash install.sh`
 
-Скрипт задаёт **3 вопроса**, всё остальное — в боте.
+Без токена скрипт завершится с ошибкой. Домен, язык и timezone задаются в боте при первом `/start`.
 
----
-
-### Что спрашивает установщик
-
-| Шаг | Поле | Где взять |
-|-----|------|-----------|
-| 1/1 | **Bot Token** | @BotFather → /newbot |
-
-Всё остальное (домен, язык, timezone, ID администратора) — в мастере первого `/start`.
-
-> SSH порт — по умолчанию 22 открыт в firewall. Если у вас нестандартный порт, добавьте вручную: `ufw allow <порт>/tcp`.
+> **SSH порт** — по умолчанию 22. Сменить можно в боте: **🖥 Server → 🔐 SSH port**. Чтобы применить на сервере: `singbox-ui-bot firewall`.
 
 > Email для certbot **не нужен** — генерируется автоматически как `admin@{domain}` (как в vpnbot).
 
@@ -700,23 +693,16 @@ docker exec singbox_core sing-box check -c /etc/sing-box/config.json
 
 ### Quick Install (one command)
 
+Installation is **non-interactive only**: the bot token is required (pass it in the command).
+
 ```bash
-curl -fsSL https://raw.githubusercontent.com/ang3el7z/singbox-ui-bot/main/scripts/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/ang3el7z/singbox-ui-bot/main/scripts/install.sh | bash -s -- YOUR_BOT_TOKEN
 ```
+Replace `YOUR_BOT_TOKEN` with your token from @BotFather. Or: `BOT_TOKEN=your_token bash install.sh`
 
-The installer asks **3 questions** — everything else is configured in the bot.
+Without the token the script exits with an error. Domain, language, and timezone are set in the bot on first `/start`.
 
----
-
-### What the installer asks
-
-| Step | Field | Where to get it |
-|------|-------|----------------|
-| 1/1 | **Bot Token** | @BotFather → /newbot |
-
-Everything else (domain, language, timezone, admin ID) is set in the first `/start` wizard.
-
-> SSH port — 22 is open in the firewall by default. If you use a non-standard port, add it manually: `ufw allow <port>/tcp`.
+> **SSH port** — default is 22. You can change it in the bot: **🖥 Server → 🔐 SSH port**. To apply on the server run: `singbox-ui-bot firewall`.
 
 > Email for certbot is **not required** — auto-generated as `admin@{domain}` (same approach as vpnbot).
 

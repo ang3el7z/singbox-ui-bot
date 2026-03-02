@@ -949,6 +949,29 @@ tailwind.config = {
           </div>
         </div>
 
+        <!-- SSH port (UFW) — apply on server with: singbox-ui-bot firewall -->
+        <div class="card mb-4">
+          <h3 class="font-semibold text-white mb-1">🔐 SSH port</h3>
+          <p class="text-slate-400 text-sm mb-3">
+            Current: <code class="text-indigo-300" x-text="s.ssh_port || '22'"></code>
+            — port allowed in UFW for SSH. Change here, then apply on the server.
+          </p>
+          <div class="flex gap-2 items-center">
+            <input class="form-input w-24" type="number" min="1" max="65535" step="1"
+                   x-model="s.ssh_port"
+                   placeholder="22"
+                   :disabled="saving === 'ssh_port'"/>
+            <button class="btn btn-primary flex-shrink-0"
+                    @click="save('ssh_port', String(s.ssh_port || 22).trim())" :disabled="saving === 'ssh_port' || !s.ssh_port">
+              <span x-show="saving === 'ssh_port'" class="spinner"></span>
+              <span x-show="saving !== 'ssh_port'">Save</span>
+            </button>
+          </div>
+          <p class="text-slate-500 text-xs mt-2">
+            To apply on the server run: <code class="bg-slate-800 px-1 rounded">singbox-ui-bot firewall</code> (or use CLI menu option 7).
+          </p>
+        </div>
+
         <!-- System info -->
         <div class="card">
           <h3 class="font-semibold text-white mb-3">ℹ️ Auto-restart &amp; SSL renewal</h3>

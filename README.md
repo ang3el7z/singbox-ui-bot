@@ -17,8 +17,12 @@ Telegram bot + Web UI for managing a [Sing-Box](https://github.com/SagerNet/sing
 
 ## Install
 
+Installation is **non-interactive**: pass your Telegram bot token (from @BotFather) in the command:
+
 ```bash
-curl -fsSL https://raw.githubusercontent.com/ang3el7z/singbox-ui-bot/main/scripts/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/ang3el7z/singbox-ui-bot/main/scripts/install.sh | bash -s -- YOUR_BOT_TOKEN
 ```
 
-The script will ask for your domain, email, Telegram bot token, and admin ID — then set everything up automatically.
+Or with env: `BOT_TOKEN=your_token bash install.sh`
+
+Domain, language, and timezone are set in the bot on first `/start`.

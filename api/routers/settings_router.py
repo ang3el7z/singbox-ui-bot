@@ -7,6 +7,7 @@ Supported keys:
   tz        — IANA timezone string (e.g. "Europe/Moscow", "UTC")
   bot_lang  — "ru" or "en"
   domain    — server domain (e.g. "example.com") — changing triggers nginx reload
+  ssh_port  — SSH port for UFW (1–65535); apply on host with: singbox-ui-bot firewall
 """
 import os
 import re
@@ -21,7 +22,7 @@ from api.deps import require_any_auth, audit
 router = APIRouter()
 
 # Keys that are allowed to be read/written via this API
-_ALLOWED = {"tz", "bot_lang", "domain"}
+_ALLOWED = {"tz", "bot_lang", "domain", "ssh_port"}
 
 _DOMAIN_RE = re.compile(r"^[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z]{2,})+$")
 
@@ -33,6 +34,7 @@ _runtime: dict[str, str] = {
     "tz":       "UTC",
     "bot_lang": "ru",
     "domain":   "",
+    "ssh_port": "22",
 }
 
 
@@ -69,12 +71,24 @@ async def set_setting(key: str, value: str) -> None:
 def _apply_setting_sync(key: str, value: str) -> None:
     """Update in-memory cache and apply side effects (env vars). Called at startup."""
     _runtime[key] = value
+    if key == "ssh_port":
+        _write_ssh_port_file(value)
     if key == "tz":
         os.environ["TZ"] = value
         try:
             _time.tzset()
         except AttributeError:
             pass
+
+
+def _write_ssh_port_file(port: str) -> None:
+    """Write ssh_port to host_data so manage.sh firewall can read it."""
+    try:
+        host_data = __import__("pathlib").Path("/app/host_data")
+        if host_data.is_dir():
+            (host_data / "ssh_port").write_text(port.strip() + "\n")
+    except Exception:
+        pass
 
 
 async def _apply_setting(key: str, value: str) -> None:
@@ -91,6 +105,8 @@ async def _apply_setting(key: str, value: str) -> None:
             # Log but don't fail — admin can reload manually
             import logging
             logging.getLogger(__name__).warning("nginx reload after domain change failed: %s", e)
+    elif key == "ssh_port":
+        _write_ssh_port_file(value)
 
 
 async def get_all_settings() -> dict:
@@ -99,6 +115,7 @@ async def get_all_settings() -> dict:
         "tz":       await get_setting("tz"),
         "bot_lang": await get_setting("bot_lang"),
         "domain":   await get_setting("domain"),
+        "ssh_port": await get_setting("ssh_port") or "22",
     }
 
 
@@ -136,6 +153,13 @@ async def update_setting(key: str, body: SettingUpdate, auth=Depends(require_any
     if key == "domain":
         if not _DOMAIN_RE.match(value):
             raise HTTPException(status_code=400, detail="Invalid domain format (e.g. example.com)")
+    if key == "ssh_port":
+        try:
+            p = int(value)
+            if p < 1 or p > 65535:
+                raise ValueError("out of range")
+        except ValueError:
+            raise HTTPException(status_code=400, detail="ssh_port must be 1–65535")
 
     await set_setting(key, value)
     await audit(auth["actor"], f"setting_update_{key}", f"value={value}")

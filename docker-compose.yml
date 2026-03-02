@@ -20,6 +20,7 @@ services:
       - "8080:8080"       # FastAPI / bot webhook
     volumes:
       - ./config/sing-box:/etc/sing-box       # shared with singbox container
+      - ./data:/app/host_data                 # ssh_port etc. — read by manage.sh on host
       - ./nginx/templates:/app/nginx/templates
       - ./nginx/override:/var/www/override    # user-uploaded site
       - ./nginx/htpasswd:/etc/nginx/htpasswd  # basic auth for 401 fallback
