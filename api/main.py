@@ -13,7 +13,7 @@ from api.config import settings
 from api.database import init_db, async_session, WebUser
 from api.deps import hash_password
 from api.routers import auth, server, clients, inbounds, routing, adguard, nginx, federation, admin
-from api.routers import docs_router
+from api.routers import docs_router, settings_router
 from sqlalchemy import select
 
 
@@ -21,7 +21,16 @@ from sqlalchemy import select
 async def lifespan(app: FastAPI):
     await init_db()
     await _ensure_default_web_user()
+    await _apply_saved_settings()
     yield
+
+
+async def _apply_saved_settings() -> None:
+    """Re-apply runtime settings that were persisted in DB (e.g. after container restart)."""
+    from api.routers.settings_router import get_all_settings, _apply_setting
+    saved = await get_all_settings()
+    for key, value in saved.items():
+        _apply_setting(key, value)
 
 
 async def _ensure_default_web_user() -> None:
@@ -65,7 +74,8 @@ def create_app() -> FastAPI:
     app.include_router(nginx.router,      prefix="/api/nginx",      tags=["nginx"])
     app.include_router(federation.router, prefix="/api/federation", tags=["federation"])
     app.include_router(admin.router,      prefix="/api/admin",      tags=["admin"])
-    app.include_router(docs_router.router, prefix="/api/docs",      tags=["docs"])
+    app.include_router(docs_router.router,     prefix="/api/docs",     tags=["docs"])
+    app.include_router(settings_router.router, prefix="/api/settings", tags=["settings"])
 
     # Federation HMAC endpoint (public, no JWT — authenticated via HMAC)
     from api.services.federation_service import fed_router

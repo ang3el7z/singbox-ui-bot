@@ -166,6 +166,12 @@ class FederationAPI:
     async def topology(self):                 return await get("/api/federation/topology")
 
 
+class SettingsAPI:
+    async def get_all(self):               return await get("/api/settings/")
+    async def get(self, key: str):         return await get(f"/api/settings/{key}")
+    async def set(self, key: str, value):  return await post(f"/api/settings/{key}", json={"value": str(value)})
+
+
 class DocsAPI:
     async def list(self):              return await get("/api/docs/")
     async def get(self, doc_id: str):  return await get_text(f"/api/docs/{doc_id}")
@@ -180,6 +186,7 @@ class AdminAPI:
 
 
 # Singletons used by handlers
+settings_api  = SettingsAPI()
 docs_api      = DocsAPI()
 server_api    = ServerAPI()
 clients_api   = ClientsAPI()

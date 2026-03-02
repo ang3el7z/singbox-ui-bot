@@ -165,20 +165,6 @@ generate_env() {
     WEB_PASS=$(openssl rand -hex 12)
     AG_PASS=$(openssl rand -hex 12)
 
-    # If AdGuard runs in docker the hostname is 'adguard'; otherwise assume localhost
-    if [[ "${USE_ADGUARD_DOCKER,,}" == "y" ]]; then
-        ADGUARD_HOST="http://adguard:3000"
-    else
-        ADGUARD_HOST="http://localhost:3000"
-    fi
-
-    # Nginx container name for docker exec commands (reload, test config)
-    if [[ "${USE_NGINX_DOCKER,,}" == "y" ]]; then
-        NGINX_CONTAINER_NAME="singbox_nginx"
-    else
-        NGINX_CONTAINER_NAME=""
-    fi
-
     cat > "$INSTALL_DIR/.env" <<EOF
 # Telegram Bot
 BOT_TOKEN=$BOT_TOKEN
@@ -197,23 +183,18 @@ WEB_ADMIN_PASSWORD=$WEB_PASS
 SINGBOX_CONFIG_PATH=/etc/sing-box/config.json
 SINGBOX_CONTAINER=singbox_core
 
-# AdGuard Home (set ADGUARD_URL='' to disable AdGuard integration)
-ADGUARD_URL=$ADGUARD_HOST
+# AdGuard Home
+ADGUARD_URL=http://adguard:3000
 ADGUARD_USER=admin
 ADGUARD_PASSWORD=$AG_PASS
 
 # Nginx & SSL
 DOMAIN=$DOMAIN
 EMAIL=$EMAIL
-# Leave empty if using host nginx (not docker container)
-NGINX_CONTAINER=$NGINX_CONTAINER_NAME
 
 # Federation (auto-generated, must match across linked bots)
 FEDERATION_SECRET=$FED_SECRET
 BOT_PUBLIC_URL=https://$DOMAIN
-
-# Docker Compose profiles (comma-separated: nginx,adguard)
-COMPOSE_PROFILES=$COMPOSE_PROFILES
 
 # App
 SECRET_KEY=$SECRET_KEY
@@ -339,25 +320,6 @@ collect_input() {
     prompt "Bot language [ru/en] (default ru):"
     read -r BOT_LANG
     BOT_LANG="${BOT_LANG:-ru}"
-
-    echo ""
-    echo "  Optional services:"
-    echo "  (skip if you already have these installed on the host)"
-    echo ""
-
-    prompt "Run Nginx in Docker? [y/N]:"
-    read -r USE_NGINX_DOCKER
-    USE_NGINX_DOCKER="${USE_NGINX_DOCKER:-n}"
-
-    prompt "Run AdGuard Home in Docker? [y/N]:"
-    read -r USE_ADGUARD_DOCKER
-    USE_ADGUARD_DOCKER="${USE_ADGUARD_DOCKER:-n}"
-
-    # Build COMPOSE_PROFILES from choices
-    COMPOSE_PROFILES=""
-    [[ "${USE_NGINX_DOCKER,,}" == "y" ]] && COMPOSE_PROFILES+="nginx,"
-    [[ "${USE_ADGUARD_DOCKER,,}" == "y" ]] && COMPOSE_PROFILES+="adguard,"
-    COMPOSE_PROFILES="${COMPOSE_PROFILES%,}"   # strip trailing comma
 }
 
 # ─── Deploy ───────────────────────────────────────────────────────────────────
@@ -365,19 +327,8 @@ collect_input() {
 deploy() {
     info "Starting containers..."
     cd "$INSTALL_DIR"
-
-    # Build the --profile flags from COMPOSE_PROFILES (comma-separated)
-    PROFILE_ARGS=""
-    if [[ -n "$COMPOSE_PROFILES" ]]; then
-        IFS=',' read -ra _profiles <<< "$COMPOSE_PROFILES"
-        for _p in "${_profiles[@]}"; do
-            PROFILE_ARGS+=" --profile $_p"
-        done
-    fi
-
-    docker compose pull --quiet $PROFILE_ARGS || true
-    # shellcheck disable=SC2086
-    docker compose up -d --build $PROFILE_ARGS
+    docker compose pull --quiet || true
+    docker compose up -d --build
     touch "$INSTALL_DIR/.installed"
     info "Deploy complete"
 }
@@ -405,9 +356,6 @@ post_install() {
     echo "  🔑 Credentials (save these!):"
     echo "     Web UI login:  admin / $WEB_PASS_SHOWN"
     echo "     AdGuard:       admin / $AG_PASS_SHOWN"
-    echo ""
-    [[ -n "$COMPOSE_PROFILES" ]] && \
-        echo "  Active profiles: $COMPOSE_PROFILES"
     echo ""
     echo "  Container status:"
     docker compose -f "$INSTALL_DIR/docker-compose.yml" ps

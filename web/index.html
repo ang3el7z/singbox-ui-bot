@@ -103,6 +103,9 @@ tailwind.config = {
       <div class="sidebar-item" :class="page==='admin' && 'active'" @click="navigate('admin')">
         👑 Admin
       </div>
+      <div class="sidebar-item" :class="page==='settings' && 'active'" @click="navigate('settings')">
+        ⚙️ Settings
+      </div>
       <div class="sidebar-item" :class="page==='docs' && 'active'" @click="navigate('docs')">
         📚 Docs
       </div>
@@ -695,6 +698,73 @@ tailwind.config = {
               </template>
             </tbody>
           </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- SETTINGS -->
+    <section x-show="page==='settings'" x-data="settingsSection()" x-init="init()">
+      <div class="p-6 max-w-2xl">
+        <h2 class="text-xl font-bold text-white mb-6">⚙️ Settings</h2>
+        <div x-show="loading" class="flex gap-2 items-center text-slate-400 mb-4"><span class="spinner"></span> Loading…</div>
+
+        <!-- Timezone -->
+        <div class="card mb-4">
+          <h3 class="font-semibold text-white mb-1">🕐 Timezone</h3>
+          <p class="text-slate-400 text-sm mb-3">Current: <code x-text="s.tz || 'UTC'"></code></p>
+          <div class="grid grid-cols-2 sm:grid-cols-3 gap-2 mb-3">
+            <template x-for="p in tzPresets" :key="p.value">
+              <button
+                class="btn btn-secondary text-sm"
+                :class="s.tz === p.value && 'ring-2 ring-indigo-500'"
+                @click="save('tz', p.value)"
+                :disabled="saving === 'tz'">
+                <span x-text="p.label"></span>
+              </button>
+            </template>
+          </div>
+          <div class="flex gap-2">
+            <input class="form-input" placeholder="Custom IANA tz (e.g. Asia/Almaty)"
+                   x-model="customTz"/>
+            <button class="btn btn-primary flex-shrink-0"
+                    @click="save('tz', customTz)" :disabled="saving === 'tz' || !customTz">
+              <span x-show="saving === 'tz'" class="spinner"></span>
+              Save
+            </button>
+          </div>
+        </div>
+
+        <!-- Language -->
+        <div class="card mb-4">
+          <h3 class="font-semibold text-white mb-1">🌐 Bot Language</h3>
+          <p class="text-slate-400 text-sm mb-3">
+            Current: <span class="font-semibold text-white" x-text="s.bot_lang === 'ru' ? '🇷🇺 Russian' : '🇬🇧 English'"></span>
+          </p>
+          <div class="flex gap-2">
+            <button class="btn" :class="s.bot_lang === 'ru' ? 'btn-primary' : 'btn-secondary'"
+                    @click="save('bot_lang','ru')" :disabled="saving === 'bot_lang'">🇷🇺 Russian</button>
+            <button class="btn" :class="s.bot_lang === 'en' ? 'btn-primary' : 'btn-secondary'"
+                    @click="save('bot_lang','en')" :disabled="saving === 'bot_lang'">🇬🇧 English</button>
+          </div>
+        </div>
+
+        <!-- System info -->
+        <div class="card">
+          <h3 class="font-semibold text-white mb-3">ℹ️ Auto-restart &amp; SSL renewal</h3>
+          <div class="flex flex-col gap-2 text-sm text-slate-300">
+            <div class="flex items-start gap-2">
+              <span class="text-green-400 flex-shrink-0">✅</span>
+              <span><b>Auto-restart on reboot:</b> all containers use <code>restart: unless-stopped</code> — they start automatically when the server reboots, no action needed.</span>
+            </div>
+            <div class="flex items-start gap-2">
+              <span class="text-green-400 flex-shrink-0">✅</span>
+              <span><b>Auto SSL renewal:</b> <code>certbot renew</code> cron runs daily at 03:00. A renewal hook copies certs to <code>nginx/certs/</code> and reloads Nginx automatically.</span>
+            </div>
+            <div class="flex items-start gap-2 mt-1">
+              <span class="text-yellow-400 flex-shrink-0">💡</span>
+              <span>After manual cert renewal, go to <b>Nginx → Configure &amp; Reload</b> to apply new certs.</span>
+            </div>
+          </div>
         </div>
       </div>
     </section>

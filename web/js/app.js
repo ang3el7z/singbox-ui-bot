@@ -610,6 +610,55 @@ function adminComponent() {
     };
 }
 
+// ─── Settings ─────────────────────────────────────────────────────────────────
+
+function settingsComponent() {
+    return {
+        s: { tz: "", bot_lang: "" },
+        loading: false,
+        saving: null,   // key currently being saved
+        tzPresets: [
+            { label: "🇷🇺 Moscow",   value: "Europe/Moscow" },
+            { label: "🇺🇦 Kyiv",     value: "Europe/Kyiv" },
+            { label: "🇰🇿 Almaty",   value: "Asia/Almaty" },
+            { label: "🌍 UTC",       value: "UTC" },
+            { label: "🇩🇪 Berlin",   value: "Europe/Berlin" },
+            { label: "🇬🇧 London",   value: "Europe/London" },
+            { label: "🇺🇸 New York", value: "America/New_York" },
+            { label: "🇺🇸 Los Angeles", value: "America/Los_Angeles" },
+            { label: "🇨🇳 Shanghai", value: "Asia/Shanghai" },
+        ],
+        customTz: "",
+
+        async init() {
+            this.loading = true;
+            try {
+                this.s = await api.settingsAll();
+                this.customTz = this.s.tz || "";
+            } catch (e) {
+                this.$dispatch("toast", { msg: e.message, type: "error" });
+            } finally { this.loading = false; }
+        },
+
+        async save(key, value) {
+            if (!value) return;
+            this.saving = key;
+            try {
+                const r = await api.settingsSet(key, value);
+                this.s[key] = r.value;
+                this.$dispatch("toast", { msg: `${key} → ${r.value}`, type: "success" });
+            } catch (e) {
+                this.$dispatch("toast", { msg: e.message, type: "error" });
+            } finally { this.saving = null; }
+        },
+
+        async toggleLang() {
+            const next = this.s.bot_lang === "ru" ? "en" : "ru";
+            await this.save("bot_lang", next);
+        },
+    };
+}
+
 // ─── Docs ─────────────────────────────────────────────────────────────────────
 
 function docsComponent() {
@@ -671,5 +720,6 @@ document.addEventListener("alpine:init", () => {
     Alpine.data("nginxSection",   nginxComponent);
     Alpine.data("federationSection", federationComponent);
     Alpine.data("adminSection",   adminComponent);
-    Alpine.data("docsSection",    docsComponent);
+    Alpine.data("docsSection",     docsComponent);
+    Alpine.data("settingsSection", settingsComponent);
 });
