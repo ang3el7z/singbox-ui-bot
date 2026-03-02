@@ -174,8 +174,8 @@ def _is_whitelisted(ip: str) -> bool:
 async def sync_to_nginx() -> tuple[bool, str]:
     """Regenerate nginx config with current deny list and reload Nginx."""
     from api.services import nginx_service
-    from api.config import settings
-    config_text = nginx_service.generate_config(domain=settings.domain)
+    from api.routers.settings_router import get_runtime
+    config_text = nginx_service.generate_config(domain=get_runtime("domain"))
     nginx_service.write_config(config_text)
     ok, msg = await nginx_service.test_nginx_config()
     if not ok:

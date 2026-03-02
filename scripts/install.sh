@@ -166,46 +166,69 @@ generate_env() {
     AG_PASS=$(openssl rand -hex 12)
 
     cat > "$INSTALL_DIR/.env" <<EOF
-# Telegram Bot
+# ── Telegram Bot ──────────────────────────────────────────────────────────────
 BOT_TOKEN=$BOT_TOKEN
 ADMIN_IDS=$ADMIN_IDS
 
-# API Auth (auto-generated, do not share)
+# ── API Auth (auto-generated secrets — do not share) ──────────────────────────
 INTERNAL_TOKEN=$INTERNAL_TOKEN
 JWT_SECRET=$JWT_SECRET
 JWT_EXPIRE_MINUTES=10080
 
-# Web UI credentials (change after first login!)
+# ── Web UI initial credentials (change after first login!) ────────────────────
 WEB_ADMIN_USER=admin
 WEB_ADMIN_PASSWORD=$WEB_PASS
 
-# Sing-Box
+# ── Sing-Box ──────────────────────────────────────────────────────────────────
 SINGBOX_CONFIG_PATH=/etc/sing-box/config.json
 SINGBOX_CONTAINER=singbox_core
 
-# AdGuard Home
+# ── AdGuard Home ──────────────────────────────────────────────────────────────
 ADGUARD_URL=http://adguard:3000
 ADGUARD_USER=admin
 ADGUARD_PASSWORD=$AG_PASS
 
-# Nginx & SSL
-DOMAIN=$DOMAIN
+# ── SSL ───────────────────────────────────────────────────────────────────────
 EMAIL=$EMAIL
 
-# Federation (auto-generated, must match across linked bots)
+# ── Federation ────────────────────────────────────────────────────────────────
 FEDERATION_SECRET=$FED_SECRET
 BOT_PUBLIC_URL=https://$DOMAIN
 
-# App
+# ── Security ──────────────────────────────────────────────────────────────────
 SECRET_KEY=$SECRET_KEY
-TZ=$TIMEZONE
-BOT_LANG=$BOT_LANG
+
+# ── Webhook ───────────────────────────────────────────────────────────────────
 WEBHOOK_HOST=https://$DOMAIN
 WEBHOOK_PATH=/webhook
 WEBHOOK_PORT=8080
+
+# ── NOTE ──────────────────────────────────────────────────────────────────────
+# Domain, timezone and bot language are stored ONLY in the database.
+# Change them anytime via the bot (⚙️ Settings) or Web UI (Settings page).
 EOF
     chmod 600 "$INSTALL_DIR/.env"
     info ".env created"
+}
+
+# ─── Initial settings seed (domain / tz / lang → DB) ─────────────────────────
+
+generate_init_json() {
+    local init_file="$INSTALL_DIR/data/init.json"
+    if [[ -f "$init_file" ]]; then
+        info "data/init.json already exists (settings already seeded), skipping"
+        return
+    fi
+    info "Writing initial settings seed to data/init.json..."
+    cat > "$init_file" <<EOF
+{
+  "domain":   "$DOMAIN",
+  "tz":       "$TIMEZONE",
+  "bot_lang": "$BOT_LANG"
+}
+EOF
+    chmod 600 "$init_file"
+    info "data/init.json written — will be imported to DB on first startup and deleted"
 }
 
 # ─── Initial Nginx config ─────────────────────────────────────────────────────
@@ -460,6 +483,7 @@ main() {
     setup_repo
     setup_dirs
     generate_env
+    generate_init_json
     issue_ssl
     setup_nginx_init
     setup_cron

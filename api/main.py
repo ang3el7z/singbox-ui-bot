@@ -37,31 +37,40 @@ async def lifespan(app: FastAPI):
 
 async def _seed_and_apply_settings() -> None:
     """
-    On first startup: seed the DB with values from .env so the DB becomes
-    the single source of truth for all runtime settings.
-    On subsequent startups: re-apply whatever is already in the DB.
+    Runtime settings (domain, tz, bot_lang) live ONLY in the AppSetting table.
+    .env never contains these values.
+
+    First startup: install.sh writes data/init.json with the values collected
+    during interactive setup.  We read that file, seed the DB, then delete it.
+    Subsequent startups: just re-apply whatever is already in the DB.
     """
+    import json
+    from pathlib import Path
     from api.database import AppSetting, async_session
     from api.routers.settings_router import _apply_setting_sync
 
-    # All settings with their .env defaults for first-run seeding
-    _defaults = {
-        "tz":       settings.tz,
-        "bot_lang": settings.bot_lang,
-        "domain":   settings.domain,
-    }
+    seed_file = Path(__file__).parent.parent / "data" / "init.json"
 
     async with async_session() as session:
-        for key, env_value in _defaults.items():
-            row = await session.get(AppSetting, key)
-            if row is None:
-                session.add(AppSetting(key=key, value=env_value))
-        await session.commit()
+        # ── First-run: import seed file into DB ────────────────────────────────
+        if seed_file.exists():
+            try:
+                seed: dict = json.loads(seed_file.read_text())
+                for key, value in seed.items():
+                    if value:  # skip empty strings
+                        row = await session.get(AppSetting, key)
+                        if row is None:
+                            session.add(AppSetting(key=key, value=str(value)))
+                await session.commit()
+                seed_file.unlink()  # one-time use — delete after seeding
+            except Exception as exc:
+                import logging
+                logging.getLogger(__name__).warning("Failed to read data/init.json: %s", exc)
 
-        # Apply every setting to the running process (sync-safe at startup)
-        for key in _defaults:
+        # ── Every startup: re-apply DB settings to the running process ─────────
+        for key in ("tz", "bot_lang", "domain"):
             row = await session.get(AppSetting, key)
-            if row:
+            if row and row.value:
                 _apply_setting_sync(key, row.value)
 
 

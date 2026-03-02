@@ -21,6 +21,7 @@ from pathlib import Path
 from jinja2 import Environment, FileSystemLoader
 
 from api.config import settings
+from api.routers.settings_router import get_runtime
 
 BASE_DIR           = Path(__file__).parent.parent.parent
 NGINX_DIR          = BASE_DIR / "nginx"
@@ -51,7 +52,7 @@ def get_ssl_paths(domain: str):
 
 
 def get_hidden_paths(domain: str = None) -> dict:
-    domain = domain or settings.domain
+    domain = domain or get_runtime("domain")
     h = _secret_hash()
     base = f"https://{domain}"
     return {
@@ -109,18 +110,7 @@ def generate_config(
 ) -> str:
     from api.services.ip_ban import get_banned_ips
     if not domain:
-        # Try DB first (single source of truth), fall back to .env
-        import asyncio
-        try:
-            from api.routers.settings_router import get_setting
-            loop = asyncio.get_event_loop()
-            if loop.is_running():
-                # Can't run coroutine synchronously — use env value; async callers pass domain explicitly
-                domain = settings.domain
-            else:
-                domain = loop.run_until_complete(get_setting("domain")) or settings.domain
-        except Exception:
-            domain = settings.domain
+        domain = get_runtime("domain")
     h = _secret_hash()
     ssl_cert, ssl_key = get_ssl_paths(domain)
     if site_enabled is None:

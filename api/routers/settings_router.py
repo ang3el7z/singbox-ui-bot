@@ -1,6 +1,7 @@
 """
-App settings — stored in the AppSetting table (DB is the single source of truth).
-Values are seeded from .env on first startup by api/main.py:_seed_and_apply_settings().
+Runtime settings — stored exclusively in the AppSetting table (DB is the single
+source of truth).  On first startup the values come from data/init.json (written
+by install.sh); that file is deleted after seeding.  .env does NOT contain these.
 
 Supported keys:
   tz        — IANA timezone string (e.g. "Europe/Moscow", "UTC")
@@ -24,11 +25,26 @@ _ALLOWED = {"tz", "bot_lang", "domain"}
 
 _DOMAIN_RE = re.compile(r"^[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z]{2,})+$")
 
+# ─── In-memory runtime cache ──────────────────────────────────────────────────
+# Updated by _apply_setting_sync on every startup + on every save.
+# Sync code (nginx_service, federation_service, etc.) reads from here — no DB
+# query needed, no asyncio required.
+_runtime: dict[str, str] = {
+    "tz":       "UTC",
+    "bot_lang": "ru",
+    "domain":   "",
+}
+
+
+def get_runtime(key: str, default: str = "") -> str:
+    """Synchronous read of a runtime setting from the in-memory cache."""
+    return _runtime.get(key, default)
+
 
 # ─── Helpers (also imported by bot handlers and main.py) ──────────────────────
 
 async def get_setting(key: str, default: str = "") -> str:
-    """Read a setting from the AppSetting table (seeded from .env on first startup)."""
+    """Read a setting from the AppSetting table."""
     async with async_session() as session:
         row = await session.get(AppSetting, key)
         if row and row.value is not None:
@@ -51,7 +67,8 @@ async def set_setting(key: str, value: str) -> None:
 
 
 def _apply_setting_sync(key: str, value: str) -> None:
-    """Synchronous part of apply — env vars only (called at startup)."""
+    """Update in-memory cache and apply side effects (env vars). Called at startup."""
+    _runtime[key] = value
     if key == "tz":
         os.environ["TZ"] = value
         try:

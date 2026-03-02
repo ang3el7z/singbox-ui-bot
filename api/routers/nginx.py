@@ -23,9 +23,9 @@ async def nginx_status(auth: dict = Depends(require_any_auth)):
 
 @router.post("/configure")
 async def nginx_configure(auth: dict = Depends(require_any_auth)):
-    from api.config import settings
+    from api.routers.settings_router import get_runtime
     nginx_service.ensure_htpasswd()
-    config_text = nginx_service.generate_config(domain=settings.domain)
+    config_text = nginx_service.generate_config(domain=get_runtime("domain"))
     nginx_service.write_config(config_text)
     ok, msg = await nginx_service.test_nginx_config()
     if not ok:
@@ -38,10 +38,13 @@ async def nginx_configure(auth: dict = Depends(require_any_auth)):
 @router.post("/ssl")
 async def nginx_ssl(auth: dict = Depends(require_any_auth)):
     from api.config import settings
-    if not settings.domain or not settings.email:
-        raise HTTPException(status_code=400, detail="DOMAIN and EMAIL not set in .env")
-    ok, output = await nginx_service.issue_ssl_cert(settings.domain, settings.email)
-    await audit(auth["actor"], "nginx_ssl", f"domain={settings.domain}")
+    from api.routers.settings_router import get_runtime, get_setting
+    domain = get_runtime("domain")
+    email = settings.email
+    if not domain or not email:
+        raise HTTPException(status_code=400, detail="Domain not configured or EMAIL not set in .env")
+    ok, output = await nginx_service.issue_ssl_cert(domain, email)
+    await audit(auth["actor"], "nginx_ssl", f"domain={domain}")
     if not ok:
         raise HTTPException(status_code=500, detail=output)
     return {"success": True}
@@ -106,9 +109,9 @@ async def site_toggle(enabled: bool, auth: dict = Depends(require_any_auth)):
     enabled=false → root '/' always shows the 401 Basic Auth camouflage popup.
     Regenerates nginx config and reloads nginx automatically.
     """
-    from api.config import settings
+    from api.routers.settings_router import get_runtime
     nginx_service.set_site_enabled(enabled)
-    config_text = nginx_service.generate_config(domain=settings.domain, site_enabled=enabled)
+    config_text = nginx_service.generate_config(domain=get_runtime("domain"), site_enabled=enabled)
     nginx_service.write_config(config_text)
     ok, msg = await nginx_service.test_nginx_config()
     if not ok:

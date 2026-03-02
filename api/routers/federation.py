@@ -124,11 +124,11 @@ async def create_bridge(body: BridgeCreate, db: AsyncSession = Depends(get_db), 
 
 @router.get("/topology")
 async def topology(db: AsyncSession = Depends(get_db), auth: dict = Depends(require_any_auth)):
-    from api.config import settings
+    from api.routers.settings_router import get_runtime
     result = await db.execute(select(FederationNode).order_by(FederationNode.created_at))
     nodes = result.scalars().all()
     return {
-        "master": settings.domain or "this server",
+        "master": get_runtime("domain") or "this server",
         "nodes": [
             {
                 "id": n.id, "name": n.name, "url": n.url,

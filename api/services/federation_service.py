@@ -17,6 +17,7 @@ from fastapi import APIRouter, HTTPException, Request, Header
 from pydantic import BaseModel
 
 from api.config import settings
+from api.routers.settings_router import get_runtime
 from api.database import async_session, FederationNode
 from api.services.singbox import singbox
 from sqlalchemy import select
@@ -74,7 +75,7 @@ class InboundShareRequest(BaseModel):
 async def fed_info():
     """Public info about this node (no auth required)."""
     return NodeInfoResponse(
-        name=settings.domain or "singbox-node",
+        name=get_runtime("domain") or "singbox-node",
         public_url=settings.bot_public_url,
         protocols=["vless", "vmess", "shadowsocks", "trojan", "hysteria2", "tuic"],
     )
@@ -108,7 +109,7 @@ async def fed_get_inbounds(request: Request):
                     "tag": ib.get("tag"),
                     "type": ib.get("type"),
                     "port": ib.get("listen_port"),
-                    "host": settings.domain,
+                    "host": get_runtime("domain"),
                 })
         return {"inbounds": public_inbounds}
     except Exception as e:
@@ -150,7 +151,7 @@ class FederationClient:
 
     async def ping_node(self, node_url: str, secret: str) -> bool:
         client = await self._client()
-        payload = self._signed({"from": settings.domain}, secret)
+        payload = self._signed({"from": get_runtime("domain")}, secret)
         try:
             resp = await client.post(f"{node_url.rstrip('/')}/federation/ping", json=payload, timeout=10)
             return resp.status_code == 200
@@ -159,7 +160,7 @@ class FederationClient:
 
     async def get_remote_inbounds(self, node_url: str, secret: str) -> List[Dict]:
         client = await self._client()
-        payload = self._signed({"from": settings.domain}, secret)
+        payload = self._signed({"from": get_runtime("domain")}, secret)
         resp = await client.post(f"{node_url.rstrip('/')}/federation/inbounds", json=payload)
         if resp.status_code != 200:
             raise ValueError(f"Remote node error: {resp.text}")
@@ -167,7 +168,7 @@ class FederationClient:
 
     async def add_outbound_to_node(self, node_url: str, secret: str, outbound: dict) -> bool:
         client = await self._client()
-        payload = self._signed({"from": settings.domain, "outbound": outbound}, secret)
+        payload = self._signed({"from": get_runtime("domain"), "outbound": outbound}, secret)
         resp = await client.post(f"{node_url.rstrip('/')}/federation/add_outbound", json=payload)
         return resp.status_code == 200
 

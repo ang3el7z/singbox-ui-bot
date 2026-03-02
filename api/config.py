@@ -3,48 +3,50 @@ from typing import List
 
 
 class Settings(BaseSettings):
+    """
+    Only TRUE secrets and infrastructure constants live here.
+    Runtime-editable settings (domain, tz, bot_lang) are stored exclusively
+    in the AppSetting DB table — seeded from data/init.json on first startup.
+    """
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
         case_sensitive=False,
     )
 
-    # Telegram
+    # ── Telegram ───────────────────────────────────────────────────────────────
     bot_token: str = ""
     admin_ids: str = ""
 
-    # API auth
-    internal_token: str = "change_internal_token"   # X-Internal-Token for bot → api
+    # ── API auth (shared secrets, never change after install) ──────────────────
+    internal_token: str = "change_internal_token"
     jwt_secret: str = "change_jwt_secret_32chars"
-    jwt_expire_minutes: int = 60 * 24 * 7           # 7 days
+    jwt_expire_minutes: int = 60 * 24 * 7          # 7 days
 
-    # Web UI admin (initial credentials, changed via API)
+    # ── Web UI — initial credentials (web_users table takes over after first run)
     web_admin_user: str = "admin"
     web_admin_password: str = "changeme"
 
-    # Sing-Box
+    # ── Sing-Box ───────────────────────────────────────────────────────────────
     singbox_config_path: str = "/etc/sing-box/config.json"
-    singbox_container: str = "singbox_core"          # docker exec target
+    singbox_container: str = "singbox_core"
 
-    # AdGuard
+    # ── AdGuard ────────────────────────────────────────────────────────────────
     adguard_url: str = "http://adguard:3000"
     adguard_user: str = "admin"
     adguard_password: str = "changeme"
 
-    # Nginx / SSL
-    domain: str = ""
+    # ── SSL email (certbot notification only, not a setting) ──────────────────
     email: str = ""
 
-    # Federation
+    # ── Federation ────────────────────────────────────────────────────────────
     federation_secret: str = "change_federation_secret"
     bot_public_url: str = ""
 
-    # Security
+    # ── Security ──────────────────────────────────────────────────────────────
     secret_key: str = "change_secret_key_32chars"
 
-    # App
-    tz: str = "UTC"
-    bot_lang: str = "ru"
+    # ── Webhook (infrastructure, not runtime-editable) ───────────────────────
     webhook_host: str = ""
     webhook_path: str = "/webhook"
     webhook_port: int = 8080
