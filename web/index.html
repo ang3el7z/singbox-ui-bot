@@ -313,16 +313,16 @@ tailwind.config = {
             </div>
 
             <div class="mb-4">
-              <div class="text-slate-400 text-xs mb-1 uppercase tracking-wide">🪟 Windows Service (WinSW)</div>
+              <div class="text-slate-400 text-xs mb-1 uppercase tracking-wide">🪟 Windows Service — ready ZIP</div>
               <p class="text-slate-500 text-xs mb-2">
-                Download XML → place alongside <code>singbox-service.exe</code> (renamed WinSW) + <code>sing-box.exe</code>.<br>
-                Run as Administrator: <code>singbox-service.exe install</code> → <code>sc start singbox</code><br>
-                Config auto-downloads from this URL on every service start.
+                Download ZIP → extract → run <code>install.cmd</code> as Administrator.<br>
+                Contains: <code>sing-box.exe</code>, <code>winsw3.exe</code>, all scripts.<br>
+                Config auto-downloads from the server on every service start.
               </p>
               <div class="bg-slate-800 rounded p-3 flex gap-2 items-center">
-                <code class="text-green-400 text-xs break-all flex-1" x-text="subUrls.winsw_url"></code>
-                <button class="btn btn-ghost text-xs shrink-0" @click="copyUrl(subUrls.winsw_url)">📋</button>
-                <a class="btn btn-secondary text-xs shrink-0" :href="subUrls.winsw_url" download="singbox-service.xml">⬇️</a>
+                <code class="text-green-400 text-xs break-all flex-1" x-text="subUrls.windows_zip"></code>
+                <button class="btn btn-ghost text-xs shrink-0" @click="copyUrl(subUrls.windows_zip)">📋</button>
+                <a class="btn btn-primary text-xs shrink-0" :href="subUrls.windows_zip" download="singbox-windows.zip">⬇️ Download</a>
               </div>
             </div>
 
@@ -1050,10 +1050,12 @@ tailwind.config = {
 
         <!-- Tabs -->
         <div class="flex gap-2 mb-5">
-          <button class="btn text-sm" :class="tab==='backup' ? 'btn-primary' : ''" @click="tab='backup'">💾 Backup</button>
+          <button class="btn text-sm" :class="tab==='backup'  ? 'btn-primary' : ''" @click="tab='backup'">💾 Backup</button>
           <button class="btn text-sm" :class="tab==='logs'   ? 'btn-primary' : ''" @click="tab='logs'">📋 Logs</button>
           <button class="btn text-sm" :class="tab==='ipban'  ? 'btn-primary' : ''"
                   @click="tab='ipban'; loadBanned()">🚫 IP Ban</button>
+          <button class="btn text-sm" :class="tab==='windows' ? 'btn-primary' : ''"
+                  @click="tab='windows'; checkWinBinaries()">🪟 Windows</button>
         </div>
 
         <!-- ── BACKUP TAB ──────────────────────────────────────────────── -->
@@ -1179,6 +1181,40 @@ tailwind.config = {
                 </div>
               </template>
             </div>
+          </div>
+        </div>
+
+        <!-- ── WINDOWS TAB ──────────────────────────────────────────────── -->
+        <div x-show="tab==='windows'">
+          <div class="card mb-4">
+            <h3 class="font-semibold text-white mb-1">🪟 Windows Service Binaries</h3>
+            <p class="text-slate-400 text-sm mb-4">
+              Pre-download <code>sing-box.exe</code> and <code>winsw3.exe</code> from GitHub Releases.
+              Once cached, any client can download the ready-to-use Windows Service ZIP instantly.
+            </p>
+            <div class="mb-3 p-3 rounded"
+              :class="winReady ? 'bg-green-900/30 border border-green-700' : 'bg-slate-800'">
+              <div x-show="winStatus">
+                <div class="text-sm mb-1">
+                  <span x-text="winStatus?.sing_box_cached ? '✅' : '❌'"></span>
+                  sing-box.exe (v<span x-text="winStatus?.sing_box_version"></span>)
+                </div>
+                <div class="text-sm">
+                  <span x-text="winStatus?.winsw_cached ? '✅' : '❌'"></span> winsw3.exe
+                </div>
+              </div>
+              <div x-show="!winStatus" class="text-slate-400 text-sm">Checking status...</div>
+            </div>
+            <div class="flex gap-3">
+              <button class="btn btn-primary" @click="prefetchWin()" :disabled="winLoading || winReady">
+                <span x-show="!winLoading">⬇️ Download binaries</span>
+                <span x-show="winLoading">⏳ Downloading... (may take 1-2 min)</span>
+              </button>
+              <button class="btn btn-ghost" @click="checkWinBinaries()">🔄 Refresh status</button>
+            </div>
+            <p x-show="winReady" class="text-green-400 text-sm mt-3">
+              ✅ Ready — clients can download Windows Service ZIP from Sub URL.
+            </p>
           </div>
         </div>
 

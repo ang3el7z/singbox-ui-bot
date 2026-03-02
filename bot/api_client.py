@@ -241,6 +241,12 @@ class MaintenanceAPI:
     async def ip_ban_clear_auto(self):
         return await post("/api/maintenance/ip-ban/clear-auto")
 
+    # Windows Service binaries
+    async def windows_binaries_status(self):
+        return await get("/api/maintenance/windows/binaries-status")
+    async def prefetch_windows_binaries(self):
+        return await post("/api/maintenance/windows/prefetch-binaries")
+
 
 # Singletons used by handlers
 settings_api     = SettingsAPI()

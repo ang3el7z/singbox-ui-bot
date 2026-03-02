@@ -56,7 +56,8 @@ def _kb_main(status: dict) -> InlineKeyboardMarkup:
     builder.row(InlineKeyboardButton(text="📋 Logs",          callback_data="maint_logs_menu"))
     builder.row(InlineKeyboardButton(text=c_label,            callback_data="maint_clean_interval"))
     builder.row(InlineKeyboardButton(text=f"🚫 IP Ban ({ban_cnt})", callback_data="maint_ipban_menu"))
-    builder.row(InlineKeyboardButton(text="⬅️ Back",           callback_data="main_menu"))
+    builder.row(InlineKeyboardButton(text="🪟 Windows Service",   callback_data="maint_windows"))
+    builder.row(InlineKeyboardButton(text="⬅️ Back",               callback_data="main_menu"))
     return builder.as_markup()
 
 
@@ -365,3 +366,70 @@ async def cb_clear_auto_bans(cq: CallbackQuery):
         )
     except APIError as e:
         await cq.answer(f"❌ {e.detail}", show_alert=True)
+
+
+# ─── Windows Service ───────────────────────────────────────────────────────────
+
+def _kb_windows(status: dict) -> InlineKeyboardMarkup:
+    ready = status.get("ready", False)
+    builder = InlineKeyboardBuilder()
+    if not ready:
+        builder.row(InlineKeyboardButton(text="⬇️ Download binaries", callback_data="maint_win_prefetch"))
+    else:
+        builder.row(InlineKeyboardButton(text="🔄 Re-download binaries", callback_data="maint_win_prefetch"))
+    builder.row(InlineKeyboardButton(text="⬅️ Back", callback_data="menu_maintenance"))
+    return builder.as_markup()
+
+
+@router.callback_query(F.data == "maint_windows")
+async def cb_windows_menu(cq: CallbackQuery):
+    try:
+        status = await maintenance_api.windows_binaries_status()
+        ver = status.get("sing_box_version", "?")
+        sb  = "✅" if status.get("sing_box_cached") else "❌"
+        ws  = "✅" if status.get("winsw_cached") else "❌"
+        ready = status.get("ready", False)
+        state_txt = "✅ Ready — clients can download ZIP" if ready else "⚠️ Binaries not downloaded yet"
+        await cq.message.edit_text(
+            f"🪟 <b>Windows Service Binaries</b>\n\n"
+            f"{sb} sing-box.exe (v{ver})\n"
+            f"{ws} winsw3.exe\n\n"
+            f"{state_txt}\n\n"
+            f"After downloading, each client can get a ready-to-use ZIP archive "
+            f"(sing-box.exe + winsw3.exe + scripts + XML) via Sub URL.",
+            reply_markup=_kb_windows(status),
+            parse_mode="HTML",
+        )
+    except APIError as e:
+        await cq.answer(f"❌ {e.detail}", show_alert=True)
+
+
+@router.callback_query(F.data == "maint_win_prefetch")
+async def cb_win_prefetch(cq: CallbackQuery):
+    await cq.answer("⏳ Downloading… this may take 1-2 minutes")
+    await cq.message.edit_text(
+        "⏳ <b>Downloading Windows binaries...</b>\n\n"
+        "• sing-box.exe (Windows AMD64)\n"
+        "• winsw3.exe\n\n"
+        "Please wait, this usually takes 1-2 minutes.",
+        parse_mode="HTML",
+    )
+    try:
+        await maintenance_api.prefetch_windows_binaries()
+        status = await maintenance_api.windows_binaries_status()
+        await cq.message.edit_text(
+            "✅ <b>Windows binaries downloaded!</b>\n\n"
+            "Clients can now download the Windows Service ZIP from their Sub URL.",
+            reply_markup=_kb_windows(status),
+            parse_mode="HTML",
+        )
+    except APIError as e:
+        await cq.message.edit_text(
+            f"❌ <b>Download failed</b>\n\n{e.detail}\n\n"
+            "Check that the server has internet access and try again.",
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
+                InlineKeyboardButton(text="🔄 Retry", callback_data="maint_win_prefetch"),
+                InlineKeyboardButton(text="⬅️ Back", callback_data="maint_windows"),
+            ]]),
+            parse_mode="HTML",
+        )

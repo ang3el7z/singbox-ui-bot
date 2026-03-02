@@ -229,3 +229,36 @@ async def ip_ban_clear_auto(auth=Depends(require_any_auth)):
         await ip_ban_svc.sync_to_nginx()
     await audit(auth["actor"], "ip_ban_clear_auto", f"removed={count}")
     return {"removed": count}
+
+
+# ─── Windows Service binaries ──────────────────────────────────────────────────
+
+@router.get("/windows/binaries-status")
+async def windows_binaries_status(auth=Depends(require_any_auth)):
+    """Check whether Windows Service binaries are cached."""
+    from api.services.windows_service import binaries_ready, SINGBOX_EXE, WINSW_EXE, SINGBOX_VERSION
+    return {
+        "ready": binaries_ready(),
+        "sing_box_cached": SINGBOX_EXE.exists(),
+        "winsw_cached": WINSW_EXE.exists(),
+        "sing_box_version": SINGBOX_VERSION,
+        "cache_dir": str(SINGBOX_EXE.parent),
+    }
+
+
+@router.post("/windows/prefetch-binaries")
+async def prefetch_windows_binaries(auth=Depends(require_any_auth)):
+    """
+    Download sing-box.exe (Windows AMD64) and winsw3.exe from GitHub Releases
+    and cache them in data/windows-service/.
+
+    After this, GET /api/sub/{sub_id}/windows.zip will work instantly.
+    Takes 30–120 seconds depending on connection speed.
+    """
+    from api.services.windows_service import ensure_binaries, SINGBOX_VERSION
+    try:
+        await ensure_binaries()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Download failed: {e}")
+    await audit(auth["actor"], "prefetch_windows_binaries", f"version={SINGBOX_VERSION}")
+    return {"detail": "Binaries downloaded and cached successfully"}

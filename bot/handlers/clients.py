@@ -98,18 +98,18 @@ async def cb_client_suburl(cq: CallbackQuery):
         await cq.answer()
         return
 
-    sub_url  = data.get("url", "")
-    winsw_url = data.get("winsw_url", "")
+    sub_url     = data.get("url", "")
+    windows_zip = data.get("windows_zip", "")
 
     text = (
         "🔗 <b>Subscription link</b>\n\n"
-        "Paste into your sing-box / nekobox / clash-meta app:\n"
+        "Paste into sing-box / nekobox / clash-meta:\n"
         f"<code>{sub_url}</code>\n\n"
-        "🪟 <b>Windows Service (WinSW)</b>\n"
-        "Download this XML, rename <code>WinSW-x64.exe</code> → "
-        "<code>singbox-service.exe</code>, put both in one folder:\n"
-        f"<code>{winsw_url}</code>\n"
-        "<i>singbox-service.exe install → sc start singbox</i>"
+        "🪟 <b>Windows Service — готовый архив</b>\n"
+        "Скачай ZIP → распакуй → запусти <code>install.cmd</code> от Администратора:\n"
+        f"<code>{windows_zip}</code>\n\n"
+        "<i>Архив содержит sing-box.exe, winsw3.exe и все скрипты.\n"
+        "Конфиг загружается с сервера автоматически при каждом старте.</i>"
     )
     await cq.message.answer(text, parse_mode="HTML")
 

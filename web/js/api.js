@@ -74,7 +74,9 @@ const api = {
     updateClient:  (id, data)       => apiFetch("PATCH", `/api/clients/${id}`, data),
     deleteClient:  (id)             => apiFetch("DELETE", `/api/clients/${id}`),
     resetStats:    (id)             => apiFetch("POST", `/api/clients/${id}/reset-stats`),
-    clientSubUrl:    (id)            => apiFetch("GET",  `/api/clients/${id}/sub-url`),
+    clientSubUrl:        (id)         => apiFetch("GET",  `/api/clients/${id}/sub-url`),
+    windowsBinariesStatus: ()         => apiFetch("GET",  "/api/maintenance/windows/binaries-status"),
+    prefetchWindowsBinaries: ()       => apiFetch("POST", "/api/maintenance/windows/prefetch-binaries"),
     subscription:    (id)           => apiFetch("GET",  `/api/clients/${id}/subscription`),
 
     // Client subscription templates

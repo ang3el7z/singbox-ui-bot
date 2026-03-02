@@ -1,7 +1,10 @@
+import logging
 import secrets
 import uuid as uuid_lib
 from datetime import datetime, timedelta, timezone
 from typing import Optional
+
+logger = logging.getLogger(__name__)
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import JSONResponse
@@ -232,6 +235,49 @@ async def reset_client_stats(
     return {"detail": "Stats reset"}
 
 
+@pub_router.get("/sub/{sub_id}/windows.zip", response_class=None)
+async def windows_zip(
+    sub_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Return a ready-to-use Windows Service ZIP for this client.
+
+    Contains: sing-box.exe, winsw3.exe, winsw3.xml (with subscription URL),
+              install/start/stop/restart/status/uninstall .cmd scripts.
+
+    On first call, sing-box.exe and winsw3.exe are downloaded from GitHub
+    Releases and cached in data/windows-service/.
+    Subsequent calls serve instantly from cache.
+    """
+    from fastapi.responses import Response as FastAPIResponse
+    result = await db.execute(select(Client).where(Client.sub_id == sub_id))
+    c = result.scalar_one_or_none()
+    if not c or not c.enable:
+        raise HTTPException(status_code=404, detail="Subscription not found or disabled")
+
+    from api.services.nginx_service import get_hidden_paths
+    paths = get_hidden_paths()
+    sub_url = f"{paths['subscriptions'].rstrip('/')}/{sub_id}"
+
+    from api.services import windows_service as ws
+    try:
+        if not ws.binaries_ready():
+            await ws.ensure_binaries()
+        zip_bytes = ws.build_zip(sub_url, c.name)
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=503, detail=str(e))
+    except Exception as e:
+        logger.error("Windows zip error: %s", e)
+        raise HTTPException(status_code=500, detail=f"Failed to build archive: {e}")
+
+    return FastAPIResponse(
+        content=zip_bytes,
+        media_type="application/zip",
+        headers={"Content-Disposition": f'attachment; filename="singbox-windows.zip"'},
+    )
+
+
 @pub_router.get("/sub/{sub_id}/winsw.xml", response_class=None)
 async def winsw_xml(
     sub_id: str,
@@ -346,9 +392,10 @@ async def get_sub_url(
     sub_base = paths["subscriptions"].rstrip("/")  # https://domain/{hash}/sub
     sub_url = f"{sub_base}/{c.sub_id}"
     return {
-        "sub_id":   c.sub_id,
-        "url":      sub_url,
-        "winsw_url": f"{sub_base}/{c.sub_id}/winsw.xml",
+        "sub_id":      c.sub_id,
+        "url":         sub_url,
+        "winsw_url":   f"{sub_url}/winsw.xml",
+        "windows_zip": f"{sub_url}/windows.zip",
         "template_id": c.template_id,
     }
 

@@ -1918,21 +1918,25 @@ geosite:netflix → exit_us-node
 - `platform.http_proxy` — автоматически выставляет системный HTTP-прокси на 127.0.0.1:7890  
   (для приложений, которые не умеют работать через TUN)
 - Порт 7890 — mixed (SOCKS5 + HTTP) как fallback
-- **Запуск:**  
-  ```
-  sing-box.exe run -c config.json
-  ```
-  (от Администратора, или установить как Windows Service)
-- **Установка как сервис (PowerShell, от Администратора):**  
-  ```powershell
-  sc.exe create SingBox binPath= "C:\sing-box\sing-box.exe run -c C:\sing-box\config.json" start= auto
-  sc.exe start SingBox
-  ```
-- **Удаление сервиса:**  
-  ```powershell
-  sc.exe stop SingBox
-  sc.exe delete SingBox
-  ```
+
+**Готовый архив (рекомендуется):**
+
+1. В боте или Web UI открой клиента → **🔗 Sub URL** → **Windows ZIP**
+2. Скачай архив (содержит `sing-box.exe`, `winsw3.exe`, все скрипты и `winsw3.xml`)
+3. Распакуй в папку, например `C:\singbox\`
+4. Запусти `install.cmd` **от Администратора** — сервис установится и запустится
+5. Конфиг загружается с сервера автоматически при каждом старте
+6. `restart.cmd` — перезапуск, `status.cmd` — статус, `uninstall.cmd` — удаление
+
+> ⚠️ **Перед первой раздачей**: в Maintenance → 🪟 Windows Service выполни  
+> "Download binaries" — сервер скачает `sing-box.exe` и `winsw3.exe` из GitHub Releases  
+> и закеширует. После этого ZIP доступен для всех клиентов мгновенно.
+
+**Ручная установка (альтернатива):**
+```
+sing-box.exe run -c config.json
+```
+(от Администратора)
 
 ### TProxy — `tproxy`
 - Для Linux-роутеров (OpenWRT, Debian-роутеры)
@@ -2170,20 +2174,25 @@ When downloading a client config (bot: "🔗 Sub URL" or "📄 Config file"), ch
 - `platform.http_proxy` — automatically sets system HTTP proxy to 127.0.0.1:7890  
   (for apps that cannot use TUN directly)
 - Port 7890 — mixed inbound (SOCKS5 + HTTP) as fallback
-- **Run** (as Administrator):  
-  ```
-  sing-box.exe run -c config.json
-  ```
-- **Install as Windows Service** (PowerShell, as Administrator):  
-  ```powershell
-  sc.exe create SingBox binPath= "C:\sing-box\sing-box.exe run -c C:\sing-box\config.json" start= auto
-  sc.exe start SingBox
-  ```
-- **Remove service:**  
-  ```powershell
-  sc.exe stop SingBox
-  sc.exe delete SingBox
-  ```
+
+**Ready-to-use archive (recommended):**
+
+1. In the bot or Web UI open a client → **🔗 Sub URL** → **Windows ZIP**
+2. Download the archive (contains `sing-box.exe`, `winsw3.exe`, all scripts and `winsw3.xml`)
+3. Extract to a folder, e.g. `C:\singbox\`
+4. Run `install.cmd` **as Administrator** — service is installed and started
+5. Config is downloaded from the server automatically on every service start
+6. `restart.cmd` — restart, `status.cmd` — status, `uninstall.cmd` — remove
+
+> ⚠️ **Before first distribution**: go to Maintenance → 🪟 Windows Service and click  
+> "Download binaries" — the server downloads `sing-box.exe` and `winsw3.exe` from GitHub  
+> Releases and caches them. After that, the ZIP is available for all clients instantly.
+
+**Manual run (alternative):**
+```
+sing-box.exe run -c config.json
+```
+(as Administrator)
 
 ### TProxy — `tproxy`
 - For Linux routers (OpenWRT, Debian routers)

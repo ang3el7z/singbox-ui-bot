@@ -248,7 +248,7 @@ function clientsComponent() {
         async openSubUrl(c) {
             try {
                 const data = await api.clientSubUrl(c.id);
-                this.subUrls = { url: data.url, winsw_url: data.winsw_url };
+                this.subUrls = { url: data.url, windows_zip: data.windows_zip };
                 this.showSubUrl = true;
             } catch (e) {
                 this.$dispatch("toast", { msg: e.message, type: "error" });
@@ -921,12 +921,30 @@ function maintenanceComponent() {
         suspicious: [],
         newIp: "",
         newReason: "manual",
-        tab: "backup",   // backup | logs | ipban
+        tab: "backup",   // backup | logs | ipban | windows
         loading: false,
         msg: "",
+        winStatus: null,
+        winLoading: false,
+        get winReady() { return this.winStatus?.ready === true; },
 
         async init() {
             await this.loadStatus();
+        },
+
+        async checkWinBinaries() {
+            try { this.winStatus = await api.windowsBinariesStatus(); } catch(e) {}
+        },
+
+        async prefetchWin() {
+            this.winLoading = true;
+            try {
+                await api.prefetchWindowsBinaries();
+                this.winStatus = await api.windowsBinariesStatus();
+                this.$dispatch("toast", { msg: "Binaries downloaded!", type: "success" });
+            } catch(e) {
+                this.$dispatch("toast", { msg: e.message, type: "error" });
+            } finally { this.winLoading = false; }
         },
 
         async loadStatus() {

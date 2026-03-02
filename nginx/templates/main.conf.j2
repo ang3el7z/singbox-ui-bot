@@ -117,8 +117,9 @@ server {
     }
 
     # Public subscriptions — proxied to /api/sub/{sub_id}
-    # JSON config:   https://domain/{hash}/sub/{sub_id}
-    # WinSW XML:     https://domain/{hash}/sub/{sub_id}/winsw.xml
+    # JSON config:      https://domain/{hash}/sub/{sub_id}
+    # WinSW XML:        https://domain/{hash}/sub/{sub_id}/winsw.xml
+    # Windows ZIP:      https://domain/{hash}/sub/{sub_id}/windows.zip
     location ~ ^{{ sub_path }}/(.+)$ {
         proxy_pass         http://app:8080/api/sub/$1$is_args$args;
         proxy_set_header   Host $host;
