@@ -10,10 +10,10 @@ from fastapi.staticfiles import StaticFiles
 from pathlib import Path
 
 from api.config import settings
-from api.database import init_db, async_session, WebUser
+from api.database import init_db, async_session, WebUser, ClientTemplate
 from api.deps import hash_password
 from api.routers import auth, server, clients, inbounds, routing, adguard, nginx, federation, admin
-from api.routers import docs_router, settings_router
+from api.routers import docs_router, settings_router, client_templates
 from api.routers import maintenance as maintenance_router
 from sqlalchemy import select
 
@@ -24,6 +24,7 @@ async def lifespan(app: FastAPI):
     await init_db()
     await _ensure_default_web_user()
     await _seed_and_apply_settings()
+    await _seed_default_templates()
     # Start background scheduler
     from api.services.scheduler import scheduler_loop
     _sched_task = asyncio.create_task(scheduler_loop())
@@ -64,6 +65,25 @@ async def _ensure_default_web_user() -> None:
             await session.commit()
 
 
+async def _seed_default_templates() -> None:
+    """Seed built-in client templates if the table is empty."""
+    import json
+    from api.database import ClientTemplate
+    from api.services.template_seeds import BUILTIN_TEMPLATES
+    async with async_session() as session:
+        result = await session.execute(select(ClientTemplate))
+        if result.scalars().first() is not None:
+            return  # already seeded
+        for t in BUILTIN_TEMPLATES:
+            session.add(ClientTemplate(
+                name=t["name"],
+                label=t["label"],
+                is_default=t["is_default"],
+                config_json=json.dumps(t["config"], ensure_ascii=False),
+            ))
+        await session.commit()
+
+
 def create_app() -> FastAPI:
     app = FastAPI(
         title="Singbox UI Bot API",
@@ -95,9 +115,10 @@ def create_app() -> FastAPI:
     app.include_router(nginx.router,      prefix="/api/nginx",      tags=["nginx"])
     app.include_router(federation.router, prefix="/api/federation", tags=["federation"])
     app.include_router(admin.router,      prefix="/api/admin",      tags=["admin"])
-    app.include_router(docs_router.router,        prefix="/api/docs",        tags=["docs"])
-    app.include_router(settings_router.router,   prefix="/api/settings",   tags=["settings"])
-    app.include_router(maintenance_router.router, prefix="/api/maintenance", tags=["maintenance"])
+    app.include_router(docs_router.router,          prefix="/api/docs",             tags=["docs"])
+    app.include_router(settings_router.router,     prefix="/api/settings",         tags=["settings"])
+    app.include_router(maintenance_router.router,  prefix="/api/maintenance",      tags=["maintenance"])
+    app.include_router(client_templates.router,    prefix="/api/client-templates", tags=["client-templates"])
 
     # Federation HMAC endpoint (public, no JWT — authenticated via HMAC)
     from api.services.federation_service import fed_router

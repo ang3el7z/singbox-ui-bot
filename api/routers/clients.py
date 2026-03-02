@@ -9,9 +9,27 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
-from api.database import get_db, Client
+from api.database import get_db, Client, ClientTemplate
 from api.services.singbox import singbox, SingBoxError
 from api.deps import require_any_auth, audit
+
+
+async def _resolve_template(client: Client, db: AsyncSession) -> str:
+    """Return the config_json for the client's assigned template, or the default."""
+    if client.template_id:
+        t = await db.get(ClientTemplate, client.template_id)
+        if t:
+            return t.config_json
+
+    # Fall back to default template
+    result = await db.execute(select(ClientTemplate).where(ClientTemplate.is_default == True))
+    default = result.scalar_one_or_none()
+    if default:
+        return default.config_json
+
+    # Last resort: seed data not yet loaded — return built-in tun JSON
+    from api.services.template_seeds import get_builtin_config_json
+    return get_builtin_config_json("tun")
 
 router = APIRouter()
 
@@ -32,6 +50,7 @@ class ClientUpdate(BaseModel):
     expire_days: Optional[int] = None
     enable: Optional[bool] = None
     tg_id: Optional[str] = None
+    template_id: Optional[int] = None   # None = use default template
 
 
 def _expiry_ms(days: int) -> Optional[int]:
@@ -50,6 +69,7 @@ def _format_client(c: Client) -> dict:
         "uuid": c.uuid,
         "password": c.password,
         "sub_id": c.sub_id,
+        "template_id": c.template_id,   # None = using default template
         "total_gb": c.total_gb,
         "expiry_time": c.expiry_time,
         "enable": c.enable,
@@ -161,6 +181,13 @@ async def update_client(
             raise HTTPException(status_code=500, detail=str(e))
     if body.tg_id is not None:
         c.tg_id = body.tg_id
+    if "template_id" in body.model_fields_set:
+        # Validate template exists if a non-None value is set
+        if body.template_id is not None:
+            t = await db.get(ClientTemplate, body.template_id)
+            if not t:
+                raise HTTPException(status_code=404, detail=f"Template id={body.template_id} not found")
+        c.template_id = body.template_id
 
     db.add(c)
     await db.commit()
@@ -208,38 +235,34 @@ async def reset_client_stats(
 @pub_router.get("/sub/{sub_id}")
 async def public_subscription(
     sub_id: str,
-    template: str = Query(default="tun"),
     db: AsyncSession = Depends(get_db),
 ):
     """
     Public subscription endpoint — no auth required.
-    Access via: https://domain/{hash}/sub/{sub_id}?template=tun
+    Access via: https://domain/{hash}/sub/{sub_id}
 
-    Supported templates: tun, tun_fakeip, tproxy, socks
-    Response includes headers for sing-box / clash meta clients.
+    Uses the template assigned to the client, or the default template if none is set.
+    Response includes Profile-* headers for sing-box / clash meta clients.
     """
     result = await db.execute(select(Client).where(Client.sub_id == sub_id))
     c = result.scalar_one_or_none()
     if not c or not c.enable:
         raise HTTPException(status_code=404, detail="Subscription not found or disabled")
 
-    if template not in singbox.CLIENT_TEMPLATES:
-        template = "tun"
-
     inbound = singbox.get_inbound(c.inbound_tag)
     if not inbound:
         raise HTTPException(status_code=404, detail="Inbound not found")
 
+    template_json = await _resolve_template(c, db)
     client_dict = {"uuid": c.uuid, "password": c.password, "name": c.name}
-    config = singbox.build_client_config(client_dict, inbound, template)
+    config = singbox.build_client_config(client_dict, inbound, template_json)
 
-    import json as _json
     return JSONResponse(
         content=config,
         headers={
-            "Content-Disposition": f'attachment; filename="{c.name}_{template}.json"',
+            "Content-Disposition": f'attachment; filename="{c.name}.json"',
             "Profile-Title": c.name,
-            "Profile-Update-Interval": "24",   # hours; used by some clients
+            "Profile-Update-Interval": "24",
             "Subscription-Userinfo": (
                 f"upload={c.upload or 0}; download={c.download or 0}; "
                 f"total={int((c.total_gb or 0) * 1024 ** 3)}; "
@@ -273,33 +296,24 @@ async def get_sub_url(
     sub_base = paths["subscriptions"].rstrip("/")  # https://domain/{hash}/sub
     return {
         "sub_id": c.sub_id,
-        "urls": {
-            tid: f"{sub_base}/{c.sub_id}?template={tid}"
-            for tid in singbox.CLIENT_TEMPLATES
-        },
-        "default_url": f"{sub_base}/{c.sub_id}",
+        "url": f"{sub_base}/{c.sub_id}",
+        "template_id": c.template_id,
     }
 
 
 @router.get("/{client_id}/subscription")
 async def get_subscription(
     client_id: int,
-    template: str = "tun",
     db: AsyncSession = Depends(get_db),
     auth: dict = Depends(require_any_auth),
 ):
-    """Return client-side sing-box config.
-
-    template: tun | tun_fakeip | tproxy | socks
-    """
-    if template not in singbox.CLIENT_TEMPLATES:
-        raise HTTPException(status_code=400, detail=f"Unknown template '{template}'. Available: {list(singbox.CLIENT_TEMPLATES)}")
+    """Return client-side sing-box config using the client's assigned template (or default)."""
     c = await db.get(Client, client_id)
     if not c:
         raise HTTPException(status_code=404, detail="Client not found")
     inbound = singbox.get_inbound(c.inbound_tag)
     if not inbound:
         raise HTTPException(status_code=404, detail="Inbound not found")
+    template_json = await _resolve_template(c, db)
     client_dict = {"uuid": c.uuid, "password": c.password, "name": c.name}
-    config = singbox.build_client_config(client_dict, inbound, template)
-    return config
+    return singbox.build_client_config(client_dict, inbound, template_json)

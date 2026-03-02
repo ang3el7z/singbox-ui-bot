@@ -74,9 +74,16 @@ const api = {
     updateClient:  (id, data)       => apiFetch("PATCH", `/api/clients/${id}`, data),
     deleteClient:  (id)             => apiFetch("DELETE", `/api/clients/${id}`),
     resetStats:    (id)             => apiFetch("POST", `/api/clients/${id}/reset-stats`),
-    clientTemplates: ()             => apiFetch("GET",  "/api/clients/templates"),
-    clientSubUrl:  (id)             => apiFetch("GET",  `/api/clients/${id}/sub-url`),
-    subscription:  (id, tmpl="tun") => apiFetch("GET",  `/api/clients/${id}/subscription?template=${tmpl}`),
+    clientSubUrl:    (id)            => apiFetch("GET",  `/api/clients/${id}/sub-url`),
+    subscription:    (id)           => apiFetch("GET",  `/api/clients/${id}/subscription`),
+
+    // Client subscription templates
+    listTemplates:   ()             => apiFetch("GET",    "/api/client-templates/"),
+    getTemplate:     (id)           => apiFetch("GET",    `/api/client-templates/${id}`),
+    createTemplate:  (data)         => apiFetch("POST",   "/api/client-templates/", data),
+    updateTemplate:  (id, data)     => apiFetch("PUT",    `/api/client-templates/${id}`, data),
+    deleteTemplate:  (id)           => apiFetch("DELETE", `/api/client-templates/${id}`),
+    setDefaultTmpl:  (id)           => apiFetch("POST",   `/api/client-templates/${id}/set-default`),
 
     // Inbounds
     inbounds:      ()           => apiFetch("GET",  "/api/inbounds/"),

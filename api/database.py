@@ -1,6 +1,6 @@
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
-from sqlalchemy import String, Integer, BigInteger, Boolean, DateTime, Text, Float, func
+from sqlalchemy import String, Integer, BigInteger, Boolean, DateTime, Text, Float, func, ForeignKey
 from datetime import datetime
 from typing import Optional
 
@@ -61,6 +61,9 @@ class Client(Base):
     # Subscription
     sub_id: Mapped[str] = mapped_column(String(32), unique=True, nullable=False)
 
+    # Template assigned to this client (None = use default template)
+    template_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+
     # Limits
     total_gb: Mapped[float] = mapped_column(Float, default=0.0)   # 0 = unlimited
     expiry_time: Mapped[Optional[int]] = mapped_column(BigInteger) # unix ms, null = no limit
@@ -119,6 +122,25 @@ class FederationNode(Base):
     last_ping: Mapped[Optional[datetime]] = mapped_column(DateTime)
     role: Mapped[str] = mapped_column(String(16), default="node")   # node | bridge
     created_at: Mapped[datetime] = mapped_column(DateTime, default=func.now())
+
+
+# ─── Client subscription templates ───────────────────────────────────────────
+
+class ClientTemplate(Base):
+    """
+    A sing-box client config template stored in DB.
+    config_json is a full sing-box client JSON where the proxy outbound is
+    marked with {"tag": "proxy", "type": "__proxy__"} — replaced at subscription time.
+    """
+    __tablename__ = "client_templates"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    name: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
+    label: Mapped[str] = mapped_column(String(128), nullable=False)
+    is_default: Mapped[bool] = mapped_column(Boolean, default=False)
+    config_json: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=func.now(), onupdate=func.now())
 
 
 # ─── App settings ─────────────────────────────────────────────────────────────

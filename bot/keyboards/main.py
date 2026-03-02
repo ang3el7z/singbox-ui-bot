@@ -30,9 +30,10 @@ def kb_main_menu() -> InlineKeyboardMarkup:
          InlineKeyboardButton(text="🌐 Nginx",        callback_data="menu_nginx")],
         [InlineKeyboardButton(text="🔗 Federation",  callback_data="menu_federation"),
          InlineKeyboardButton(text="👑 Admin",        callback_data="menu_admin")],
-        [InlineKeyboardButton(text="⚙️ Settings",    callback_data="menu_settings"),
-         InlineKeyboardButton(text="📚 Docs",         callback_data="menu_docs")],
-        [InlineKeyboardButton(text="🔧 Maintenance",  callback_data="menu_maintenance")],
+        [InlineKeyboardButton(text="📋 Templates",    callback_data="menu_templates"),
+         InlineKeyboardButton(text="⚙️ Settings",    callback_data="menu_settings")],
+        [InlineKeyboardButton(text="📚 Docs",         callback_data="menu_docs"),
+         InlineKeyboardButton(text="🔧 Maintenance",  callback_data="menu_maintenance")],
     )
 
 
@@ -84,8 +85,9 @@ def kb_client_detail(client_id: int) -> InlineKeyboardMarkup:
          InlineKeyboardButton(text="📊 Reset stats",  callback_data=f"client_reset_stats_{client_id}")],
         [InlineKeyboardButton(text="🔗 Sub URL",       callback_data=f"client_suburl_{client_id}"),
          InlineKeyboardButton(text="📄 Config file",  callback_data=f"client_sub_{client_id}")],
-        [InlineKeyboardButton(text="🗑 Delete",        callback_data=f"client_delete_{client_id}"),
-         InlineKeyboardButton(text="⬅️ Back",          callback_data="menu_clients")],
+        [InlineKeyboardButton(text="🎨 Template",      callback_data=f"client_tmpl_{client_id}"),
+         InlineKeyboardButton(text="🗑 Delete",        callback_data=f"client_delete_{client_id}")],
+        [InlineKeyboardButton(text="⬅️ Back",          callback_data="menu_clients")],
     )
 
 

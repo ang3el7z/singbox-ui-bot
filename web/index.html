@@ -106,6 +106,9 @@ tailwind.config = {
       <div class="sidebar-item" :class="page==='settings' && 'active'" @click="navigate('settings')">
         ⚙️ Settings
       </div>
+      <div class="sidebar-item" :class="page==='templates' && 'active'" @click="navigate('templates')">
+        📋 Templates
+      </div>
       <div class="sidebar-item" :class="page==='docs' && 'active'" @click="navigate('docs')">
         📚 Docs
       </div>
@@ -274,9 +277,21 @@ tailwind.config = {
                 <tr><td class="text-slate-400">Traffic</td><td>↑<span x-text="formatBytes(selected?.upload)"></span> / ↓<span x-text="formatBytes(selected?.download)"></span></td></tr>
               </tbody>
             </table>
+            <!-- Template assignment for this client -->
+            <div class="mb-3 p-3 bg-slate-800 rounded">
+              <div class="text-slate-400 text-xs mb-2">Template: <span class="text-white font-semibold" x-text="templateLabel(selected)"></span></div>
+              <select class="form-input text-sm"
+                @change="assignTemplate(selected, parseInt($event.target.value))"
+                :value="selected?.template_id || 0">
+                <option value="0">⭐ Default template</option>
+                <template x-for="t in allTemplates" :key="t.id">
+                  <option :value="t.id" x-text="t.label"></option>
+                </template>
+              </select>
+            </div>
             <div class="flex gap-2 flex-wrap">
               <button class="btn btn-primary" @click="openSubUrl(selected)">🔗 Sub URL</button>
-              <button class="btn btn-primary" @click="openTemplatePicker(selected)">📄 Download config</button>
+              <button class="btn btn-primary" @click="downloadSub(selected)">📄 Download config</button>
               <button class="btn btn-secondary" @click="resetStats(selected)">📊 Reset stats</button>
               <button class="btn btn-danger" @click="deleteClient(selected)">🗑 Delete</button>
             </div>
@@ -286,36 +301,18 @@ tailwind.config = {
         <!-- Subscription URL modal -->
         <div class="modal-overlay" x-show="showSubUrl" @click.self="showSubUrl=false">
           <div class="modal-box">
-            <h3 class="font-bold text-white text-lg mb-1">🔗 Subscription Links</h3>
-            <p class="text-slate-400 text-sm mb-4">Paste any link into your sing-box / nekobox / clash-meta app.</p>
-            <div class="flex flex-col gap-3">
-              <template x-for="(url, tmpl) in subUrls" :key="tmpl">
-                <div class="bg-slate-800 rounded p-3">
-                  <div class="text-slate-400 text-xs mb-1 uppercase" x-text="tmpl"></div>
-                  <div class="flex gap-2 items-center">
-                    <code class="text-green-400 text-xs break-all flex-1" x-text="url"></code>
-                    <button class="btn btn-ghost text-xs shrink-0" @click="copyUrl(url)">📋 Copy</button>
-                  </div>
-                </div>
-              </template>
-              <button class="btn btn-ghost" @click="showSubUrl=false">Close</button>
+            <h3 class="font-bold text-white text-lg mb-1">🔗 Subscription Link</h3>
+            <p class="text-slate-400 text-sm mb-4">
+              Paste into your sing-box / nekobox / clash-meta app.<br>
+              Uses the template assigned to this client.
+            </p>
+            <div class="bg-slate-800 rounded p-3">
+              <div class="flex gap-2 items-center">
+                <code class="text-green-400 text-xs break-all flex-1" x-text="subUrls.url"></code>
+                <button class="btn btn-ghost text-xs shrink-0" @click="copyUrl(subUrls.url)">📋 Copy</button>
+              </div>
             </div>
-          </div>
-        </div>
-
-        <!-- Template picker modal -->
-        <div class="modal-overlay" x-show="showTmpl" @click.self="showTmpl=false">
-          <div class="modal-box">
-            <h3 class="font-bold text-white text-lg mb-4">📄 Select Config Template</h3>
-            <div class="flex flex-col gap-3">
-              <template x-for="t in templates" :key="t.id">
-                <button class="btn btn-secondary text-left w-full" @click="downloadSub(t.id)">
-                  <div class="font-semibold text-sm" x-text="t.label"></div>
-                  <div class="text-slate-400 text-xs mt-1" x-text="t.description"></div>
-                </button>
-              </template>
-              <button class="btn btn-ghost" @click="showTmpl=false">Cancel</button>
-            </div>
+            <button class="btn btn-ghost mt-3" @click="showSubUrl=false">Close</button>
           </div>
         </div>
 
@@ -925,6 +922,92 @@ tailwind.config = {
     </section>
 
     <!-- MAINTENANCE -->
+    <!-- ═══════════════════════════════════════════════════════════════════
+         Templates section
+    ════════════════════════════════════════════════════════════════════ -->
+    <section x-show="page==='templates'" x-cloak x-data="templatesSection()" x-init="init()">
+      <div class="p-6">
+        <div class="flex items-center justify-between mb-4">
+          <div>
+            <h2 class="text-xl font-bold text-white">📋 Client Templates</h2>
+            <p class="text-slate-400 text-sm mt-1">Subscription config templates. Each client uses its assigned template (or the ⭐ default).</p>
+          </div>
+          <button class="btn btn-primary" @click="showCreate=true">➕ New template</button>
+        </div>
+
+        <!-- Templates list -->
+        <div class="grid gap-3">
+          <template x-for="t in templates" :key="t.id">
+            <div class="card flex items-center gap-3">
+              <div class="flex-1 min-w-0">
+                <div class="flex items-center gap-2">
+                  <span x-show="t.is_default" class="text-yellow-400 text-sm">⭐</span>
+                  <span class="font-semibold text-white" x-text="t.label"></span>
+                </div>
+                <div class="text-slate-400 text-xs mt-0.5" x-text="`name: ${t.name}  •  id: ${t.id}`"></div>
+              </div>
+              <div class="flex gap-2 shrink-0">
+                <button class="btn btn-ghost text-xs" @click="downloadJson(t)">📥</button>
+                <button class="btn btn-secondary text-xs" @click="select(t)">✏️ Edit</button>
+                <button x-show="!t.is_default" class="btn btn-ghost text-xs" @click="setDefault(t)">⭐ Default</button>
+                <button x-show="!t.is_default" class="btn btn-danger text-xs" @click="remove(t)">🗑</button>
+              </div>
+            </div>
+          </template>
+          <div x-show="templates.length === 0 && !loading" class="text-slate-500 text-center py-8">No templates</div>
+        </div>
+
+        <!-- Create modal -->
+        <div class="modal-overlay" x-show="showCreate" @click.self="showCreate=false">
+          <div class="modal-box" style="max-width:700px">
+            <h3 class="font-bold text-white text-lg mb-4">➕ New Template</h3>
+            <div class="flex flex-col gap-3">
+              <div>
+                <label class="text-slate-400 text-sm block mb-1">Internal name (no spaces)</label>
+                <input type="text" x-model="form.name" class="form-input" placeholder="my_router"/>
+              </div>
+              <div>
+                <label class="text-slate-400 text-sm block mb-1">Display label</label>
+                <input type="text" x-model="form.label" class="form-input" placeholder="My OpenWRT Router"/>
+              </div>
+              <div>
+                <label class="text-slate-400 text-sm block mb-1">
+                  Config JSON — must contain <code class="text-green-400">{"tag":"proxy","type":"__proxy__"}</code> in outbounds
+                </label>
+                <textarea x-model="form.config_json" class="form-input font-mono text-xs" rows="14"
+                  placeholder='{"log":{"level":"info"},"outbounds":[{"tag":"proxy","type":"__proxy__"},...]}'></textarea>
+              </div>
+              <div class="flex gap-2">
+                <button class="btn btn-primary flex-1" @click="create()">Create</button>
+                <button class="btn btn-ghost" @click="showCreate=false">Cancel</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Edit modal -->
+        <div class="modal-overlay" x-show="showEdit && selected" @click.self="showEdit=false">
+          <div class="modal-box" style="max-width:700px">
+            <h3 class="font-bold text-white text-lg mb-4" x-text="`✏️ Edit: ${selected?.label}`"></h3>
+            <div class="flex flex-col gap-3">
+              <div>
+                <label class="text-slate-400 text-sm block mb-1">Display label</label>
+                <input type="text" x-model="editForm.label" class="form-input"/>
+              </div>
+              <div>
+                <label class="text-slate-400 text-sm block mb-1">Config JSON</label>
+                <textarea x-model="editForm.config_json" class="form-input font-mono text-xs" rows="16"></textarea>
+              </div>
+              <div class="flex gap-2">
+                <button class="btn btn-primary flex-1" @click="save()">Save</button>
+                <button class="btn btn-ghost" @click="showEdit=false">Cancel</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
     <section x-show="page==='maintenance'" x-cloak x-data="maintenanceSection()" x-init="init()">
       <div class="p-6">
         <h2 class="text-xl font-bold text-white mb-2">🔧 Maintenance</h2>

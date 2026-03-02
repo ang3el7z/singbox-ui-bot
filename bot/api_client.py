@@ -108,10 +108,18 @@ class ClientsAPI:
     async def update(self, cid, **kw):        return await patch(f"/api/clients/{cid}", json=kw)
     async def delete(self, cid):              return await delete(f"/api/clients/{cid}")
     async def reset_stats(self, cid):         return await post(f"/api/clients/{cid}/reset-stats")
-    async def templates(self):                return await get("/api/clients/templates")
-    async def subscription(self, cid, template="tun"):
-        return await get(f"/api/clients/{cid}/subscription", template=template)
+    async def subscription(self, cid):        return await get(f"/api/clients/{cid}/subscription")
     async def sub_url(self, cid):             return await get(f"/api/clients/{cid}/sub-url")
+
+
+class ClientTemplatesAPI:
+    async def list(self):                     return await get("/api/client-templates/")
+    async def get(self, tid):                 return await get(f"/api/client-templates/{tid}")
+    async def create(self, **kw):             return await post("/api/client-templates/", json=kw)
+    async def update(self, tid, **kw):        return await patch(f"/api/client-templates/{tid}", json=kw)
+    async def delete(self, tid):              return await delete(f"/api/client-templates/{tid}")
+    async def set_default(self, tid):         return await post(f"/api/client-templates/{tid}/set-default")
+    async def get_default(self):              return await get("/api/client-templates/default")
 
 
 class InboundsAPI:
@@ -239,6 +247,7 @@ settings_api     = SettingsAPI()
 docs_api         = DocsAPI()
 server_api       = ServerAPI()
 clients_api      = ClientsAPI()
+client_tmpl_api  = ClientTemplatesAPI()
 inbounds_api     = InboundsAPI()
 routing_api      = RoutingAPI()
 adguard_api      = AdguardAPI()

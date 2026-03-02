@@ -276,30 +276,28 @@ class SingBoxService:
         ok, out = await self._exec(["sing-box", "generate", "rand", "--hex", "8"])
         return out.strip() if ok else "abcdef01"
 
-    # ─── Client config templates ──────────────────────────────────────────────
+    # ─── Subscription template injection ──────────────────────────────────────
 
-    CLIENT_TEMPLATES: dict[str, dict] = {
-        "tun": {
-            "label": "TUN — Phone / PC (Android, iOS, Linux, macOS)",
-            "description": "Virtual network interface. Full traffic capture, DNS hijack, strict_route. Recommended for mobile and non-Windows desktop.",
-        },
-        "tun_fakeip": {
-            "label": "TUN + FakeIP — Phone / PC (advanced DNS)",
-            "description": "Same as TUN but uses FakeIP for faster DNS resolution. Best for high-performance use.",
-        },
-        "windows": {
-            "label": "🪟 Windows Service (WinTun + system proxy)",
-            "description": "For Windows: TUN with WinTun driver + system HTTP proxy fallback on port 7890. Run sing-box.exe as Administrator or install as a Windows Service.",
-        },
-        "tproxy": {
-            "label": "TProxy — Router (OpenWRT / Linux)",
-            "description": "Transparent proxy via TProxy/redirect. For Linux routers; no TUN interface needed.",
-        },
-        "socks": {
-            "label": "SOCKS5 + HTTP — Manual proxy",
-            "description": "Simple proxy on ports 7891 (SOCKS5) and 7890 (HTTP). No auto-routing; configure apps manually.",
-        },
-    }
+    def inject_proxy_into_template(self, template_json: str, proxy_ob: dict) -> dict:
+        """
+        Load a template JSON and replace the placeholder outbound
+        ({"tag": "proxy", "type": "__proxy__"}) with the real proxy outbound.
+        If no placeholder is found, prepend the proxy outbound to the list.
+        """
+        import json as _json
+        config = _json.loads(template_json)
+        outbounds = config.get("outbounds", [])
+        injected = False
+        for i, ob in enumerate(outbounds):
+            if ob.get("type") == "__proxy__":
+                outbounds[i] = proxy_ob
+                injected = True
+                break
+        if not injected:
+            config["outbounds"] = [proxy_ob] + outbounds
+        else:
+            config["outbounds"] = outbounds
+        return config
 
     def _build_outbound(self, client_data: dict, inbound: dict, domain: str) -> dict:
         """Build the proxy outbound block for a given protocol."""
@@ -353,223 +351,17 @@ class SingBoxService:
 
         return ob
 
-    def build_client_config(self, client_data: dict, inbound: dict, template: str = "tun") -> dict:
+    def build_client_config(self, client_data: dict, inbound: dict, template_json: str) -> dict:
         """
-        Build a client-side sing-box config for a given client + inbound.
+        Build a client-side sing-box config by injecting the proxy outbound
+        into the provided template JSON.
 
-        Templates:
-          tun        — TUN interface (Android/iOS/Windows/macOS)
-          tun_fakeip — TUN + FakeIP DNS (faster DNS, advanced)
-          tproxy     — TProxy transparent proxy (OpenWRT / Linux router)
-          socks      — SOCKS5/HTTP manual proxy (no auto-routing)
+        template_json — JSON string with {"tag":"proxy","type":"__proxy__"} placeholder.
         """
         from api.routers.settings_router import get_runtime
         domain = get_runtime("domain")
-
         proxy_ob = self._build_outbound(client_data, inbound, domain)
-        common_outbounds = [
-            proxy_ob,
-            {"tag": "direct", "type": "direct"},
-            {"tag": "block",  "type": "block"},
-        ]
-        common_route_rules = [
-            {"action": "sniff"},
-            {"protocol": "dns", "action": "hijack-dns"},
-            {"ip_is_private": True, "outbound": "direct"},
-        ]
-
-        if template == "tun":
-            return {
-                "log": {"level": "info"},
-                "dns": {
-                    "servers": [
-                        {"tag": "dns_proxy", "type": "tls", "server": "8.8.8.8"},
-                        {"tag": "dns_direct", "type": "udp", "server": "223.5.5.5", "detour": "direct"},
-                    ],
-                    "rules": [{"outbound": "any", "server": "dns_direct"}],
-                    "strategy": "ipv4_only",
-                    "final": "dns_proxy",
-                    "independent_cache": True,
-                },
-                "inbounds": [{
-                    "type": "tun",
-                    "tag": "tun-in",
-                    "address": ["172.19.0.1/30"],
-                    "auto_route": True,
-                    "strict_route": True,
-                    "sniff": True,
-                }],
-                "outbounds": common_outbounds,
-                "route": {
-                    "rules": common_route_rules,
-                    "final": "proxy",
-                    "auto_detect_interface": True,
-                },
-                "experimental": {"cache_file": {"enabled": True}},
-            }
-
-        elif template == "tun_fakeip":
-            return {
-                "log": {"level": "info"},
-                "dns": {
-                    "servers": [
-                        {"tag": "dns_proxy", "type": "tls", "server": "8.8.8.8"},
-                        {"tag": "dns_direct", "type": "udp", "server": "223.5.5.5", "detour": "direct"},
-                        {"tag": "dns_fakeip", "type": "fakeip",
-                         "inet4_range": "198.18.0.0/15", "inet6_range": "fc00::/18"},
-                    ],
-                    "rules": [
-                        {"query_type": ["A", "AAAA"], "server": "dns_fakeip"},
-                        {"outbound": "any", "server": "dns_direct"},
-                    ],
-                    "strategy": "ipv4_only",
-                    "final": "dns_proxy",
-                    "independent_cache": True,
-                },
-                "inbounds": [{
-                    "type": "tun",
-                    "tag": "tun-in",
-                    "address": ["172.19.0.1/30"],
-                    "auto_route": True,
-                    "strict_route": True,
-                    "sniff": True,
-                }],
-                "outbounds": common_outbounds,
-                "route": {
-                    "rules": common_route_rules,
-                    "final": "proxy",
-                    "auto_detect_interface": True,
-                },
-                "experimental": {"cache_file": {"enabled": True}},
-            }
-
-        elif template == "tproxy":
-            return {
-                "log": {"level": "info"},
-                "dns": {
-                    "servers": [
-                        {"tag": "dns_proxy", "type": "tls", "server": "8.8.8.8"},
-                        {"tag": "dns_direct", "type": "udp", "server": "223.5.5.5", "detour": "direct"},
-                    ],
-                    "rules": [{"outbound": "any", "server": "dns_direct"}],
-                    "final": "dns_proxy",
-                    "independent_cache": True,
-                },
-                "inbounds": [
-                    {
-                        "type": "tproxy",
-                        "tag": "tproxy-in",
-                        "listen": "0.0.0.0",
-                        "listen_port": 7893,
-                        "network": "tcp udp",
-                        "sniff": True,
-                    },
-                    {
-                        "type": "redirect",
-                        "tag": "redirect-in",
-                        "listen": "0.0.0.0",
-                        "listen_port": 7892,
-                        "sniff": True,
-                    },
-                    {
-                        "type": "dns",
-                        "tag": "dns-in",
-                        "listen": "0.0.0.0",
-                        "listen_port": 5353,
-                    },
-                ],
-                "outbounds": common_outbounds + [{"tag": "dns-out", "type": "dns"}],
-                "route": {
-                    "rules": [
-                        {"inbound": "dns-in", "outbound": "dns-out"},
-                        {"ip_is_private": True, "outbound": "direct"},
-                    ],
-                    "final": "proxy",
-                    "auto_detect_interface": True,
-                },
-                "experimental": {"cache_file": {"enabled": True}},
-            }
-
-        elif template == "windows":
-            # Windows Service: TUN (WinTun driver) + system HTTP proxy fallback.
-            # Requires Administrator. Run: sing-box.exe run -c config.json
-            # Or install as service: sc create SingBox binPath= "C:\sing-box\sing-box.exe run -c C:\sing-box\config.json"
-            return {
-                "log": {"level": "info"},
-                "dns": {
-                    "servers": [
-                        {"tag": "dns_proxy", "type": "tls", "server": "8.8.8.8"},
-                        {"tag": "dns_direct", "type": "udp", "server": "223.5.5.5", "detour": "direct"},
-                    ],
-                    "rules": [{"outbound": "any", "server": "dns_direct"}],
-                    "strategy": "ipv4_only",
-                    "final": "dns_proxy",
-                    "independent_cache": True,
-                },
-                "inbounds": [
-                    # HTTP/SOCKS proxy on 127.0.0.1 — fallback for apps that ignore TUN
-                    {
-                        "type": "mixed",
-                        "tag": "mixed-in",
-                        "listen": "127.0.0.1",
-                        "listen_port": 7890,
-                        "sniff": True,
-                    },
-                    # TUN interface — main traffic capture
-                    {
-                        "type": "tun",
-                        "tag": "tun-in",
-                        "address": ["172.19.0.1/30"],
-                        "auto_route": True,
-                        "strict_route": True,   # prevents DNS leaks on Windows (multihomed DNS)
-                        "sniff": True,
-                        "stack": "system",      # WinTun uses system stack
-                        "platform": {
-                            "http_proxy": {
-                                "enabled": True,
-                                "server": "127.0.0.1",
-                                "server_port": 7890,
-                            }
-                        },
-                    },
-                ],
-                "outbounds": common_outbounds,
-                "route": {
-                    "rules": common_route_rules,
-                    "final": "proxy",
-                    "auto_detect_interface": True,
-                },
-                "experimental": {"cache_file": {"enabled": True}},
-            }
-
-        elif template == "socks":
-            return {
-                "log": {"level": "info"},
-                "inbounds": [
-                    {
-                        "type": "socks",
-                        "tag": "socks-in",
-                        "listen": "127.0.0.1",
-                        "listen_port": 7891,
-                        "sniff": True,
-                    },
-                    {
-                        "type": "http",
-                        "tag": "http-in",
-                        "listen": "127.0.0.1",
-                        "listen_port": 7890,
-                        "sniff": True,
-                    },
-                ],
-                "outbounds": common_outbounds,
-                "route": {
-                    "rules": [{"ip_is_private": True, "outbound": "direct"}],
-                    "final": "proxy",
-                },
-            }
-
-        # fallback: return tun
-        return self.build_client_config(client_data, inbound, "tun")
+        return self.inject_proxy_into_template(template_json, proxy_ob)
 
     # ─── Helper ───────────────────────────────────────────────────────────────
 

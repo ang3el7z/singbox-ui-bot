@@ -8,7 +8,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 
 from bot.api_client import clients_api, inbounds_api, APIError
-from bot.keyboards.main import kb_back, kb_clients_list, kb_client_detail, kb_template_select
+from bot.keyboards.main import kb_back, kb_clients_list, kb_client_detail
 from bot.utils import make_qr, format_bytes
 
 router = Router()
@@ -124,36 +124,16 @@ async def cb_client_suburl(cq: CallbackQuery):
 
 @router.callback_query(F.data.startswith("client_sub_"))
 async def cb_client_sub(cq: CallbackQuery):
-    """Show template selector before downloading config."""
+    """Download config using the client's assigned template (or default)."""
     cid = int(cq.data.split("_")[-1])
-    await cq.message.answer(
-        "📱 Choose config template:\n\n"
-        "• <b>TUN</b> — Android, iOS, Linux, macOS\n"
-        "• <b>TUN + FakeIP</b> — Same + faster DNS\n"
-        "• <b>Windows</b> — WinTun driver + system proxy (run as Administrator)\n"
-        "• <b>TProxy</b> — Linux router / OpenWRT\n"
-        "• <b>SOCKS5</b> — Manual proxy, configure apps yourself",
-        reply_markup=kb_template_select(cid),
-        parse_mode="HTML",
-    )
-    await cq.answer()
-
-
-@router.callback_query(F.data.startswith("sub_tmpl_"))
-async def cb_sub_template(cq: CallbackQuery):
-    """Download config with the selected template."""
-    # format: sub_tmpl_{cid}_{template}
-    parts = cq.data.split("_")
-    # sub_tmpl_123_tun_fakeip → parts = ["sub","tmpl","123","tun","fakeip"]
-    cid = int(parts[2])
-    template = "_".join(parts[3:])
     try:
-        sub_cfg = await clients_api.subscription(cid, template=template)
+        sub_cfg = await clients_api.subscription(cid)
         sub_json = json.dumps(sub_cfg, indent=2, ensure_ascii=False)
-        file = BufferedInputFile(sub_json.encode("utf-8"), filename=f"config_{template}.json")
+        file = BufferedInputFile(sub_json.encode("utf-8"), filename="config.json")
         await cq.message.answer_document(
             file,
-            caption=f"📄 Sing-Box config — <b>{template}</b>",
+            caption="📄 Sing-Box client config\n"
+                    "<i>To change template: client detail → 🎨 Template</i>",
             parse_mode="HTML",
         )
     except APIError as e:

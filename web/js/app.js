@@ -151,20 +151,19 @@ function clientsComponent() {
     return {
         clients: [],
         inbounds: [],
+        allTemplates: [],
         selected: null,
         showAdd: false,
         showTmpl: false,
         showSubUrl: false,
         subUrls: {},
-        tmplClientId: null,
-        templates: [],
         form: { name: "", inbound_tag: "", total_gb: 0, expire_days: 0 },
         loading: false,
         search: "",
 
         async init() {
             await this.load();
-            try { this.templates = await api.clientTemplates(); } catch (e) {}
+            try { this.allTemplates = await api.listTemplates(); } catch (e) {}
         },
 
         async load() {
@@ -225,10 +224,31 @@ function clientsComponent() {
             this.$dispatch("toast", { msg: "Stats reset", type: "success" });
         },
 
+        templateLabel(c) {
+            if (!c.template_id) return "⭐ Default";
+            const t = this.allTemplates.find(x => x.id === c.template_id);
+            return t ? t.label : `Template #${c.template_id}`;
+        },
+
+        async assignTemplate(c, tid) {
+            try {
+                await api.updateClient(c.id, { template_id: tid === 0 ? null : tid });
+                this.selected = await api.client(c.id);
+                this.$dispatch("toast", { msg: "Template updated", type: "success" });
+            } catch (e) {
+                this.$dispatch("toast", { msg: e.message, type: "error" });
+            }
+            this.showTmpl = false;
+        },
+
+        openTemplatePicker(c) {
+            this.showTmpl = true;
+        },
+
         async openSubUrl(c) {
             try {
                 const data = await api.clientSubUrl(c.id);
-                this.subUrls = data.urls || {};
+                this.subUrls = { url: data.url };
                 this.showSubUrl = true;
             } catch (e) {
                 this.$dispatch("toast", { msg: e.message, type: "error" });
@@ -249,17 +269,14 @@ function clientsComponent() {
             this.showTmpl = true;
         },
 
-        async downloadSub(tmpl) {
-            const cid = this.tmplClientId;
-            this.showTmpl = false;
+        async downloadSub(c) {
             try {
-                const cfg = await api.subscription(cid, tmpl);
+                const cfg = await api.subscription(c.id);
                 const blob = new Blob([JSON.stringify(cfg, null, 2)], { type: "application/json" });
                 const url = URL.createObjectURL(blob);
                 const a = document.createElement("a");
                 a.href = url;
-                const c = this.clients.find(x => x.id === cid);
-                a.download = `${c ? c.name : cid}_${tmpl}.json`;
+                a.download = `${c.name}.json`;
                 a.click();
                 URL.revokeObjectURL(url);
             } catch (e) {
@@ -1034,4 +1051,86 @@ document.addEventListener("alpine:init", () => {
     Alpine.data("docsSection",         docsComponent);
     Alpine.data("settingsSection",     settingsComponent);
     Alpine.data("maintenanceSection",  maintenanceComponent);
+    Alpine.data("templatesSection",    templatesComponent);
 });
+
+function templatesComponent() {
+    return {
+        templates: [],
+        selected: null,
+        showCreate: false,
+        showEdit: false,
+        form: { name: "", label: "", config_json: "" },
+        editForm: { label: "", config_json: "" },
+        loading: false,
+
+        async init() { await this.load(); },
+
+        async load() {
+            this.loading = true;
+            try { this.templates = await api.listTemplates(); }
+            finally { this.loading = false; }
+        },
+
+        async select(t) {
+            this.selected = await api.getTemplate(t.id);
+            this.editForm = { label: this.selected.label, config_json: JSON.stringify(JSON.parse(this.selected.config_json), null, 2) };
+            this.showEdit = true;
+        },
+
+        async create() {
+            try {
+                // Compact JSON before sending
+                const cfg = JSON.parse(this.form.config_json);
+                await api.createTemplate({ ...this.form, config_json: JSON.stringify(cfg) });
+                this.showCreate = false;
+                this.form = { name: "", label: "", config_json: "" };
+                await this.load();
+                this.$dispatch("toast", { msg: "Template created", type: "success" });
+            } catch (e) {
+                this.$dispatch("toast", { msg: e.message, type: "error" });
+            }
+        },
+
+        async save() {
+            try {
+                const cfg = JSON.parse(this.editForm.config_json);
+                await api.updateTemplate(this.selected.id, { label: this.editForm.label, config_json: JSON.stringify(cfg) });
+                this.showEdit = false;
+                await this.load();
+                this.$dispatch("toast", { msg: "Template saved", type: "success" });
+            } catch (e) {
+                this.$dispatch("toast", { msg: e.message, type: "error" });
+            }
+        },
+
+        async setDefault(t) {
+            try {
+                await api.setDefaultTmpl(t.id);
+                await this.load();
+                this.$dispatch("toast", { msg: `'${t.label}' is now default`, type: "success" });
+            } catch (e) {
+                this.$dispatch("toast", { msg: e.message, type: "error" });
+            }
+        },
+
+        async remove(t) {
+            if (!confirm(`Delete template '${t.label}'?`)) return;
+            try {
+                await api.deleteTemplate(t.id);
+                this.showEdit = false;
+                await this.load();
+                this.$dispatch("toast", { msg: "Deleted", type: "success" });
+            } catch (e) {
+                this.$dispatch("toast", { msg: e.message, type: "error" });
+            }
+        },
+
+        downloadJson(t) {
+            const blob = new Blob([JSON.stringify(JSON.parse(t.config_json), null, 2)], { type: "application/json" });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a"); a.href = url; a.download = `${t.name}.json`; a.click();
+            URL.revokeObjectURL(url);
+        },
+    };
+}
