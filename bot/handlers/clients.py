@@ -98,23 +98,28 @@ async def cb_client_suburl(cq: CallbackQuery):
         await cq.answer()
         return
 
-    default_url = data.get("default_url", "")
-    urls = data.get("urls", {})
+    sub_url  = data.get("url", "")
+    winsw_url = data.get("winsw_url", "")
 
-    lines = ["🔗 <b>Subscription links</b>\n"]
-    lines.append("Paste any link into your sing-box / nekobox / clash-meta app:\n")
-    for tid, url in urls.items():
-        lines.append(f"<b>{tid}</b>\n<code>{url}</code>\n")
+    text = (
+        "🔗 <b>Subscription link</b>\n\n"
+        "Paste into your sing-box / nekobox / clash-meta app:\n"
+        f"<code>{sub_url}</code>\n\n"
+        "🪟 <b>Windows Service (WinSW)</b>\n"
+        "Download this XML, rename <code>WinSW-x64.exe</code> → "
+        "<code>singbox-service.exe</code>, put both in one folder:\n"
+        f"<code>{winsw_url}</code>\n"
+        "<i>singbox-service.exe install → sc start singbox</i>"
+    )
+    await cq.message.answer(text, parse_mode="HTML")
 
-    await cq.message.answer("\n".join(lines), parse_mode="HTML")
-
-    # QR for default (tun) URL
-    if default_url:
+    # QR for sub URL
+    if sub_url:
         try:
-            qr_file = make_qr(default_url)
+            qr_file = make_qr(sub_url)
             await cq.message.answer_photo(
                 qr_file,
-                caption="📱 QR — scan to import subscription (TUN template)",
+                caption="📱 Scan to import subscription",
             )
         except Exception:
             pass

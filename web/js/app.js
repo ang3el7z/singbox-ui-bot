@@ -248,7 +248,7 @@ function clientsComponent() {
         async openSubUrl(c) {
             try {
                 const data = await api.clientSubUrl(c.id);
-                this.subUrls = { url: data.url };
+                this.subUrls = { url: data.url, winsw_url: data.winsw_url };
                 this.showSubUrl = true;
             } catch (e) {
                 this.$dispatch("toast", { msg: e.message, type: "error" });

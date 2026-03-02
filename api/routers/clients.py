@@ -232,6 +232,56 @@ async def reset_client_stats(
     return {"detail": "Stats reset"}
 
 
+@pub_router.get("/sub/{sub_id}/winsw.xml", response_class=None)
+async def winsw_xml(
+    sub_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Return a WinSW v3 XML for installing sing-box as a Windows Service.
+    The XML includes a <download> directive that fetches the subscription config
+    from this server on every service start — keeping config always up to date.
+
+    Usage:
+      1. Download sing-box.exe from https://github.com/SagerNet/sing-box/releases
+      2. Download WinSW-x64.exe from https://github.com/winsw/winsw/releases
+      3. Rename WinSW-x64.exe → singbox-service.exe
+      4. Download this XML → save as singbox-service.xml (same folder)
+      5. Run as Administrator: singbox-service.exe install
+      6. sc start singbox
+    """
+    from fastapi.responses import Response
+    result = await db.execute(select(Client).where(Client.sub_id == sub_id))
+    c = result.scalar_one_or_none()
+    if not c or not c.enable:
+        raise HTTPException(status_code=404, detail="Subscription not found or disabled")
+
+    from api.services.nginx_service import get_hidden_paths
+    paths = get_hidden_paths()
+    sub_base = paths["subscriptions"].rstrip("/")
+    sub_url = f"{sub_base}/{sub_id}"
+
+    xml = f"""<service>
+    <id>singbox</id>
+    <name>Sing-Box VPN ({c.name})</name>
+    <description>Sing-Box VPN client — managed by singbox-ui-bot</description>
+    <executable>%BASE%\\sing-box.exe</executable>
+    <arguments>run -c %BASE%\\config.json</arguments>
+    <logmode>rotate</logmode>
+    <onfailure action="restart" delay="10 sec" />
+    <onfailure action="restart" delay="20 sec" />
+    <onfailure action="restart" delay="30 sec" />
+    <onfailure action="none" />
+    <download from="{sub_url}" to="%BASE%\\config.json" failOnError="true" />
+</service>"""
+
+    return Response(
+        content=xml,
+        media_type="application/xml",
+        headers={"Content-Disposition": f'attachment; filename="singbox-service.xml"'},
+    )
+
+
 @pub_router.get("/sub/{sub_id}")
 async def public_subscription(
     sub_id: str,
@@ -294,9 +344,11 @@ async def get_sub_url(
     from api.services.nginx_service import get_hidden_paths
     paths = get_hidden_paths()
     sub_base = paths["subscriptions"].rstrip("/")  # https://domain/{hash}/sub
+    sub_url = f"{sub_base}/{c.sub_id}"
     return {
-        "sub_id": c.sub_id,
-        "url": f"{sub_base}/{c.sub_id}",
+        "sub_id":   c.sub_id,
+        "url":      sub_url,
+        "winsw_url": f"{sub_base}/{c.sub_id}/winsw.xml",
         "template_id": c.template_id,
     }
 

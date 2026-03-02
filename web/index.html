@@ -301,18 +301,32 @@ tailwind.config = {
         <!-- Subscription URL modal -->
         <div class="modal-overlay" x-show="showSubUrl" @click.self="showSubUrl=false">
           <div class="modal-box">
-            <h3 class="font-bold text-white text-lg mb-1">🔗 Subscription Link</h3>
-            <p class="text-slate-400 text-sm mb-4">
-              Paste into your sing-box / nekobox / clash-meta app.<br>
-              Uses the template assigned to this client.
-            </p>
-            <div class="bg-slate-800 rounded p-3">
-              <div class="flex gap-2 items-center">
+            <h3 class="font-bold text-white text-lg mb-1">🔗 Subscription</h3>
+
+            <div class="mb-4">
+              <div class="text-slate-400 text-xs mb-1 uppercase tracking-wide">Subscription URL</div>
+              <p class="text-slate-500 text-xs mb-2">Paste into sing-box / nekobox / clash-meta app. Uses the template assigned to this client.</p>
+              <div class="bg-slate-800 rounded p-3 flex gap-2 items-center">
                 <code class="text-green-400 text-xs break-all flex-1" x-text="subUrls.url"></code>
-                <button class="btn btn-ghost text-xs shrink-0" @click="copyUrl(subUrls.url)">📋 Copy</button>
+                <button class="btn btn-ghost text-xs shrink-0" @click="copyUrl(subUrls.url)">📋</button>
               </div>
             </div>
-            <button class="btn btn-ghost mt-3" @click="showSubUrl=false">Close</button>
+
+            <div class="mb-4">
+              <div class="text-slate-400 text-xs mb-1 uppercase tracking-wide">🪟 Windows Service (WinSW)</div>
+              <p class="text-slate-500 text-xs mb-2">
+                Download XML → place alongside <code>singbox-service.exe</code> (renamed WinSW) + <code>sing-box.exe</code>.<br>
+                Run as Administrator: <code>singbox-service.exe install</code> → <code>sc start singbox</code><br>
+                Config auto-downloads from this URL on every service start.
+              </p>
+              <div class="bg-slate-800 rounded p-3 flex gap-2 items-center">
+                <code class="text-green-400 text-xs break-all flex-1" x-text="subUrls.winsw_url"></code>
+                <button class="btn btn-ghost text-xs shrink-0" @click="copyUrl(subUrls.winsw_url)">📋</button>
+                <a class="btn btn-secondary text-xs shrink-0" :href="subUrls.winsw_url" download="singbox-service.xml">⬇️</a>
+              </div>
+            </div>
+
+            <button class="btn btn-ghost w-full" @click="showSubUrl=false">Close</button>
           </div>
         </div>
 
