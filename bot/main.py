@@ -15,7 +15,7 @@ from api.main import app as fastapi_app
 
 from bot.middleware.auth import AdminAuthMiddleware
 from bot.middleware.rate_limit import RateLimitMiddleware
-from bot.handlers import start, server, clients, inbounds, routing, adguard, nginx, federation, admin
+from bot.handlers import start, server, clients, inbounds, routing, adguard, nginx, federation, admin, docs
 
 logging.basicConfig(
     level=logging.INFO,
@@ -45,6 +45,7 @@ def create_dispatcher() -> Dispatcher:
     dp.include_router(nginx.router)
     dp.include_router(federation.router)
     dp.include_router(admin.router)
+    dp.include_router(docs.router)
 
     return dp
 

@@ -13,6 +13,7 @@ from api.config import settings
 from api.database import init_db, async_session, WebUser
 from api.deps import hash_password
 from api.routers import auth, server, clients, inbounds, routing, adguard, nginx, federation, admin
+from api.routers import docs_router
 from sqlalchemy import select
 
 
@@ -63,7 +64,8 @@ def create_app() -> FastAPI:
     app.include_router(adguard.router,    prefix="/api/adguard",    tags=["adguard"])
     app.include_router(nginx.router,      prefix="/api/nginx",      tags=["nginx"])
     app.include_router(federation.router, prefix="/api/federation", tags=["federation"])
-    app.include_router(admin.router,     prefix="/api/admin",      tags=["admin"])
+    app.include_router(admin.router,      prefix="/api/admin",      tags=["admin"])
+    app.include_router(docs_router.router, prefix="/api/docs",      tags=["docs"])
 
     # Federation HMAC endpoint (public, no JWT — authenticated via HMAC)
     from api.services.federation_service import fed_router

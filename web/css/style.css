@@ -228,3 +228,137 @@ code {
     border-radius: 4px;
     font-size: 0.85em;
 }
+
+/* ── Docs section markdown rendering ──────────────────────────────────────── */
+
+.docs-content {
+    color: #cbd5e1;
+    line-height: 1.75;
+    font-size: 0.9rem;
+    max-width: 860px;
+}
+
+.docs-content h1 {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: #f1f5f9;
+    margin: 1.5rem 0 0.75rem;
+    padding-bottom: 0.4rem;
+    border-bottom: 1px solid #334155;
+}
+
+.docs-content h2 {
+    font-size: 1.2rem;
+    font-weight: 700;
+    color: #e2e8f0;
+    margin: 1.4rem 0 0.6rem;
+    padding-bottom: 0.3rem;
+    border-bottom: 1px solid #1e3a5f;
+}
+
+.docs-content h3 {
+    font-size: 1rem;
+    font-weight: 600;
+    color: #c7d2fe;
+    margin: 1.2rem 0 0.5rem;
+}
+
+.docs-content h4 {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: #a5b4fc;
+    margin: 1rem 0 0.4rem;
+}
+
+.docs-content p {
+    margin: 0.6rem 0;
+}
+
+.docs-content ul, .docs-content ol {
+    margin: 0.6rem 0 0.6rem 1.5rem;
+}
+
+.docs-content li {
+    margin: 0.25rem 0;
+}
+
+.docs-content code {
+    background: #0f172a;
+    border: 1px solid #334155;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 0.82em;
+    font-family: 'JetBrains Mono', monospace;
+    color: #a5f3fc;
+}
+
+.docs-content pre {
+    background: #0f172a;
+    border: 1px solid #334155;
+    border-radius: 8px;
+    padding: 14px 16px;
+    overflow-x: auto;
+    margin: 0.75rem 0;
+}
+
+.docs-content pre code {
+    border: none;
+    padding: 0;
+    background: transparent;
+    color: #94a3b8;
+    font-size: 0.8rem;
+}
+
+.docs-content table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 0.75rem 0;
+    font-size: 0.85rem;
+}
+
+.docs-content th {
+    background: #0f172a;
+    color: #64748b;
+    font-weight: 600;
+    text-transform: uppercase;
+    font-size: 0.75rem;
+    letter-spacing: 0.04em;
+    padding: 8px 12px;
+    border: 1px solid #334155;
+    text-align: left;
+}
+
+.docs-content td {
+    padding: 8px 12px;
+    border: 1px solid #1e293b;
+    color: #cbd5e1;
+    vertical-align: top;
+}
+
+.docs-content tr:nth-child(even) td {
+    background: rgba(255,255,255,0.02);
+}
+
+.docs-content blockquote {
+    border-left: 3px solid #6366f1;
+    padding: 8px 16px;
+    margin: 0.75rem 0;
+    background: rgba(99,102,241,0.07);
+    border-radius: 0 6px 6px 0;
+    color: #a5b4fc;
+}
+
+.docs-content a {
+    color: #818cf8;
+    text-decoration: underline;
+}
+
+.docs-content a:hover {
+    color: #c7d2fe;
+}
+
+.docs-content hr {
+    border: none;
+    border-top: 1px solid #334155;
+    margin: 1.5rem 0;
+}

@@ -34,6 +34,22 @@ async def get(path: str, **params) -> Any:
         return r.json()
 
 
+async def get_text(path: str, **params) -> str:
+    """GET request that returns raw text (for plain-text responses like markdown)."""
+    async with _client() as c:
+        r = await c.get(path, params=params)
+        if not r.is_success:
+            raise APIError(r.status_code, _extract_detail(r))
+        return r.text
+
+
+# Convenience alias used by docs handler
+async def api_get(path: str, raw_text: bool = False, **params) -> Any:
+    if raw_text:
+        return await get_text(path, **params)
+    return await get(path, **params)
+
+
 async def post(path: str, json: Any = None, **params) -> Any:
     async with _client() as c:
         r = await c.post(path, json=json, params=params)
@@ -149,6 +165,11 @@ class FederationAPI:
     async def topology(self):                 return await get("/api/federation/topology")
 
 
+class DocsAPI:
+    async def list(self):              return await get("/api/docs/")
+    async def get(self, doc_id: str):  return await get_text(f"/api/docs/{doc_id}")
+
+
 class AdminAPI:
     async def list_admins(self):              return await get("/api/admin/admins")
     async def add_admin(self, tg_id, uname=None): return await post("/api/admin/admins", json={"telegram_id": tg_id, "username": uname})
@@ -158,6 +179,7 @@ class AdminAPI:
 
 
 # Singletons used by handlers
+docs_api      = DocsAPI()
 server_api    = ServerAPI()
 clients_api   = ClientsAPI()
 inbounds_api  = InboundsAPI()

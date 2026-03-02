@@ -135,6 +135,10 @@ const api = {
     createBridge: (ids)         => apiFetch("POST", "/api/federation/bridge", { node_ids: ids }),
     topology:     ()            => apiFetch("GET",  "/api/federation/topology"),
 
+    // Docs
+    docsList: ()           => apiFetch("GET", "/api/docs/"),
+    docGet:   (id)         => apiFetch("GET", `/api/docs/${id}`),
+
     // Admin
     admins:       ()            => apiFetch("GET",  "/api/admin/admins"),
     addAdmin:     (data)        => apiFetch("POST", "/api/admin/admins", data),

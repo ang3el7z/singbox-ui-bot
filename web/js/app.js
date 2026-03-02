@@ -595,6 +595,54 @@ function adminComponent() {
     };
 }
 
+// ─── Docs ─────────────────────────────────────────────────────────────────────
+
+function docsComponent() {
+    return {
+        docs: [],
+        activeId: null,
+        activeTitle: "",
+        content: "",
+        loading: false,
+        loadingDoc: false,
+
+        async init() {
+            this.loading = true;
+            try {
+                this.docs = await api.docsList();
+            } catch (e) {
+                this.$dispatch("toast", { msg: e.message, type: "error" });
+            } finally {
+                this.loading = false;
+            }
+        },
+
+        async open(doc) {
+            this.activeId = doc.id;
+            this.activeTitle = doc.title;
+            this.content = "";
+            this.loadingDoc = true;
+            try {
+                this.content = await api.docGet(doc.id);
+            } catch (e) {
+                this.content = `Error: ${e.message}`;
+            } finally {
+                this.loadingDoc = false;
+            }
+        },
+
+        // Render markdown to safe HTML using marked (loaded from CDN)
+        rendered() {
+            if (!this.content) return "";
+            if (typeof marked !== "undefined") {
+                return marked.parse(this.content);
+            }
+            // Fallback: basic escaping + pre block
+            return `<pre style="white-space:pre-wrap;word-break:break-word">${this.content.replace(/</g, "&lt;").replace(/>/g, "&gt;")}</pre>`;
+        },
+    };
+}
+
 // Register components globally
 document.addEventListener("alpine:init", () => {
     Alpine.data("appRoot",        appRoot);
@@ -608,4 +656,5 @@ document.addEventListener("alpine:init", () => {
     Alpine.data("nginxSection",   nginxComponent);
     Alpine.data("federationSection", federationComponent);
     Alpine.data("adminSection",   adminComponent);
+    Alpine.data("docsSection",    docsComponent);
 });
