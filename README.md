@@ -1,6 +1,6 @@
 # Singbox UI Bot
 
-Telegram bot + Web UI for managing a [Sing-Box](https://github.com/SagerNet/sing-box) VPN server.
+Telegram bot + Web UI for managing a [Sing-Box](https://github.com/SagerNet/sing-box) server.
 
 ## System Requirements
 
