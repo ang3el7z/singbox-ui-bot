@@ -168,7 +168,7 @@ generate_env() {
     cat > "$INSTALL_DIR/.env" <<EOF
 # ── Telegram Bot ──────────────────────────────────────────────────────────────
 BOT_TOKEN=$BOT_TOKEN
-ADMIN_IDS=$ADMIN_IDS
+# No ADMIN_IDS — first /start registers the owner as admin via bot wizard
 
 # ── API Auth (auto-generated secrets — do not share) ──────────────────────────
 INTERNAL_TOKEN=$INTERNAL_TOKEN
@@ -220,11 +220,10 @@ generate_init_json() {
         return
     fi
     info "Writing initial settings seed to data/init.json..."
+    # Only domain is seeded here — tz and bot_lang are collected via the bot wizard on first /start
     cat > "$init_file" <<EOF
 {
-  "domain":   "$DOMAIN",
-  "tz":       "$TIMEZONE",
-  "bot_lang": "$BOT_LANG"
+  "domain": "$DOMAIN"
 }
 EOF
     chmod 600 "$init_file"
@@ -338,66 +337,34 @@ collect_input() {
     echo "     Singbox UI Bot — Installation"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo ""
+    echo "  ℹ️  After installation, send /start to"
+    echo "     your bot — it will ask for language,"
+    echo "     timezone, and register you as admin."
+    echo ""
 
     # ── Step 1: Telegram token ────────────────────────────────────────────────
-    prompt "Step 1/6 — Telegram Bot Token (get from @BotFather):"
+    prompt "Step 1/4 — Telegram Bot Token (get from @BotFather):"
     read -r BOT_TOKEN
     [[ -n "$BOT_TOKEN" ]] || error "BOT_TOKEN cannot be empty"
 
-    # ── Step 2: Admin Telegram ID ─────────────────────────────────────────────
-    prompt "Step 2/6 — Your Telegram ID (get from @userinfobot):"
-    read -r ADMIN_IDS
-    [[ -n "$ADMIN_IDS" ]] || error "ADMIN_IDS cannot be empty"
-
-    # ── Step 3: Domain ────────────────────────────────────────────────────────
-    prompt "Step 3/6 — Domain name (A-record must point to this server, e.g. example.com):"
+    # ── Step 2: Domain ────────────────────────────────────────────────────────
+    prompt "Step 2/4 — Domain name (A-record must point to this server, e.g. example.com):"
     read -r DOMAIN
     [[ -n "$DOMAIN" ]] || error "DOMAIN cannot be empty"
 
-    # ── Step 4: Email ─────────────────────────────────────────────────────────
-    prompt "Step 4/6 — Email for Let's Encrypt SSL:"
+    # ── Step 3: Email ─────────────────────────────────────────────────────────
+    prompt "Step 3/4 — Email for Let's Encrypt SSL:"
     read -r EMAIL
     [[ -n "$EMAIL" ]] || error "EMAIL cannot be empty"
 
-    # ── Step 5: SSH port ──────────────────────────────────────────────────────
-    prompt "Step 5/6 — SSH port (press Enter for default 22):"
+    # ── Step 4: SSH port ──────────────────────────────────────────────────────
+    prompt "Step 4/4 — SSH port (press Enter for default 22):"
     read -r SSH_PORT
     SSH_PORT="${SSH_PORT:-22}"
-
-    # ── Step 6: Timezone — numbered list, no manual input ────────────────────
-    TIMEZONE=$(select_option "Step 6/6 — Select your timezone:" \
-        "Europe/Moscow" \
-        "Europe/Kyiv" \
-        "Europe/Minsk" \
-        "Europe/Berlin" \
-        "Europe/London" \
-        "Asia/Almaty" \
-        "Asia/Tashkent" \
-        "Asia/Baku" \
-        "Asia/Tbilisi" \
-        "Asia/Yerevan" \
-        "Asia/Novosibirsk" \
-        "Asia/Krasnoyarsk" \
-        "Asia/Irkutsk" \
-        "Asia/Vladivostok" \
-        "America/New_York" \
-        "America/Los_Angeles" \
-        "Asia/Shanghai" \
-        "UTC" \
-    )
-
-    # ── Language — numbered list, no manual input ─────────────────────────────
-    _lang_choice=$(select_option "Bot interface language:" \
-        "ru — Russian" \
-        "en — English" \
-    )
-    [[ "$_lang_choice" == ru* ]] && BOT_LANG="ru" || BOT_LANG="en"
 
     echo ""
     echo -e "${GREEN}[OK]${NC} Configuration:"
     echo "     Domain:   $DOMAIN"
-    echo "     Timezone: $TIMEZONE"
-    echo "     Language: $BOT_LANG"
     echo ""
 }
 
@@ -437,7 +404,7 @@ post_install() {
     echo -e "${GREEN}  ✅ Installation complete!${NC}"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo ""
-    echo "  📱 Telegram: find your bot and send /start"
+    echo "  📱 Telegram: find your bot and send /start → setup wizard will run"
     echo "  🌐 Web UI:   https://$DOMAIN/web/"
     echo ""
     echo "  🔑 Credentials (save these!):"
@@ -459,9 +426,10 @@ post_install() {
     echo "  ─────────────────────────────────────────"
     echo ""
     echo "  ⚠️  Next steps:"
-    echo "    1. Send /menu to your bot → Inbounds → Add inbound (e.g. VLESS Reality)"
-    echo "    2. Add clients → download config → import in Sing-Box app"
-    echo "    3. Web UI: https://$DOMAIN/web/ — same features in browser"
+    echo "    1. Send /start to your bot → language + timezone wizard → you become admin"
+    echo "    2. Send /menu to your bot → Inbounds → Add inbound (e.g. VLESS Reality)"
+    echo "    3. Add clients → download config → import in Sing-Box app"
+    echo "    4. Web UI: https://$DOMAIN/web/ — same features in browser"
     echo ""
     echo "  Config file:  $INSTALL_DIR/.env"
     echo "  Sing-Box cfg: $INSTALL_DIR/config/sing-box/config.json"

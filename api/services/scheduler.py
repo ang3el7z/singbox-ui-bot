@@ -64,15 +64,14 @@ def _build_backup_zip() -> bytes:
 async def _send_backup_to_admins(zip_bytes: bytes) -> None:
     """Send backup ZIP to all Telegram admin IDs via the running bot instance."""
     from api.services.bot_holder import get_bot
-    from api.config import settings
 
     bot = get_bot()
     if not bot:
         logger.warning("Scheduler: bot not available, skipping auto-backup send")
         return
 
-    # Collect admin IDs: env list + DB admins
-    admin_ids = set(settings.admin_ids_list)
+    # Admin IDs come exclusively from the DB (no env fallback)
+    admin_ids: set[int] = set()
     try:
         from api.database import async_session, Admin
         from sqlalchemy import select

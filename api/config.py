@@ -1,5 +1,4 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from typing import List
 
 
 class Settings(BaseSettings):
@@ -7,6 +6,7 @@ class Settings(BaseSettings):
     Only TRUE secrets and infrastructure constants live here.
     Runtime-editable settings (domain, tz, bot_lang) are stored exclusively
     in the AppSetting DB table — seeded from data/init.json on first startup.
+    The first user to send /start to the bot becomes the admin (no ADMIN_IDS needed).
     """
     model_config = SettingsConfigDict(
         env_file=".env",
@@ -16,7 +16,6 @@ class Settings(BaseSettings):
 
     # ── Telegram ───────────────────────────────────────────────────────────────
     bot_token: str = ""
-    admin_ids: str = ""
 
     # ── API auth (shared secrets, never change after install) ──────────────────
     internal_token: str = "change_internal_token"
@@ -50,12 +49,6 @@ class Settings(BaseSettings):
     webhook_host: str = ""
     webhook_path: str = "/webhook"
     webhook_port: int = 8080
-
-    @property
-    def admin_ids_list(self) -> List[int]:
-        if not self.admin_ids:
-            return []
-        return [int(x.strip()) for x in self.admin_ids.split(",") if x.strip().isdigit()]
 
     @property
     def use_webhook(self) -> bool:
