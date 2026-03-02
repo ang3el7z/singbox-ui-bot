@@ -253,6 +253,33 @@ collect_input() {
     echo ""
 }
 
+# ─── Kernel / sysctl ──────────────────────────────────────────────────────────
+
+setup_sysctl() {
+    # sing-box runs with network_mode: host — sysctl must be set on the HOST,
+    # not inside the container (Docker rejects it with "not allowed in host network namespace").
+    info "Enabling IP forwarding on host..."
+    sysctl -w net.ipv4.ip_forward=1 >/dev/null 2>&1 || true
+
+    # Persist across reboots
+    if ! grep -q "net.ipv4.ip_forward" /etc/sysctl.conf 2>/dev/null; then
+        echo "net.ipv4.ip_forward=1" >> /etc/sysctl.conf
+    else
+        sed -i 's/^#*\s*net\.ipv4\.ip_forward\s*=.*/net.ipv4.ip_forward=1/' /etc/sysctl.conf
+    fi
+
+    # Same for IPv6 forwarding (needed for dual-stack VPN setups)
+    sysctl -w net.ipv6.conf.all.forwarding=1 >/dev/null 2>&1 || true
+    if ! grep -q "net.ipv6.conf.all.forwarding" /etc/sysctl.conf 2>/dev/null; then
+        echo "net.ipv6.conf.all.forwarding=1" >> /etc/sysctl.conf
+    else
+        sed -i 's/^#*\s*net\.ipv6\.conf\.all\.forwarding\s*=.*/net.ipv6.conf.all.forwarding=1/' /etc/sysctl.conf
+    fi
+
+    info "IP forwarding enabled (IPv4 + IPv6)"
+}
+
+
 # ─── Deploy ───────────────────────────────────────────────────────────────────
 
 deploy() {
@@ -336,6 +363,7 @@ main() {
     generate_env
     setup_nginx_init
     setup_firewall
+    setup_sysctl
     setup_cron
     deploy
     install_cli

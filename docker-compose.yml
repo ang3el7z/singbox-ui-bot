@@ -51,9 +51,10 @@ services:
     command: run -c /etc/sing-box/config.json
     cap_add:
       - NET_ADMIN
-    sysctls:
-      - net.ipv4.ip_forward=1
     network_mode: host                        # need host network for VPN
+    # NOTE: net.ipv4.ip_forward must be enabled on the HOST, not here.
+    # With network_mode: host the container shares the host's network namespace
+    # and Docker cannot set sysctls on it. install.sh handles this automatically.
     # IMPORTANT: After changing config, app sends SIGHUP or restarts this container.
 
   # ── AdGuard Home ─────────────────────────────────────────────────────────────
