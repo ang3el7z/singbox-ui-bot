@@ -1,7 +1,7 @@
 """
 Runtime settings — stored exclusively in the AppSetting table (DB is the single
-source of truth).  On first startup the values come from data/init.json (written
-by install.sh); that file is deleted after seeding.  .env does NOT contain these.
+source of truth).  Values are written here by the bot setup wizard on first /start.
+.env does NOT contain these values (domain, tz, bot_lang).
 
 Supported keys:
   tz        — IANA timezone string (e.g. "Europe/Moscow", "UTC")
