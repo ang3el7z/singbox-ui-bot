@@ -9,7 +9,7 @@ from aiogram.fsm.state import State, StatesGroup
 
 from bot.api_client import clients_api, inbounds_api, APIError
 from bot.keyboards.main import kb_back, kb_clients_list, kb_client_detail
-from bot.utils import make_qr, format_bytes, paginate
+from bot.utils import make_qr, format_bytes
 
 router = Router()
 PAGE_SIZE = 8

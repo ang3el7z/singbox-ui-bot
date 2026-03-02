@@ -219,6 +219,7 @@ _DOCS["overview"] = {
 - Смена пароля Web UI
 
 #### ⚙️ Settings
+- **Смена домена** — вводится текстом, Nginx перегенерируется автоматически (нужно потом выпустить SSL)
 - Смена часового пояса (выбор из списка, без ввода вручную)
 - Смена языка бота (ru / en)
 - Статус автоперезапуска Docker и автообновления SSL
@@ -319,16 +320,16 @@ Both interfaces share **one backend (FastAPI)** and have **exactly the same func
 | `clients` | VPN users: name, uuid/password, limits, stats |
 | `inbounds` | Inbound config metadata |
 | `web_users` | Web UI accounts |
-| `admins` | Telegram administrators |
+| `admins` | Telegram administrators (first admin registered via /start wizard) |
 | `audit_log` | Log of all actions |
 | `federation_nodes` | List of remote server nodes |
-| `app_settings` | Application settings |
+| `app_settings` | Runtime settings: domain, tz, bot_lang — single source of truth (set via bot wizard or Web UI) |
 
 #### Key Config Files
 
 | File | Contents |
 |------|---------|
-| `.env` | All secrets: tokens, passwords, domain |
+| `.env` | Secrets only: tokens, passwords (no domain — it lives in `app_settings`) |
 | `config/sing-box/config.json` | Live Sing-Box config (inbounds, routing, DNS) |
 | `nginx/conf.d/singbox.conf` | Nginx config (auto-generated) |
 | `nginx/override/index.html` | Custom public site (optional) |
@@ -410,6 +411,7 @@ Both interfaces share **one backend (FastAPI)** and have **exactly the same func
 - Change Web UI password
 
 #### ⚙️ Settings
+- **Change domain** — enter text, Nginx regenerates automatically (issue SSL separately after domain change)
 - Change timezone (select from list, no manual typing)
 - Change bot language (ru / en)
 - View Docker auto-restart and SSL auto-renewal status
@@ -789,6 +791,7 @@ JWT_SECRET=<32+ chars>
 FEDERATION_SECRET=<32+ chars>
 SECRET_KEY=<32+ chars>
 
+WEB_ADMIN_USER=admin
 WEB_ADMIN_PASSWORD=<strong password>
 ADGUARD_PASSWORD=<strong password>
 ```
@@ -1410,7 +1413,7 @@ curl -X POST https://домен/api/routing/rule-sets \\
 #### `POST /api/nginx/ssl` — Выпустить SSL сертификат
 
 Запускает `certbot certonly --nginx` внутри контейнера.  
-Требует: `DOMAIN` и `EMAIL` в `.env`, домен должен смотреть на сервер, порт 80 открыт.
+Требует: домен, сохранённый в `app_settings` (через бота или Web UI → Settings), и `EMAIL` в `.env`. Домен должен смотреть на сервер, порт 80 открыт.
 
 #### `GET /api/nginx/paths` — Скрытые пути панелей
 
@@ -2334,7 +2337,7 @@ Master: vpn.example.com
 └── node-london    [bridge] 🔴
 ```
 
-Подробнее о федерации: [FEDERATION.md](./FEDERATION.md)
+Подробнее о федерации: см. раздел **Federation** в документации (`/menu → 📚 Docs → Federation`).
 
 ---
 
@@ -2361,6 +2364,11 @@ Master: vpn.example.com
 ---
 
 ### Раздел: ⚙️ Settings
+
+**Domain:**
+- Поле ввода домена (например `vpn.example.com`)
+- После сохранения Nginx автоматически перегенерируется и перезагружается
+- Выпустить SSL нужно отдельно: **Nginx → Issue SSL Certificate**
 
 **Timezone:**
 - Выпадающий список с часовыми поясами по группам (Европа, Азия, Америка и т.д.)
@@ -2504,7 +2512,7 @@ Change password: ☰ menu → top-right profile → **Change Password**
 | 🌐 Nginx | Override status, hidden paths, configure, SSL, upload/remove custom site, logs |
 | 🔗 Federation | Nodes table, add node, ping all, create bridge, view topology |
 | 👑 Admin | Admins list, audit log, change Web UI password |
-| ⚙️ Settings | Timezone dropdown, bot language buttons, system status |
+| ⚙️ Settings | Domain input (auto-reloads Nginx), timezone dropdown, bot language buttons, system status |
 | 🔧 Maintenance | Backup (download/send/schedule), log management, IP ban with log analysis |
 | 📚 Docs | Built-in documentation browser with markdown rendering |
 

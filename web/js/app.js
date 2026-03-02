@@ -300,6 +300,7 @@ function routingComponent() {
         showAdd: false,
         form: { rule_key: "domain", value: "", outbound: "proxy" },
         loading: false,
+        importing: false,
 
         async init() { await this.loadRules(); },
 
@@ -344,12 +345,35 @@ function routingComponent() {
         },
 
         async exportRules() {
-            const data = await api.exportRules();
-            const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement("a");
-            a.href = url; a.download = "routing_rules.json"; a.click();
-            URL.revokeObjectURL(url);
+            try {
+                const data = await api.exportRules();
+                const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement("a");
+                a.href = url; a.download = "routing_rules.json"; a.click();
+                URL.revokeObjectURL(url);
+            } catch (e) {
+                this.$dispatch("toast", { msg: e.message, type: "error" });
+            }
+        },
+
+        async importRules(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            this.importing = true;
+            try {
+                const text = await file.text();
+                const data = JSON.parse(text);
+                await api.importRules(data);
+                this.rules = {};
+                await this.loadRules();
+                this.$dispatch("toast", { msg: "Rules imported", type: "success" });
+            } catch (e) {
+                this.$dispatch("toast", { msg: e.message, type: "error" });
+            } finally {
+                this.importing = false;
+                event.target.value = "";
+            }
         },
     };
 }
@@ -366,6 +390,7 @@ function adguardComponent() {
         newUpstream: "",
         newRule: "",
         newPassword: "",
+        showPassword: false,
 
         async init() { await this.load(); },
 
@@ -406,6 +431,17 @@ function adguardComponent() {
             }
         },
 
+        async delUpstream(u) {
+            if (!confirm(`Remove upstream: ${u}?`)) return;
+            try {
+                await api.delUpstream(u);
+                await this.load();
+                this.$dispatch("toast", { msg: "Upstream removed", type: "success" });
+            } catch (e) {
+                this.$dispatch("toast", { msg: e.message, type: "error" });
+            }
+        },
+
         async addFilterRule() {
             if (!this.newRule) return;
             try {
@@ -413,6 +449,38 @@ function adguardComponent() {
                 this.newRule = "";
                 await this.load();
                 this.$dispatch("toast", { msg: "Rule added", type: "success" });
+            } catch (e) {
+                this.$dispatch("toast", { msg: e.message, type: "error" });
+            }
+        },
+
+        async delFilterRule(r) {
+            if (!confirm(`Remove rule: ${r}?`)) return;
+            try {
+                await api.delFilterRule(r);
+                await this.load();
+                this.$dispatch("toast", { msg: "Rule removed", type: "success" });
+            } catch (e) {
+                this.$dispatch("toast", { msg: e.message, type: "error" });
+            }
+        },
+
+        async changePassword() {
+            if (!this.newPassword.trim()) return;
+            try {
+                await api.adguardPassword(this.newPassword.trim());
+                this.newPassword = "";
+                this.showPassword = false;
+                this.$dispatch("toast", { msg: "AdGuard password changed", type: "success" });
+            } catch (e) {
+                this.$dispatch("toast", { msg: e.message, type: "error" });
+            }
+        },
+
+        async syncClients() {
+            try {
+                await api.syncClients();
+                this.$dispatch("toast", { msg: "Clients synced to AdGuard", type: "success" });
             } catch (e) {
                 this.$dispatch("toast", { msg: e.message, type: "error" });
             }
@@ -544,11 +612,28 @@ function federationComponent() {
                 const results = await api.pingAll();
                 this.$dispatch("toast", { msg: `Pinged ${results.length} nodes`, type: "success" });
                 await this.load();
+            } catch (e) {
+                this.$dispatch("toast", { msg: e.message, type: "error" });
             } finally { this.loading = false; }
         },
 
+        async pingNode(n) {
+            try {
+                const r = await api.pingNode(n.id);
+                this.$dispatch("toast", { msg: r.online ? `${n.name}: online` : `${n.name}: offline`, type: r.online ? "success" : "error" });
+                await this.load();
+            } catch (e) {
+                this.$dispatch("toast", { msg: e.message, type: "error" });
+            }
+        },
+
         async loadTopology() {
-            this.topology = await api.topology();
+            this.loading = true;
+            try {
+                this.topology = await api.topology();
+            } catch (e) {
+                this.$dispatch("toast", { msg: e.message, type: "error" });
+            } finally { this.loading = false; }
         },
 
         async deleteNode(n) {
@@ -571,6 +656,8 @@ function adminComponent() {
         auditLog: [],
         newAdminId: "",
         loading: false,
+        showChangePass: false,
+        passForm: { current: "", next: "" },
 
         async init() { await this.load(); },
 
@@ -606,6 +693,18 @@ function adminComponent() {
         async backup() {
             try { await api.backup(); }
             catch (e) { this.$dispatch("toast", { msg: e.message, type: "error" }); }
+        },
+
+        async changePassword() {
+            if (!this.passForm.current || !this.passForm.next) return;
+            try {
+                await api.changePassword(this.passForm.current, this.passForm.next);
+                this.passForm = { current: "", next: "" };
+                this.showChangePass = false;
+                this.$dispatch("toast", { msg: "Web password changed", type: "success" });
+            } catch (e) {
+                this.$dispatch("toast", { msg: e.message, type: "error" });
+            }
         },
     };
 }
@@ -716,7 +815,7 @@ function docsComponent() {
         lang: "ru",
 
         async init() {
-            // Language is always configured at install time (.env → DB)
+            // Language is set during /start wizard and stored in app_settings (DB)
             const s = await api.settingsAll();
             this.lang = s.bot_lang || "ru";
 

@@ -1,9 +1,9 @@
 """Localised text strings for the bot."""
-from bot.config import settings
 
 
 def t(key: str, **kwargs) -> str:
-    lang = settings.bot_lang
+    from api.routers.settings_router import get_runtime
+    lang = get_runtime("bot_lang", "ru")
     text = TEXTS.get(lang, TEXTS["ru"]).get(key, TEXTS["ru"].get(key, key))
     if kwargs:
         return text.format(**kwargs)
