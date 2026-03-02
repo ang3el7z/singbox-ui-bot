@@ -22,7 +22,3 @@ Installation is **non-interactive**: pass your Telegram bot token (from @BotFath
 ```bash
 curl -fsSL https://raw.githubusercontent.com/ang3el7z/singbox-ui-bot/main/scripts/install.sh | bash -s -- YOUR_BOT_TOKEN
 ```
-
-Or with env: `BOT_TOKEN=your_token bash install.sh`
-
-Domain, language, and timezone are set in the bot on first `/start`.
