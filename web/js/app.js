@@ -554,6 +554,8 @@ function nginxComponent() {
         paths: null,
         logs: "",
         loading: false,
+        showSslModal: false,
+        sslEmail: "",
 
         async init() { await this.load(); },
 
@@ -575,11 +577,20 @@ function nginxComponent() {
             } finally { this.loading = false; }
         },
 
+        openSslModal() {
+            this.sslEmail = "";
+            this.showSslModal = true;
+        },
         async issueSSL() {
-            if (!confirm("Issue SSL certificate? Make sure domain is pointed to this server.")) return;
+            const email = (this.sslEmail || "").trim();
+            if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+                this.$dispatch("toast", { msg: "Invalid email format", type: "error" });
+                return;
+            }
+            this.showSslModal = false;
             this.loading = true;
             try {
-                await api.nginxSsl();
+                await api.nginxSsl(email || undefined);
                 this.$dispatch("toast", { msg: "SSL issued", type: "success" });
             } catch (e) {
                 this.$dispatch("toast", { msg: e.message, type: "error" });

@@ -122,7 +122,7 @@ const api = {
     // Nginx
     nginxStatus:     ()         => apiFetch("GET",  "/api/nginx/status"),
     nginxConfigure:  ()         => apiFetch("POST", "/api/nginx/configure"),
-    nginxSsl:        ()         => apiFetch("POST", "/api/nginx/ssl"),
+    nginxSsl:        (email)    => apiFetch("POST", "/api/nginx/ssl", { email: email || "" }),
     nginxPaths:      ()         => apiFetch("GET",  "/api/nginx/paths"),
     nginxLogs:       (n=50)     => apiFetch("GET",  `/api/nginx/logs?lines=${n}`),
     nginxDeleteOverride: ()     => apiFetch("DELETE", "/api/nginx/override"),
