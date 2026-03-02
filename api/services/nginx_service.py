@@ -60,8 +60,15 @@ def get_hidden_paths(domain: str = None) -> dict:
         "subscriptions":  f"{base}/{h[12:24]}/sub/",
         "adguard":        f"{base}/{h[24:36]}/adg/",
         "api":            f"{base}/{h[36:48]}/api/",
+        "doh":            f"{base}/{h[48:60]}/doh/",   # AdGuard DoH proxy, per-user: .../doh/{sub_id}
         "api_docs":       f"{base}/api/docs",
     }
+
+
+def get_doh_url(sub_id: str, domain: str = None) -> str:
+    """Return the per-client AdGuard DoH URL for a given subscription ID."""
+    paths = get_hidden_paths(domain)
+    return paths["doh"].rstrip("/") + f"/{sub_id}"
 
 
 # ─── .htpasswd generation ─────────────────────────────────────────────────────
@@ -126,6 +133,7 @@ def generate_config(
         adguard_enabled=adguard_enabled,
         site_enabled=site_enabled,
         banned_ips=get_banned_ips(),
+        doh_path=f"/{h[48:60]}/doh",   # AdGuard DoH proxy path
     )
 
 

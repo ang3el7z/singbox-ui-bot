@@ -52,3 +52,9 @@ subs/
 
 # Sing-Box cache
 config/sing-box/cache.db
+
+# AdGuard runtime data (persisted in Docker volume, seed config is in git)
+# Only AdGuardHome.yaml seed is tracked; AdGuard writes its runtime files here too
+config/adguard/AdGuardHome.yaml.tmp
+config/adguard/*.db
+config/adguard/*.bak

@@ -351,7 +351,7 @@ async def public_subscription(
 
     template_json = await _resolve_template(c, db)
     client_dict = {"uuid": c.uuid, "password": c.password, "name": c.name}
-    config = singbox.build_client_config(client_dict, inbound, template_json)
+    config = singbox.build_client_config(client_dict, inbound, template_json, sub_id=c.sub_id)
 
     return JSONResponse(
         content=config,
@@ -415,4 +415,4 @@ async def get_subscription(
         raise HTTPException(status_code=404, detail="Inbound not found")
     template_json = await _resolve_template(c, db)
     client_dict = {"uuid": c.uuid, "password": c.password, "name": c.name}
-    return singbox.build_client_config(client_dict, inbound, template_json)
+    return singbox.build_client_config(client_dict, inbound, template_json, sub_id=c.sub_id)

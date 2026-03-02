@@ -38,8 +38,12 @@ services:
       - adguard
 
   # ── Sing-Box ─────────────────────────────────────────────────────────────────
+  # Built from Dockerfile.singbox — pinned version, no ghcr.io dependency.
+  # To upgrade: change SINGBOX_VERSION in Dockerfile.singbox, then `docker compose build singbox`.
   singbox:
-    image: ghcr.io/sagernet/sing-box:1.11
+    build:
+      context: .
+      dockerfile: Dockerfile.singbox
     container_name: singbox_core
     restart: unless-stopped
     volumes:
@@ -54,16 +58,17 @@ services:
 
   # ── AdGuard Home ─────────────────────────────────────────────────────────────
   adguard:
-    image: adguard/adguardhome:latest
+    image: adguard/adguardhome:v0.107.52
     container_name: singbox_adguard
     restart: unless-stopped
     volumes:
       - adguard_data:/opt/adguardhome/work
-      - adguard_data:/opt/adguardhome/conf
+      - ./config/adguard:/opt/adguardhome/conf   # pre-seeded AdGuardHome.yaml
     ports:
       - "53:53/tcp"
       - "53:53/udp"
       - "3000:3000"   # AdGuard Web UI (internal only, proxied via Nginx)
+                      # AdGuard DoH: http://adguard:3000/dns-query (used by Nginx DoH proxy)
     networks:
       - singbox_net
 

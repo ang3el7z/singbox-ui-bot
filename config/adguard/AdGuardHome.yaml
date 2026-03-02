@@ -1,0 +1,110 @@
+# AdGuard Home initial configuration for singbox-ui-bot.
+# This file is read-only seed — AdGuard will copy it to /opt/adguardhome/conf on first start.
+# After that, all changes are persisted in the Docker volume (adguard_data).
+
+http:
+  pprof:
+    port: 6060
+    enabled: false
+  address: 0.0.0.0:3000
+  session_ttl: 720h
+
+users:
+  - name: admin
+    # password is empty — admin must set it via AdGuard Web UI at first login
+    # Access: https://{your-domain}/{adguard-path}/
+
+auth_attempts: 5
+block_auth_min: 15
+
+dns:
+  bind_hosts:
+    - 0.0.0.0
+  port: 53
+  # Upstream DNS servers
+  upstream_dns:
+    - https://dns.google/dns-query
+    - https://cloudflare-dns.com/dns-query
+    - tls://dns.google
+  fallback_dns:
+    - 8.8.8.8
+    - 1.1.1.1
+  upstream_mode: load_balance
+  bootstrap_dns:
+    - 9.9.9.10
+    - 149.112.112.10
+  use_private_ptr_resolvers: true
+  local_ptr_upstreams: []
+  serve_plain_dns: true
+  blocking_mode: default
+  blocked_response_ttl: 10
+  trusted_proxies:
+    - 10.0.0.0/8
+    - 172.16.0.0/12
+    - 192.168.0.0/16
+    - 127.0.0.0/8
+    - ::1/128
+
+# DoH endpoint exposed at: http://adguard:3000/dns-query
+# Per-client DoH:          http://adguard:3000/{client_id}/dns-query
+# Nginx proxies these from: https://{domain}/{doh_path}/{sub_id}
+
+tls:
+  enabled: false
+  server_name: ""
+  force_https: false
+
+querylog:
+  enabled: true
+  file_enabled: true
+  interval: 2160h   # 90 days
+  size_memory: 1000
+  ignored: []
+
+statistics:
+  enabled: true
+  interval: 168h    # 7 days
+  ignored: []
+
+filters:
+  - enabled: true
+    url: https://adguardteam.github.io/HostlistsRegistry/assets/filter_1.txt
+    name: AdGuard DNS filter
+    id: 1
+  - enabled: true
+    url: https://adguardteam.github.io/HostlistsRegistry/assets/filter_2.txt
+    name: AdAway Default Blocklist
+    id: 2
+  - enabled: true
+    url: https://adguardteam.github.io/HostlistsRegistry/assets/filter_59.txt
+    name: AdGuard DNS Popup Hosts filter
+    id: 3
+
+user_rules: []
+
+filtering:
+  filtering_enabled: true
+  filters_update_interval: 24
+  parental_enabled: false
+  safe_search:
+    enabled: false
+  safe_browsing_enabled: false
+  blocked_services:
+    ids: []
+
+log:
+  enabled: true
+  file: ""
+  max_backups: 0
+  max_size: 100
+  max_age: 3
+  compress: false
+  local_time: false
+  verbose: false
+
+os:
+  group: ""
+  user: ""
+  rlimit_nofile: 0
+
+schema_version: 28

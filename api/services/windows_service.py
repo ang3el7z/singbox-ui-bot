@@ -30,8 +30,9 @@ CACHE_DIR = Path("data/windows-service")
 SINGBOX_EXE = CACHE_DIR / "sing-box.exe"
 WINSW_EXE   = CACHE_DIR / "winsw3.exe"
 
-# Official download URLs — keep in sync with docker-compose.yml sing-box version
-SINGBOX_VERSION = "1.11.0"
+# Official download URLs — keep in sync with Dockerfile.singbox SINGBOX_VERSION.
+# We pin the same version for both server (Linux) and Windows client.
+SINGBOX_VERSION = "1.10.3"
 SINGBOX_ZIP_URL = (
     f"https://github.com/SagerNet/sing-box/releases/download/"
     f"v{SINGBOX_VERSION}/sing-box-{SINGBOX_VERSION}-windows-amd64.zip"

@@ -7,31 +7,24 @@
   "dns": {
     "servers": [
       {
-        "tag": "dns_proxy",
-        "address": "https://1.1.1.1/dns-query",
-        "strategy": "prefer_ipv4"
-      },
-      {
-        "tag": "dns_direct",
-        "address": "223.5.5.5",
+        "tag": "dns_adguard",
+        "address": "udp://127.0.0.1",
+        "strategy": "prefer_ipv4",
         "detour": "direct"
       },
       {
-        "tag": "dns_block",
-        "address": "rcode://success"
+        "tag": "dns_fallback",
+        "address": "udp://8.8.8.8",
+        "detour": "direct"
       }
     ],
     "rules": [
       {
-        "rule_set": ["geosite-category-ads-all"],
-        "server": "dns_block"
-      },
-      {
         "outbound": "any",
-        "server": "dns_direct"
+        "server": "dns_adguard"
       }
     ],
-    "final": "dns_proxy",
+    "final": "dns_adguard",
     "independent_cache": true
   },
   "inbounds": [],
@@ -64,22 +57,9 @@
       {
         "ip_is_private": true,
         "outbound": "direct"
-      },
-      {
-        "rule_set": ["geosite-category-ads-all"],
-        "outbound": "block"
       }
     ],
-    "rule_set": [
-      {
-        "tag": "geosite-category-ads-all",
-        "type": "remote",
-        "format": "binary",
-        "url": "https://raw.githubusercontent.com/SagerNet/sing-geosite/rule-set/geosite-category-ads-all.srs",
-        "download_detour": "direct",
-        "update_interval": "1d"
-      }
-    ],
+    "rule_set": [],
     "final": "proxy",
     "auto_detect_interface": true
   },

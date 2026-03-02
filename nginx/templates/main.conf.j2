@@ -1,7 +1,15 @@
-{% set web_path  = '/' + secret_hash[:12] + '/web' %}
-{% set sub_path  = '/' + secret_hash[12:24] + '/sub' %}
-{% set adguard_path = '/' + secret_hash[24:36] + '/adg' %}
-{% set api_path  = '/' + secret_hash[36:48] + '/api' %}
+{% set web_path     = '/' + secret_hash[:12]   + '/web' %}
+{% set sub_path     = '/' + secret_hash[12:24]  + '/sub' %}
+{% set adguard_path = '/' + secret_hash[24:36]  + '/adg' %}
+{% set api_path     = '/' + secret_hash[36:48]  + '/api' %}
+{% set doh_path     = '/' + secret_hash[48:60]  + '/doh' %}
+
+# ── DoH response cache (shared across server blocks) ─────────────────────────
+proxy_cache_path /tmp/nginx_doh_cache levels=1:2
+                 keys_zone=doh_cache:10m
+                 max_size=100m
+                 inactive=60m
+                 use_temp_path=off;
 
 # Redirect HTTP → HTTPS
 server {
@@ -116,6 +124,32 @@ server {
         proxy_read_timeout 120;
     }
 
+    # ── AdGuard DoH proxy — per-user DNS-over-HTTPS ───────────────────────────
+    # Client URL: https://{domain}/{doh_path}/{sub_id}
+    # Nginx proxies to: http://adguard:3000/{sub_id}/dns-query
+    # AdGuard Home supports per-client path: /{client_id}/dns-query
+    # This enables per-user DNS statistics and custom filtering rules in AdGuard.
+    #
+    # Responses are cached to reduce load on AdGuard.
+    location ~ ^{{ doh_path }}/(.+)$ {
+        proxy_pass         http://adguard:3000/$1/dns-query;
+        proxy_http_version 1.1;
+        proxy_set_header   Host adguard;
+        proxy_set_header   Connection "";
+        # Pass real client IP so AdGuard can identify users
+        proxy_set_header   X-Real-IP $remote_addr;
+        proxy_set_header   X-Forwarded-For $proxy_add_x_forwarded_for;
+        # DoH response caching
+        proxy_cache            doh_cache;
+        proxy_cache_key        "$scheme$proxy_host$uri$is_args$args$request_body";
+        proxy_cache_valid      200 30s;
+        proxy_cache_use_stale  error timeout updating;
+        proxy_ignore_headers   Cache-Control Expires;
+        proxy_cache_lock       on;
+        # Log DoH requests separately
+        access_log /var/log/nginx/doh_access.log;
+    }
+
     # Public subscriptions — proxied to /api/sub/{sub_id}
     # JSON config:      https://domain/{hash}/sub/{sub_id}
     # WinSW XML:        https://domain/{hash}/sub/{sub_id}/winsw.xml
@@ -129,7 +163,7 @@ server {
     }
 
     {% if adguard_enabled %}
-    # AdGuard Home
+    # AdGuard Home Web UI
     location {{ adguard_path }}/ {
         proxy_pass         http://adguard:3000/;
         proxy_http_version 1.1;

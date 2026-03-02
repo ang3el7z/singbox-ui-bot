@@ -1,17 +1,49 @@
 """
 Built-in client subscription templates.
 
-Each template is a full sing-box client config JSON where the proxy
-outbound is marked with {"tag": "proxy", "type": "__proxy__"}.
-At subscription time this placeholder is replaced with the real outbound
-built from the client credentials + inbound settings.
+Each template is a full sing-box client config JSON where:
+  • {"tag": "proxy", "type": "__proxy__"} — replaced with the real proxy outbound at subscription time.
+  • "__dns_url__" in any DNS server address — replaced with the user's personal AdGuard DoH URL
+    (https://{domain}/{doh_path}/{sub_id}), enabling per-user DNS filtering via AdGuard Home.
 
-Add to outbounds only what is needed by the template.
 The __proxy__ placeholder MUST be present exactly once.
+
+Architecture (mirrors vpnbot's sing.json):
+  dns_adguard (DoH → server's AdGuard, filtered, detour=direct)
+      └── address_resolver: dns_bootstrap (plain TCP 8.8.8.8, resolves AdGuard's hostname)
+  All outbound queries → dns_adguard (via "outbound: any" rule)
+  Result: ad-blocked DNS for all VPN users, queries visible in AdGuard per-client stats.
 """
 import json
 
-# ─── Common route rules shared by most templates ───────────────────────────
+# ─── DNS block (injected into all non-fakeip templates) ────────────────────────────
+# "__dns_url__" is replaced at build time with https://{domain}/{doh_hash}/{sub_id}
+_DNS_ADGUARD = {
+    "servers": [
+        {
+            "tag": "dns_adguard",
+            "address": "__dns_url__",        # AdGuard DoH URL injected per-user at build time
+            "address_resolver": "dns_bootstrap",
+            "strategy": "prefer_ipv4",
+            "detour": "direct",              # DNS queries bypass the VPN tunnel → go to server directly
+        },
+        {
+            # Bootstrap: plain TCP to resolve the DoH server's hostname (avoid chicken-and-egg)
+            "tag": "dns_bootstrap",
+            "address": "tcp://8.8.8.8",
+            "detour": "direct",
+        },
+    ],
+    "rules": [
+        # All outbound connections use AdGuard for DNS
+        {"outbound": "any", "server": "dns_adguard", "disable_cache": False},
+    ],
+    "strategy": "ipv4_only",
+    "final": "dns_adguard",
+    "independent_cache": True,
+}
+
+# ─── Common route rules shared by most templates ─────────────────────────────────
 _COMMON_RULES = [
     {"action": "sniff"},
     {"protocol": "dns", "action": "hijack-dns"},
@@ -24,18 +56,7 @@ _COMMON_OUTBOUNDS = [
     {"tag": "block",  "type": "block"},
 ]
 
-_DNS_BASE = {
-    "servers": [
-        {"tag": "dns_proxy",  "type": "tls", "server": "8.8.8.8"},
-        {"tag": "dns_direct", "type": "udp", "server": "223.5.5.5", "detour": "direct"},
-    ],
-    "rules": [{"outbound": "any", "server": "dns_direct"}],
-    "strategy": "ipv4_only",
-    "final": "dns_proxy",
-    "independent_cache": True,
-}
-
-# ─── Template definitions ──────────────────────────────────────────────────
+# ─── Template definitions ─────────────────────────────────────────────────────────
 
 BUILTIN_TEMPLATES = [
     {
@@ -43,15 +64,17 @@ BUILTIN_TEMPLATES = [
         "label": "TUN — Phone / PC (Android, iOS, Linux, macOS)",
         "is_default": True,
         "config": {
-            "log": {"level": "info"},
-            "dns": _DNS_BASE,
+            "log": {"level": "error", "timestamp": True},
+            "dns": _DNS_ADGUARD,
             "inbounds": [{
                 "type": "tun",
                 "tag": "tun-in",
                 "address": ["172.19.0.1/30"],
+                "mtu": 1400,
                 "auto_route": True,
                 "strict_route": True,
                 "sniff": True,
+                "domain_strategy": "prefer_ipv4",
             }],
             "outbounds": _COMMON_OUTBOUNDS,
             "route": {
@@ -64,32 +87,52 @@ BUILTIN_TEMPLATES = [
     },
     {
         "name": "tun_fakeip",
-        "label": "TUN + FakeIP — Phone / PC (advanced DNS)",
+        "label": "TUN + FakeIP — Phone / PC (faster DNS, advanced routing)",
         "is_default": False,
         "config": {
-            "log": {"level": "info"},
+            "log": {"level": "error", "timestamp": True},
             "dns": {
                 "servers": [
-                    {"tag": "dns_proxy",  "type": "tls", "server": "8.8.8.8"},
-                    {"tag": "dns_direct", "type": "udp", "server": "223.5.5.5", "detour": "direct"},
-                    {"tag": "dns_fakeip", "type": "fakeip",
-                     "inet4_range": "198.18.0.0/15", "inet6_range": "fc00::/18"},
+                    {
+                        # DoH DNS via AdGuard (for direct/block outbounds)
+                        "tag": "dns_adguard",
+                        "address": "__dns_url__",
+                        "address_resolver": "dns_bootstrap",
+                        "strategy": "prefer_ipv4",
+                        "detour": "direct",
+                    },
+                    {
+                        "tag": "dns_bootstrap",
+                        "address": "tcp://8.8.8.8",
+                        "detour": "direct",
+                    },
+                    {
+                        # FakeIP for proxy-bound traffic — faster routing decisions
+                        "tag": "dns_fakeip",
+                        "address": "fakeip",
+                        "inet4_range": "198.18.0.0/15",
+                        "inet6_range": "fc00::/18",
+                    },
                 ],
                 "rules": [
+                    # Outbound DNS resolution uses direct AdGuard
+                    {"outbound": "any", "server": "dns_adguard", "disable_cache": False},
+                    # A/AAAA queries for routing get fake IPs (domain sent to proxy for real resolution)
                     {"query_type": ["A", "AAAA"], "server": "dns_fakeip"},
-                    {"outbound": "any", "server": "dns_direct"},
                 ],
                 "strategy": "ipv4_only",
-                "final": "dns_proxy",
+                "final": "dns_adguard",
                 "independent_cache": True,
             },
             "inbounds": [{
                 "type": "tun",
                 "tag": "tun-in",
                 "address": ["172.19.0.1/30"],
+                "mtu": 1400,
                 "auto_route": True,
                 "strict_route": True,
                 "sniff": True,
+                "domain_strategy": "prefer_ipv4",
             }],
             "outbounds": _COMMON_OUTBOUNDS,
             "route": {
@@ -105,8 +148,8 @@ BUILTIN_TEMPLATES = [
         "label": "Windows Service (WinTun + system proxy)",
         "is_default": False,
         "config": {
-            "log": {"level": "info"},
-            "dns": _DNS_BASE,
+            "log": {"level": "error", "timestamp": True},
+            "dns": _DNS_ADGUARD,
             "inbounds": [
                 {
                     "type": "mixed",
@@ -119,6 +162,7 @@ BUILTIN_TEMPLATES = [
                     "type": "tun",
                     "tag": "tun-in",
                     "address": ["172.19.0.1/30"],
+                    "mtu": 1400,
                     "auto_route": True,
                     "strict_route": True,
                     "sniff": True,
@@ -146,11 +190,8 @@ BUILTIN_TEMPLATES = [
         "label": "TProxy — Router (OpenWRT / Linux)",
         "is_default": False,
         "config": {
-            "log": {"level": "info"},
-            "dns": {
-                **_DNS_BASE,
-                "final": "dns_proxy",
-            },
+            "log": {"level": "error", "timestamp": True},
+            "dns": _DNS_ADGUARD,
             "inbounds": [
                 {
                     "type": "tproxy",
@@ -191,7 +232,7 @@ BUILTIN_TEMPLATES = [
         "label": "SOCKS5 + HTTP — Manual proxy",
         "is_default": False,
         "config": {
-            "log": {"level": "info"},
+            "log": {"level": "error", "timestamp": True},
             "inbounds": [
                 {
                     "type": "socks",

@@ -299,6 +299,17 @@ class SingBoxService:
             config["outbounds"] = outbounds
         return config
 
+    def inject_dns_url(self, config: dict, dns_url: str) -> dict:
+        """
+        Replace "__dns_url__" placeholder in DNS server addresses with the real DoH URL.
+        This injects the per-user AdGuard DoH URL into the client config.
+        """
+        import json as _json
+        # Serialize → replace → deserialize (handles nested structures safely)
+        raw = _json.dumps(config, ensure_ascii=False)
+        raw = raw.replace('"__dns_url__"', _json.dumps(dns_url))
+        return _json.loads(raw)
+
     def _build_outbound(self, client_data: dict, inbound: dict, domain: str) -> dict:
         """Build the proxy outbound block for a given protocol."""
         proto = inbound.get("type", "vless")
@@ -351,17 +362,37 @@ class SingBoxService:
 
         return ob
 
-    def build_client_config(self, client_data: dict, inbound: dict, template_json: str) -> dict:
+    def build_client_config(
+        self,
+        client_data: dict,
+        inbound: dict,
+        template_json: str,
+        sub_id: str = "",
+    ) -> dict:
         """
-        Build a client-side sing-box config by injecting the proxy outbound
-        into the provided template JSON.
+        Build a client-side sing-box config by injecting:
+          1. The proxy outbound (replaces {"tag":"proxy","type":"__proxy__"})
+          2. The per-user AdGuard DoH URL (replaces "__dns_url__" in DNS server addresses)
 
-        template_json — JSON string with {"tag":"proxy","type":"__proxy__"} placeholder.
+        template_json — JSON string with the two placeholders.
+        sub_id        — subscription ID used to build the per-user DoH URL.
         """
         from api.routers.settings_router import get_runtime
+        from api.services.nginx_service import get_doh_url
+
         domain = get_runtime("domain")
         proxy_ob = self._build_outbound(client_data, inbound, domain)
-        return self.inject_proxy_into_template(template_json, proxy_ob)
+        config = self.inject_proxy_into_template(template_json, proxy_ob)
+
+        # Inject per-user AdGuard DoH URL if domain and sub_id are available
+        if domain and sub_id:
+            dns_url = get_doh_url(sub_id, domain)
+            config = self.inject_dns_url(config, dns_url)
+        else:
+            # Fallback: replace placeholder with Cloudflare DoH so config is still valid
+            config = self.inject_dns_url(config, "https://cloudflare-dns.com/dns-query")
+
+        return config
 
     # ─── Helper ───────────────────────────────────────────────────────────────
 
