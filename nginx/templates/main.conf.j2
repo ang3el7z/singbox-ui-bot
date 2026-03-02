@@ -40,6 +40,14 @@ server {
     access_log /var/log/nginx/access.log;
     error_log  /var/log/nginx/error.log warn;
 
+    # ── IP deny list (managed via bot/UI → Maintenance → IP Ban) ─────────────
+    {% for ip in banned_ips %}
+    deny {{ ip }};
+    {% endfor %}
+    {% if banned_ips %}
+    allow all;
+    {% endif %}
+
     # ── Root: configurable public site (toggle via bot/UI) ────────────────────
     root /var/www/override;
 

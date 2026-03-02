@@ -732,6 +732,130 @@ function docsComponent() {
     };
 }
 
+// ─── Maintenance component ────────────────────────────────────────────────────
+
+function maintenanceComponent() {
+    return {
+        status: null,
+        logs: [],
+        banned: [],
+        suspicious: [],
+        newIp: "",
+        newReason: "manual",
+        tab: "backup",   // backup | logs | ipban
+        loading: false,
+        msg: "",
+
+        async init() {
+            await this.loadStatus();
+        },
+
+        async loadStatus() {
+            try {
+                this.status = await api.maintStatus();
+                this.logs   = this.status?.logs?.files || [];
+            } catch (e) {
+                this.msg = "Error: " + e.message;
+            }
+        },
+
+        async setBackupHours(h) {
+            try { await api.maintSetBackupHours(parseInt(h)); await this.loadStatus(); }
+            catch(e) { this.msg = e.message; }
+        },
+
+        async downloadBackup() {
+            this.loading = true;
+            try { await api.maintBackupDownload(); }
+            catch(e) { this.msg = e.message; }
+            finally { this.loading = false; }
+        },
+
+        async runBackup() {
+            this.loading = true;
+            try { await api.maintRunBackup(); this.msg = "✅ Backup sent to admins"; }
+            catch(e) { this.msg = e.message; }
+            finally { this.loading = false; }
+        },
+
+        async setCleanHours(h) {
+            try { await api.maintSetCleanHours(parseInt(h)); await this.loadStatus(); }
+            catch(e) { this.msg = e.message; }
+        },
+
+        async downloadLog(name) {
+            try { await api.maintLogDownload(name); }
+            catch(e) { this.msg = e.message; }
+        },
+
+        async clearLog(name) {
+            try {
+                await api.maintLogClearOne(name);
+                await this.loadStatus();
+                this.msg = `✅ ${name} cleared`;
+            } catch(e) { this.msg = e.message; }
+        },
+
+        async clearAllLogs() {
+            if (!confirm("Clear all log files?")) return;
+            try {
+                const r = await api.maintLogClearAll();
+                this.msg = `✅ Cleared: ${r.cleared.join(", ")}`;
+                await this.loadStatus();
+            } catch(e) { this.msg = e.message; }
+        },
+
+        async loadBanned() {
+            try { const d = await api.maintIpBanList(); this.banned = d.banned || []; }
+            catch(e) { this.msg = e.message; }
+        },
+
+        async addBan() {
+            if (!this.newIp.trim()) return;
+            try {
+                await api.maintIpBanAdd(this.newIp.trim(), this.newReason || "manual");
+                this.newIp = "";
+                await this.loadBanned();
+                this.msg = "✅ IP banned";
+            } catch(e) { this.msg = e.message; }
+        },
+
+        async unban(ip) {
+            try {
+                await api.maintIpBanRemove(ip);
+                await this.loadBanned();
+                this.msg = `✅ ${ip} unbanned`;
+            } catch(e) { this.msg = e.message; }
+        },
+
+        async analyze() {
+            this.loading = true;
+            try { const d = await api.maintIpBanAnalyze(); this.suspicious = d.suspicious || []; }
+            catch(e) { this.msg = e.message; }
+            finally { this.loading = false; }
+        },
+
+        async banAll() {
+            if (!this.suspicious.length) return;
+            try {
+                const r = await api.maintIpBanAll();
+                this.msg = `✅ Banned ${r.banned} IPs`;
+                this.suspicious = [];
+                await this.loadBanned();
+            } catch(e) { this.msg = e.message; }
+        },
+
+        async clearAutoBans() {
+            if (!confirm("Remove all auto-added bans?")) return;
+            try {
+                const r = await api.maintIpBanClearAuto();
+                this.msg = `✅ Removed ${r.removed} auto-bans`;
+                await this.loadBanned();
+            } catch(e) { this.msg = e.message; }
+        },
+    };
+}
+
 // Register components globally
 document.addEventListener("alpine:init", () => {
     Alpine.data("appRoot",        appRoot);
@@ -745,6 +869,7 @@ document.addEventListener("alpine:init", () => {
     Alpine.data("nginxSection",   nginxComponent);
     Alpine.data("federationSection", federationComponent);
     Alpine.data("adminSection",   adminComponent);
-    Alpine.data("docsSection",     docsComponent);
-    Alpine.data("settingsSection", settingsComponent);
+    Alpine.data("docsSection",         docsComponent);
+    Alpine.data("settingsSection",     settingsComponent);
+    Alpine.data("maintenanceSection",  maintenanceComponent);
 });

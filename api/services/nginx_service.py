@@ -107,6 +107,7 @@ def generate_config(
     adguard_enabled: bool = True,
     site_enabled: bool = None,
 ) -> str:
+    from api.services.ip_ban import get_banned_ips
     domain = domain or settings.domain
     h = _secret_hash()
     ssl_cert, ssl_key = get_ssl_paths(domain)
@@ -122,6 +123,7 @@ def generate_config(
         ssl_key=ssl_key,
         adguard_enabled=adguard_enabled,
         site_enabled=site_enabled,
+        banned_ips=get_banned_ips(),
     )
 
 

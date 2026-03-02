@@ -185,14 +185,56 @@ class AdminAPI:
     async def backup(self):                   return await get("/api/admin/backup")
 
 
+class MaintenanceAPI:
+    async def status(self):
+        return await get("/api/maintenance/status")
+
+    # Backup
+    async def set_backup_interval(self, hours: int):
+        return await post("/api/maintenance/backup/settings", json={"hours": hours})
+    async def run_backup(self):
+        return await post("/api/maintenance/backup/run")
+
+    # Logs
+    async def logs_list(self):
+        return await get("/api/maintenance/logs/list")
+    async def log_download(self, name: str) -> bytes:
+        async with _client() as c:
+            r = await c.get(f"/api/maintenance/logs/download/{name}")
+            if not r.is_success:
+                raise APIError(r.status_code, _extract_detail(r))
+            return r.content
+    async def log_clear_one(self, name: str):
+        return await post(f"/api/maintenance/logs/clear/{name}")
+    async def log_clear_all(self):
+        return await post("/api/maintenance/logs/clear-all")
+    async def set_log_clean_interval(self, hours: int):
+        return await post("/api/maintenance/logs/settings", json={"hours": hours})
+
+    # IP Ban
+    async def ip_ban_list(self):
+        return await get("/api/maintenance/ip-ban/list")
+    async def ip_ban_add(self, ip: str, reason: str = "manual"):
+        return await post("/api/maintenance/ip-ban/add", json={"ip": ip, "reason": reason})
+    async def ip_ban_remove(self, ip: str):
+        return await delete(f"/api/maintenance/ip-ban/{ip}")
+    async def ip_ban_analyze(self, threshold: int = 30):
+        return await post(f"/api/maintenance/ip-ban/analyze?threshold={threshold}")
+    async def ip_ban_all_analyzed(self, threshold: int = 30):
+        return await post(f"/api/maintenance/ip-ban/ban-analyzed?threshold={threshold}")
+    async def ip_ban_clear_auto(self):
+        return await post("/api/maintenance/ip-ban/clear-auto")
+
+
 # Singletons used by handlers
-settings_api  = SettingsAPI()
-docs_api      = DocsAPI()
-server_api    = ServerAPI()
-clients_api   = ClientsAPI()
-inbounds_api  = InboundsAPI()
-routing_api   = RoutingAPI()
-adguard_api   = AdguardAPI()
-nginx_api     = NginxAPI()
-federation_api = FederationAPI()
-admin_api     = AdminAPI()
+settings_api     = SettingsAPI()
+docs_api         = DocsAPI()
+server_api       = ServerAPI()
+clients_api      = ClientsAPI()
+inbounds_api     = InboundsAPI()
+routing_api      = RoutingAPI()
+adguard_api      = AdguardAPI()
+nginx_api        = NginxAPI()
+federation_api   = FederationAPI()
+admin_api        = AdminAPI()
+maintenance_api  = MaintenanceAPI()

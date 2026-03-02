@@ -32,6 +32,7 @@ def kb_main_menu() -> InlineKeyboardMarkup:
          InlineKeyboardButton(text="👑 Admin",        callback_data="menu_admin")],
         [InlineKeyboardButton(text="⚙️ Settings",    callback_data="menu_settings"),
          InlineKeyboardButton(text="📚 Docs",         callback_data="menu_docs")],
+        [InlineKeyboardButton(text="🔧 Maintenance",  callback_data="menu_maintenance")],
     )
 
 

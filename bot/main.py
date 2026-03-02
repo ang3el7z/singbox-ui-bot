@@ -15,7 +15,7 @@ from api.main import app as fastapi_app
 
 from bot.middleware.auth import AdminAuthMiddleware
 from bot.middleware.rate_limit import RateLimitMiddleware
-from bot.handlers import start, server, clients, inbounds, routing, adguard, nginx, federation, admin, docs, settings
+from bot.handlers import start, server, clients, inbounds, routing, adguard, nginx, federation, admin, docs, settings, maintenance
 
 logging.basicConfig(
     level=logging.INFO,
@@ -47,6 +47,7 @@ def create_dispatcher() -> Dispatcher:
     dp.include_router(admin.router)
     dp.include_router(docs.router)
     dp.include_router(settings.router)
+    dp.include_router(maintenance.router)
 
     return dp
 
@@ -74,6 +75,10 @@ async def run_api() -> None:
 async def main() -> None:
     bot = create_bot()
     dp = create_dispatcher()
+
+    # Register bot reference so scheduler can send messages to admins
+    from api.services.bot_holder import set_bot
+    set_bot(bot)
 
     await asyncio.gather(
         run_api(),

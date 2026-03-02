@@ -145,6 +145,51 @@ const api = {
     docsList: ()           => apiFetch("GET", "/api/docs/"),
     docGet:   (id)         => apiFetch("GET", `/api/docs/${id}`),
 
+    // Maintenance
+    maintStatus:          ()        => apiFetch("GET",  "/api/maintenance/status"),
+    maintSetBackupHours:  (h)       => apiFetch("POST", "/api/maintenance/backup/settings", { hours: h }),
+    maintRunBackup:       ()        => apiFetch("POST", "/api/maintenance/backup/run"),
+    maintLogsList:        ()        => apiFetch("GET",  "/api/maintenance/logs/list"),
+    maintLogClearOne:     (n)       => apiFetch("POST", `/api/maintenance/logs/clear/${n}`),
+    maintLogClearAll:     ()        => apiFetch("POST", "/api/maintenance/logs/clear-all"),
+    maintSetCleanHours:   (h)       => apiFetch("POST", "/api/maintenance/logs/settings", { hours: h }),
+    maintIpBanList:       ()        => apiFetch("GET",  "/api/maintenance/ip-ban/list"),
+    maintIpBanAdd:        (ip, r)   => apiFetch("POST", "/api/maintenance/ip-ban/add", { ip, reason: r }),
+    maintIpBanRemove:     (ip)      => apiFetch("DELETE", `/api/maintenance/ip-ban/${ip}`),
+    maintIpBanAnalyze:    ()        => apiFetch("POST", "/api/maintenance/ip-ban/analyze"),
+    maintIpBanAll:        ()        => apiFetch("POST", "/api/maintenance/ip-ban/ban-analyzed"),
+    maintIpBanClearAuto:  ()        => apiFetch("POST", "/api/maintenance/ip-ban/clear-auto"),
+
+    async maintBackupDownload() {
+        const token = getToken();
+        const res = await fetch(BASE + "/api/maintenance/backup/download", {
+            headers: { "Authorization": `Bearer ${token}` },
+        });
+        if (!res.ok) throw new Error((await res.json()).detail || res.statusText);
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `backup_${new Date().toISOString().slice(0, 16).replace("T", "_")}.zip`;
+        a.click();
+        URL.revokeObjectURL(url);
+    },
+
+    async maintLogDownload(name) {
+        const token = getToken();
+        const res = await fetch(BASE + `/api/maintenance/logs/download/${name}`, {
+            headers: { "Authorization": `Bearer ${token}` },
+        });
+        if (!res.ok) throw new Error(res.statusText);
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = name;
+        a.click();
+        URL.revokeObjectURL(url);
+    },
+
     // Admin
     admins:       ()            => apiFetch("GET",  "/api/admin/admins"),
     addAdmin:     (data)        => apiFetch("POST", "/api/admin/admins", data),

@@ -14,15 +14,25 @@ from api.database import init_db, async_session, WebUser
 from api.deps import hash_password
 from api.routers import auth, server, clients, inbounds, routing, adguard, nginx, federation, admin
 from api.routers import docs_router, settings_router
+from api.routers import maintenance as maintenance_router
 from sqlalchemy import select
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    import asyncio
     await init_db()
     await _ensure_default_web_user()
     await _apply_saved_settings()
+    # Start background scheduler
+    from api.services.scheduler import scheduler_loop
+    _sched_task = asyncio.create_task(scheduler_loop())
     yield
+    _sched_task.cancel()
+    try:
+        await _sched_task
+    except asyncio.CancelledError:
+        pass
 
 
 async def _apply_saved_settings() -> None:
@@ -51,7 +61,7 @@ def create_app() -> FastAPI:
         title="Singbox UI Bot API",
         version="2.0.0",
         lifespan=lifespan,
-        docs_url="/api/docs",
+        docs_url="/api/swagger",
         redoc_url="/api/redoc",
         openapi_url="/api/openapi.json",
     )
@@ -74,8 +84,9 @@ def create_app() -> FastAPI:
     app.include_router(nginx.router,      prefix="/api/nginx",      tags=["nginx"])
     app.include_router(federation.router, prefix="/api/federation", tags=["federation"])
     app.include_router(admin.router,      prefix="/api/admin",      tags=["admin"])
-    app.include_router(docs_router.router,     prefix="/api/docs",     tags=["docs"])
-    app.include_router(settings_router.router, prefix="/api/settings", tags=["settings"])
+    app.include_router(docs_router.router,        prefix="/api/docs",        tags=["docs"])
+    app.include_router(settings_router.router,   prefix="/api/settings",   tags=["settings"])
+    app.include_router(maintenance_router.router, prefix="/api/maintenance", tags=["maintenance"])
 
     # Federation HMAC endpoint (public, no JWT — authenticated via HMAC)
     from api.services.federation_service import fed_router
