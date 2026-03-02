@@ -8,7 +8,7 @@ services:
     env_file: .env
     volumes:
       - ./data:/app/data
-      - ./nginx:/app/nginx
+      - ./nginx:/app/nginx        # includes conf.d, override, htpasswd, logs
       - ./configs:/app/configs
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - /etc/letsencrypt:/etc/letsencrypt:ro
@@ -53,7 +53,10 @@ services:
     restart: unless-stopped
     volumes:
       - ./nginx/conf.d:/etc/nginx/conf.d
-      - ./nginx/stubs:/var/www/stubs
+      # User-uploaded override site (index.html + assets)
+      - ./nginx/override:/var/www/override:ro
+      # htpasswd with random creds — makes 401 popup appear but login always fails
+      - ./nginx/htpasswd/.htpasswd:/etc/nginx/.htpasswd:ro
       - ./data/certs:/etc/nginx/certs:ro
       - /etc/letsencrypt:/etc/letsencrypt:ro
       - ./nginx/logs:/var/log/nginx

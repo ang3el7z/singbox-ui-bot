@@ -25,7 +25,8 @@ venv/
 # Nginx generated/runtime files
 nginx/conf.d/*.conf
 nginx/logs/
-nginx/stubs/custom/
+nginx/override/       # user-uploaded stub site (managed via bot)
+nginx/htpasswd/       # generated .htpasswd with random creds
 
 # Database files
 *.db

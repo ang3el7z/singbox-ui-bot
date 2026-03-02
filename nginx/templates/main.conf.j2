@@ -29,77 +29,83 @@ server {
     ssl_ciphers         HIGH:!aNULL:!MD5;
     ssl_session_cache   shared:SSL:10m;
     ssl_session_timeout 10m;
+    server_tokens       off;
 
-    add_header X-Frame-Options        "SAMEORIGIN" always;
-    add_header X-Content-Type-Options "nosniff"    always;
-    add_header Referrer-Policy        "no-referrer" always;
+    # Security headers
+    add_header X-Frame-Options   "SAMEORIGIN"   always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header Referrer-Policy   "no-referrer"  always;
 
+    # Logs
     access_log /var/log/nginx/access.log;
     error_log  /var/log/nginx/error.log warn;
 
-    # ── Root behaviour ────────────────────────────────────────────────────────
-    {% if stub_mode == "auth" %}
-    # Basic Auth challenge — browser shows native login dialog (401)
-    location / {
-        auth_basic           "{{ auth_realm }}";
-        auth_basic_user_file /etc/nginx/conf.d/.htpasswd;
-    }
-    {% elif stub_mode == "custom" %}
-    # Serve user-uploaded HTML
-    root  /var/www/stubs/custom;
-    index index.html;
-    location / {
-        try_files $uri $uri/ =404;
-    }
-    {% else %}
-    # Fallback: 404
-    location / {
-        return 404;
-    }
-    {% endif %}
+    # ── Root: serve override/index.html if uploaded, else 401 auth popup ──────
+    root /var/www/override;
 
-    # ── s-ui panel (hidden path) ──────────────────────────────────────────────
+    location = / {
+        # If user uploaded override/index.html — show it, otherwise 401 popup
+        try_files /index.html @auth;
+    }
+
+    # Static assets that override page may reference (CSS, images, fonts…)
+    location /override/ {
+        alias /var/www/override/;
+        try_files $uri =404;
+    }
+
+    # Named location: shows browser's native HTTP Basic Auth dialog
+    # htpasswd contains a random hash — real login is impossible (camouflage)
+    location @auth {
+        auth_basic           "Restricted Content";
+        auth_basic_user_file /etc/nginx/.htpasswd;
+        try_files            /dev/null =403;
+    }
+
+    # ── Hidden service paths (hash-based) ─────────────────────────────────────
+
+    # s-ui panel
     location {{ sui_path }}/ {
         proxy_pass         http://sui:2095/;
         proxy_http_version 1.1;
-        proxy_set_header   Upgrade     $http_upgrade;
-        proxy_set_header   Connection  "upgrade";
-        proxy_set_header   Host        $host;
-        proxy_set_header   X-Real-IP   $remote_addr;
-        proxy_set_header   X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header   Upgrade $http_upgrade;
+        proxy_set_header   Connection "upgrade";
+        proxy_set_header   Host $host;
+        proxy_set_header   X-Real-IP $remote_addr;
+        proxy_set_header   X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header   X-Forwarded-Proto $scheme;
         proxy_read_timeout 86400;
     }
 
-    # ── Subscriptions (hidden path) ───────────────────────────────────────────
+    # Subscriptions
     location {{ sub_path }}/ {
-        proxy_pass       http://sui:2096/sub/;
-        proxy_set_header Host              $host;
-        proxy_set_header X-Real-IP         $remote_addr;
-        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_pass         http://sui:2096/sub/;
+        proxy_set_header   Host $host;
+        proxy_set_header   X-Real-IP $remote_addr;
+        proxy_set_header   X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header   X-Forwarded-Proto $scheme;
     }
 
-    # ── AdGuard Home (hidden path) ────────────────────────────────────────────
     {% if adguard_enabled %}
+    # AdGuard Home
     location {{ adguard_path }}/ {
         proxy_pass         http://adguard:3000/;
         proxy_http_version 1.1;
-        proxy_set_header   Upgrade     $http_upgrade;
-        proxy_set_header   Connection  "upgrade";
-        proxy_set_header   Host        $host;
-        proxy_set_header   X-Real-IP   $remote_addr;
-        proxy_set_header   X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header   Upgrade $http_upgrade;
+        proxy_set_header   Connection "upgrade";
+        proxy_set_header   Host $host;
+        proxy_set_header   X-Real-IP $remote_addr;
+        proxy_set_header   X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header   X-Forwarded-Proto $scheme;
     }
     {% endif %}
 
-    # ── Federation API (hidden path) ──────────────────────────────────────────
+    # Federation API
     location {{ fed_path }}/ {
-        proxy_pass       http://bot:8080/federation/;
-        proxy_set_header Host              $host;
-        proxy_set_header X-Real-IP         $remote_addr;
-        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_pass         http://bot:8080/federation/;
+        proxy_set_header   Host $host;
+        proxy_set_header   X-Real-IP $remote_addr;
+        proxy_set_header   X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header   X-Forwarded-Proto $scheme;
     }
 }

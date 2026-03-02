@@ -12,22 +12,11 @@ from bot.middleware.auth import log_action
 
 router = Router()
 
-# Saved in memory between restarts; persisted via re-reading .env or bot settings
-_current_stub_mode: str = "auth"
-
-
-def _get_stub_mode() -> str:
-    return _current_stub_mode
-
-
-def _set_stub_mode(mode: str) -> None:
-    global _current_stub_mode
-    _current_stub_mode = mode
+MAX_UPLOAD_MB = 20  # max ZIP size
 
 
 class NginxFSM(StatesGroup):
-    waiting_custom_html = State()
-    waiting_auth_realm  = State()
+    waiting_site_file = State()   # HTML or ZIP
 
 
 # ─── Menu ─────────────────────────────────────────────────────────────────────
@@ -39,8 +28,8 @@ def nginx_menu_kb() -> InlineKeyboardBuilder:
         InlineKeyboardButton(text=t("nginx_ssl"),       callback_data="nginx:ssl"),
     )
     builder.row(
-        InlineKeyboardButton(text="🎭 Заглушка",        callback_data="nginx:stub"),
-        InlineKeyboardButton(text=t("nginx_logs"),      callback_data="nginx:logs"),
+        InlineKeyboardButton(text="🎨 Сайт-заглушка",   callback_data="nginx:override_menu"),
+        InlineKeyboardButton(text=t("nginx_logs"),       callback_data="nginx:logs"),
     )
     builder.row(
         InlineKeyboardButton(text="🔗 Скрытые пути",    callback_data="nginx:paths"),
@@ -52,41 +41,36 @@ def nginx_menu_kb() -> InlineKeyboardBuilder:
 @router.callback_query(F.data == "menu:nginx")
 async def cb_nginx_menu(callback: CallbackQuery) -> None:
     from bot.config import settings
-    domain  = settings.domain or "не настроен"
-    mode    = _get_stub_mode()
-    mode_lbl = nginx_service.STUB_MODES.get(mode, mode)
+    domain = settings.domain or "не настроен"
+    status = nginx_service.override_status()
+    stub_line = "🎨 Заглушка: ✅ активна" if status["active"] else "🎨 Заглушка: 🔒 auth-попап (по умолчанию)"
     await callback.message.edit_text(
-        f"🌐 <b>Nginx</b>\n\n"
-        f"▪ Домен: <code>{domain}</code>\n"
-        f"▪ Заглушка: {mode_lbl}",
+        f"🌐 <b>Nginx</b>\n\n▪ Домен: <code>{domain}</code>\n▪ {stub_line}",
         reply_markup=nginx_menu_kb(),
         parse_mode="HTML",
     )
     await callback.answer()
 
 
-# ─── Apply / configure ────────────────────────────────────────────────────────
-
-async def _apply_config(stub_mode: str, auth_realm: str = "Protected Area") -> tuple[bool, str]:
-    from bot.config import settings
-    config_text = nginx_service.generate_config(
-        domain=settings.domain,
-        stub_mode=stub_mode,
-        auth_realm=auth_realm,
-    )
-    nginx_service.write_config(config_text)
-    ok, msg = await nginx_service.test_nginx_config()
-    if not ok:
-        return False, msg
-    ok, msg = await nginx_service.reload_nginx()
-    return ok, msg
-
+# ─── Configure ────────────────────────────────────────────────────────────────
 
 @router.callback_query(F.data == "nginx:configure")
 async def cb_nginx_configure(callback: CallbackQuery) -> None:
     await callback.answer()
     try:
-        ok, msg = await _apply_config(_get_stub_mode())
+        from bot.config import settings
+        nginx_service.ensure_htpasswd()
+        config_text = nginx_service.generate_config(domain=settings.domain)
+        nginx_service.write_config(config_text)
+        ok, msg = await nginx_service.test_nginx_config()
+        if not ok:
+            await callback.message.edit_text(
+                f"❌ Конфиг содержит ошибки:\n<code>{truncate(msg, 1000)}</code>",
+                reply_markup=back_kb("menu:nginx"),
+                parse_mode="HTML",
+            )
+            return
+        ok, msg = await nginx_service.reload_nginx()
         await log_action(callback.from_user.id, "nginx_configure")
         if ok:
             await callback.message.edit_text(
@@ -96,7 +80,7 @@ async def cb_nginx_configure(callback: CallbackQuery) -> None:
             )
         else:
             await callback.message.edit_text(
-                f"❌ Ошибка конфигурации:\n<code>{truncate(msg, 1200)}</code>",
+                f"⚠️ Конфиг записан, reload завершился с предупреждением:\n<code>{truncate(msg, 800)}</code>",
                 reply_markup=back_kb("menu:nginx"),
                 parse_mode="HTML",
             )
@@ -121,203 +105,179 @@ async def cb_nginx_ssl(callback: CallbackQuery) -> None:
         parse_mode="HTML",
     )
     ok, output = await nginx_service.issue_ssl_cert(settings.domain, settings.email)
-    await log_action(callback.from_user.id, "nginx_ssl", f"ok={ok}")
+    await log_action(callback.from_user.id, "nginx_ssl", f"domain={settings.domain} ok={ok}")
     if ok:
         await callback.message.edit_text(t("nginx_ssl_issued"), reply_markup=back_kb("menu:nginx"))
     else:
         await callback.message.edit_text(
-            f"❌ Ошибка:\n<code>{truncate(output, 1500)}</code>",
+            f"❌ Ошибка получения сертификата:\n<code>{truncate(output, 1500)}</code>",
             reply_markup=back_kb("menu:nginx"),
             parse_mode="HTML",
         )
 
 
-# ─── Stub site ────────────────────────────────────────────────────────────────
+# ─── Override site menu ───────────────────────────────────────────────────────
 
-def stub_menu_kb() -> InlineKeyboardBuilder:
-    builder = InlineKeyboardBuilder()
-    current = _get_stub_mode()
-    for mode_key, mode_label in nginx_service.STUB_MODES.items():
-        # Skip custom if no file uploaded yet
-        if mode_key == "custom" and not nginx_service.has_custom_stub():
-            builder.row(InlineKeyboardButton(
-                text="📁 Загрузить свой HTML",
-                callback_data="nginx:stub:upload",
-            ))
-            continue
-        marker = "✅ " if mode_key == current else ""
-        builder.row(InlineKeyboardButton(
-            text=f"{marker}{mode_label}",
-            callback_data=f"nginx:stub:set:{mode_key}",
-        ))
-    if nginx_service.has_custom_stub():
-        builder.row(InlineKeyboardButton(
-            text="📁 Заменить HTML",
-            callback_data="nginx:stub:upload",
-        ))
-    builder.row(InlineKeyboardButton(
-        text="✏️ Изменить заголовок диалога",
-        callback_data="nginx:stub:realm",
-    ))
-    builder.row(InlineKeyboardButton(text=t("back"), callback_data="menu:nginx"))
-    return builder.as_markup()
-
-
-@router.callback_query(F.data == "nginx:stub")
-async def cb_nginx_stub(callback: CallbackQuery) -> None:
+@router.callback_query(F.data == "nginx:override_menu")
+async def cb_nginx_override_menu(callback: CallbackQuery) -> None:
     await callback.answer()
-    current_mode  = _get_stub_mode()
-    current_label = nginx_service.STUB_MODES.get(current_mode, current_mode)
-    has_custom    = nginx_service.has_custom_stub()
+    status = nginx_service.override_status()
 
-    text = (
-        f"🎭 <b>Настройка заглушки</b>\n\n"
-        f"▪ Текущий режим: <b>{current_label}</b>\n\n"
-        f"<b>auth</b> — браузер показывает нативное окно авторизации (401). "
-        f"Выглядит как защищённый сервер.\n\n"
-        f"<b>custom</b> — ваша HTML страница.\n\n"
-        f"<b>none</b> — возвращать 404."
-    )
-    if current_mode == "auth":
-        text += "\n\n💡 <i>Никаких файлов HTML не нужно — браузер сам покажет окно входа.</i>"
-    if has_custom and current_mode == "custom":
-        text += "\n\n✅ <i>Ваш HTML файл загружен.</i>"
-
-    await callback.message.edit_text(text, reply_markup=stub_menu_kb(), parse_mode="HTML")
-
-
-@router.callback_query(F.data.startswith("nginx:stub:set:"))
-async def cb_nginx_stub_set(callback: CallbackQuery) -> None:
-    await callback.answer()
-    mode = callback.data.split(":")[3]
-
-    if mode == "custom" and not nginx_service.has_custom_stub():
-        await callback.answer("Сначала загрузите HTML файл.", show_alert=True)
-        return
-
-    _set_stub_mode(mode)
-    ok, msg = await _apply_config(mode)
-    await log_action(callback.from_user.id, "nginx_stub_mode", f"mode={mode}")
-    label = nginx_service.STUB_MODES.get(mode, mode)
-    if ok:
-        await callback.message.edit_text(
-            f"✅ Режим заглушки изменён: <b>{label}</b>",
-            reply_markup=back_kb("menu:nginx"),
-            parse_mode="HTML",
+    if status["active"]:
+        files_preview = ", ".join(status["files"][:6])
+        if len(status["files"]) > 6:
+            files_preview += f" и ещё {len(status['files']) - 6}…"
+        text = (
+            f"🎨 <b>Сайт-заглушка</b>\n\n"
+            f"▪ Статус: ✅ активна\n"
+            f"▪ Файлов: {len(status['files'])} ({status['size_kb']} КБ)\n"
+            f"▪ Состав: <code>{files_preview}</code>\n\n"
+            f"Загрузите новый файл чтобы заменить, или удалите чтобы вернуть 🔒 auth-попап."
         )
     else:
-        await callback.message.edit_text(
-            f"⚠️ Режим изменён, но reload nginx завершился с предупреждением:\n<code>{truncate(msg, 800)}</code>",
-            reply_markup=back_kb("menu:nginx"),
-            parse_mode="HTML",
+        text = (
+            f"🎨 <b>Сайт-заглушка</b>\n\n"
+            f"▪ Статус: 🔒 auth-попап (по умолчанию)\n\n"
+            f"Посетители видят браузерное окно авторизации (HTTP 401 Basic Auth).\n"
+            f"Сервер выглядит как защищённый ресурс — настоящий адрес скрыт.\n\n"
+            f"<i>Чтобы показать свой сайт — загрузите HTML-файл или ZIP-архив.</i>"
         )
 
+    builder = InlineKeyboardBuilder()
+    builder.row(
+        InlineKeyboardButton(text="📄 Загрузить HTML / ZIP", callback_data="nginx:override_upload"),
+    )
+    if status["active"]:
+        builder.row(
+            InlineKeyboardButton(text="🗑 Удалить (вернуть auth-попап)", callback_data="nginx:override_delete"),
+        )
+    builder.row(InlineKeyboardButton(text=t("back"), callback_data="menu:nginx"))
+    await callback.message.edit_text(text, reply_markup=builder.as_markup(), parse_mode="HTML")
 
-# ─── Upload custom HTML ───────────────────────────────────────────────────────
 
-@router.callback_query(F.data == "nginx:stub:upload")
-async def cb_nginx_stub_upload(callback: CallbackQuery, state: FSMContext) -> None:
+# ─── Upload site ──────────────────────────────────────────────────────────────
+
+@router.callback_query(F.data == "nginx:override_upload")
+async def cb_nginx_override_upload(callback: CallbackQuery, state: FSMContext) -> None:
     await callback.answer()
-    await state.set_state(NginxFSM.waiting_custom_html)
+    await state.set_state(NginxFSM.waiting_site_file)
     await callback.message.answer(
-        "📁 Отправьте <b>.html</b> файл.\n\n"
-        "После загрузки автоматически переключу режим заглушки на <b>custom</b> и применю конфиг.",
-        reply_markup=back_kb("nginx:stub"),
+        "📤 <b>Загрузка сайта-заглушки</b>\n\n"
+        "Отправьте один из вариантов:\n"
+        "• <b>HTML-файл</b> — одностраничный сайт (index.html)\n"
+        "• <b>ZIP-архив</b> — полный сайт с CSS, изображениями и т.д.\n\n"
+        "⚠️ Максимальный размер: <b>20 МБ</b>\n"
+        "⚠️ В ZIP-архиве должен быть <code>index.html</code>\n\n"
+        "<i>Статические ресурсы (CSS/JS/картинки) доступны по пути <code>/override/имя_файла</code></i>",
+        reply_markup=back_kb("nginx:override_menu"),
         parse_mode="HTML",
     )
 
 
-@router.message(NginxFSM.waiting_custom_html, F.document)
-async def fsm_nginx_custom_html(message: Message, state: FSMContext) -> None:
+@router.message(NginxFSM.waiting_site_file, F.document)
+async def fsm_nginx_site_file(message: Message, state: FSMContext) -> None:
     await state.clear()
     doc: Document = message.document
-    if not (doc.file_name or "").lower().endswith((".html", ".htm")):
-        await message.answer("Пожалуйста, загрузите файл с расширением .html или .htm")
+    filename = doc.file_name or ""
+
+    # Size check
+    if doc.file_size and doc.file_size > MAX_UPLOAD_MB * 1024 * 1024:
+        await message.answer(f"❌ Файл слишком большой. Максимум {MAX_UPLOAD_MB} МБ.")
         return
+
+    is_html = filename.lower().endswith((".html", ".htm"))
+    is_zip  = filename.lower().endswith(".zip")
+
+    if not is_html and not is_zip:
+        await message.answer(
+            "❌ Неподдерживаемый формат. Загрузите <b>.html</b> или <b>.zip</b> файл.",
+            parse_mode="HTML",
+            reply_markup=back_kb("nginx:override_menu"),
+        )
+        return
+
+    await message.answer("⏳ Загружаю файл...")
+
     try:
         import io
-        file = await message.bot.get_file(doc.file_id)
+        bot = message.bot
+        file = await bot.get_file(doc.file_id)
         buf = io.BytesIO()
-        await message.bot.download_file(file.file_path, buf)
-        nginx_service.save_custom_stub(buf.getvalue())
+        await bot.download_file(file.file_path, buf)
+        content = buf.getvalue()
 
-        _set_stub_mode("custom")
-        ok, msg = await _apply_config("custom")
-        await log_action(message.from_user.id, "nginx_upload_stub")
-
-        if ok:
+        if is_html:
+            nginx_service.save_override_html(content)
+            await log_action(message.from_user.id, "nginx_override_html", filename)
             await message.answer(
-                "✅ HTML загружен, режим заглушки переключён на <b>custom</b> и конфиг применён.",
-                reply_markup=back_kb("menu:nginx"),
+                "✅ <b>HTML-файл сохранён.</b>\n\n"
+                "Теперь посетители будут видеть вашу страницу вместо auth-попапа.\n"
+                "Нажмите <b>⚙️ Настроить</b> в меню Nginx чтобы перезагрузить конфиг.",
                 parse_mode="HTML",
+                reply_markup=back_kb("nginx:override_menu"),
             )
         else:
+            count = nginx_service.save_override_zip(content)
+            if not (nginx_service.OVERRIDE_DIR / "index.html").exists():
+                await message.answer(
+                    "❌ В архиве не найден <code>index.html</code>. Убедитесь что файл есть в корне архива.",
+                    parse_mode="HTML",
+                    reply_markup=back_kb("nginx:override_menu"),
+                )
+                nginx_service.remove_override()
+                return
+            await log_action(message.from_user.id, "nginx_override_zip", f"{filename} ({count} файлов)")
             await message.answer(
-                f"✅ HTML загружен, но reload nginx завершился с предупреждением:\n<code>{truncate(msg, 800)}</code>",
-                reply_markup=back_kb("menu:nginx"),
+                f"✅ <b>ZIP-архив распакован:</b> {count} файлов\n\n"
+                "Нажмите <b>⚙️ Настроить</b> в меню Nginx чтобы перезагрузить конфиг.",
                 parse_mode="HTML",
+                reply_markup=back_kb("nginx:override_menu"),
             )
+
+        # Auto-reload nginx after upload
+        ok, _ = await nginx_service.reload_nginx()
+        if ok:
+            await message.answer("🔄 Nginx перезагружен автоматически.")
+
     except Exception as e:
-        await message.answer(t("error", msg=str(e)))
+        await message.answer(t("error", msg=str(e)), reply_markup=back_kb("nginx:override_menu"))
 
 
-# ─── Change auth realm label ─────────────────────────────────────────────────
+@router.message(NginxFSM.waiting_site_file)
+async def fsm_nginx_site_file_wrong(message: Message, state: FSMContext) -> None:
+    await message.answer("Пожалуйста, отправьте файл (HTML или ZIP).")
 
-@router.callback_query(F.data == "nginx:stub:realm")
-async def cb_nginx_stub_realm(callback: CallbackQuery, state: FSMContext) -> None:
+
+# ─── Delete override ──────────────────────────────────────────────────────────
+
+@router.callback_query(F.data == "nginx:override_delete")
+async def cb_nginx_override_delete(callback: CallbackQuery) -> None:
     await callback.answer()
-    await state.set_state(NginxFSM.waiting_auth_realm)
-    await callback.message.answer(
-        "✏️ Введите текст заголовка окна авторизации.\n\n"
-        "Например: <code>Private Area</code>, <code>Company Portal</code>, <code>Restricted</code>\n\n"
-        "<i>Это текст, который браузер отобразит в диалоге ввода логина/пароля.</i>",
-        reply_markup=back_kb("nginx:stub"),
-        parse_mode="HTML",
+    nginx_service.remove_override()
+    await nginx_service.reload_nginx()
+    await log_action(callback.from_user.id, "nginx_override_delete")
+    await callback.message.edit_text(
+        "✅ Сайт-заглушка удалена.\n\nТеперь посетители снова видят 🔒 auth-попап.",
+        reply_markup=back_kb("menu:nginx"),
     )
 
 
-@router.message(NginxFSM.waiting_auth_realm)
-async def fsm_nginx_auth_realm(message: Message, state: FSMContext) -> None:
-    await state.clear()
-    realm = message.text.strip()
-    if not realm:
-        await message.answer("Заголовок не может быть пустым.")
-        return
-    try:
-        ok, msg = await _apply_config(_get_stub_mode(), auth_realm=realm)
-        await log_action(message.from_user.id, "nginx_auth_realm", realm)
-        if ok:
-            await message.answer(
-                f"✅ Заголовок изменён на: <b>{realm}</b>",
-                reply_markup=back_kb("nginx:stub"),
-                parse_mode="HTML",
-            )
-        else:
-            await message.answer(
-                f"⚠️ Заголовок изменён, но reload завершился с предупреждением:\n<code>{truncate(msg, 600)}</code>",
-                reply_markup=back_kb("menu:nginx"),
-                parse_mode="HTML",
-            )
-    except Exception as e:
-        await message.answer(t("error", msg=str(e)))
-
-
-# ─── Paths ────────────────────────────────────────────────────────────────────
+# ─── Hidden paths ─────────────────────────────────────────────────────────────
 
 @router.callback_query(F.data == "nginx:paths")
 async def cb_nginx_paths(callback: CallbackQuery) -> None:
     await callback.answer()
     paths = nginx_service.get_hidden_paths()
+    text = "🔗 <b>Скрытые пути доступа</b>\n\n"
     labels = {
-        "panel":          "🖥 Панель управления",
+        "panel":          "🖥 Панель управления (s-ui)",
         "subscriptions":  "📋 Подписки",
         "adguard":        "🛡 AdGuard Home",
         "federation_api": "🔗 Federation API",
     }
-    text = "🔗 <b>Скрытые пути доступа</b>\n\n"
     for key, url in paths.items():
         text += f"{labels.get(key, key)}:\n<code>{url}</code>\n\n"
-    text += "<i>Пути скрыты хэшем секретного ключа. Не передавайте их третьим лицам.</i>"
+    text += "<i>Пути скрыты хэшем SECRET_KEY. Не передавайте их третьим лицам.</i>"
     await callback.message.edit_text(text, reply_markup=back_kb("menu:nginx"), parse_mode="HTML")
 
 

@@ -28,7 +28,6 @@ class Settings(BaseSettings):
     # Nginx / SSL
     domain: str = ""
     email: str = ""
-    stub_mode: str = "auth"
 
     # Federation
     federation_secret: str = "change_this_secret"
