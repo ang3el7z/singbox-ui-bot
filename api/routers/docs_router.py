@@ -467,11 +467,12 @@ curl -fsSL https://raw.githubusercontent.com/ang3el7z/singbox-ui-bot/main/script
 
 | Шаг | Поле | Где взять |
 |-----|------|-----------|
-| 1/3 | **Bot Token** | @BotFather → /newbot |
-| 2/3 | **Email** | любой email — только для уведомлений Let's Encrypt |
-| 3/3 | **SSH порт** | по умолчанию 22 |
+| 1/2 | **Bot Token** | @BotFather → /newbot |
+| 2/2 | **SSH порт** | по умолчанию 22 |
 
 Всё остальное (домен, язык, timezone, ID администратора) — в мастере первого `/start`.
+
+> Email для certbot **не нужен** — генерируется автоматически как `admin@{domain}` (как в vpnbot).
 
 ---
 
@@ -501,7 +502,6 @@ curl -fsSL https://raw.githubusercontent.com/ang3el7z/singbox-ui-bot/main/script
 
 ```env
 BOT_TOKEN=1234567890:AAxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx  # от @BotFather
-EMAIL=admin@example.com                                # для certbot
 
 # Остальное генерируется автоматически случайными значениями:
 INTERNAL_TOKEN=...    JWT_SECRET=...    SECRET_KEY=...
@@ -541,7 +541,6 @@ nano .env
 
 ```env
 BOT_TOKEN=1234567890:AAxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-EMAIL=admin@example.com
 
 # Сгенерировать: openssl rand -hex 32
 INTERNAL_TOKEN=<32+ символов>
@@ -712,11 +711,12 @@ The installer asks **3 questions** — everything else is configured in the bot.
 
 | Step | Field | Where to get it |
 |------|-------|----------------|
-| 1/3 | **Bot Token** | @BotFather → /newbot |
-| 2/3 | **Email** | any email — only for Let's Encrypt notifications |
-| 3/3 | **SSH port** | default is 22 |
+| 1/2 | **Bot Token** | @BotFather → /newbot |
+| 2/2 | **SSH port** | default is 22 |
 
 Everything else (domain, language, timezone, admin ID) is set in the first `/start` wizard.
+
+> Email for certbot is **not required** — auto-generated as `admin@{domain}` (same approach as vpnbot).
 
 ---
 
@@ -746,7 +746,6 @@ If you chose a domain — Nginx is auto-regenerated. Then issue SSL:
 
 ```env
 BOT_TOKEN=1234567890:AAxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx  # from @BotFather
-EMAIL=admin@example.com                                # for certbot
 
 # Everything else is auto-generated with random values:
 INTERNAL_TOKEN=...    JWT_SECRET=...    SECRET_KEY=...
@@ -785,7 +784,6 @@ Minimum required fields:
 
 ```env
 BOT_TOKEN=1234567890:AAxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-EMAIL=admin@example.com
 
 # Generate with: openssl rand -hex 32
 INTERNAL_TOKEN=<32+ chars>
@@ -1422,7 +1420,7 @@ curl -X POST https://домен/api/routing/rule-sets \\
 #### `POST /api/nginx/ssl` — Выпустить SSL сертификат
 
 Запускает `certbot certonly --nginx` внутри контейнера.  
-Требует: домен, сохранённый в `app_settings` (через бота или Web UI → Settings), и `EMAIL` в `.env`. Домен должен смотреть на сервер, порт 80 открыт.
+Требует: домен, сохранённый в `app_settings` (через бота или Web UI → Settings). Email генерируется автоматически как `admin@{domain}`. Домен должен смотреть на сервер, порт 80 открыт.
 
 #### `GET /api/nginx/paths` — Скрытые пути панелей
 

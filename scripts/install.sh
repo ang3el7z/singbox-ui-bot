@@ -146,9 +146,6 @@ ADGUARD_URL=http://adguard:3000
 ADGUARD_USER=admin
 ADGUARD_PASSWORD=$AG_PASS
 
-# ── SSL email (certbot notification only) ─────────────────────────────────────
-EMAIL=$EMAIL
-
 # ── Federation ────────────────────────────────────────────────────────────────
 FEDERATION_SECRET=$FED_SECRET
 BOT_PUBLIC_URL=
@@ -242,17 +239,12 @@ collect_input() {
     echo ""
 
     # ── Step 1: Telegram token ────────────────────────────────────────────────
-    prompt "Step 1/3 — Telegram Bot Token (from @BotFather):"
+    prompt "Step 1/2 — Telegram Bot Token (from @BotFather):"
     read -r BOT_TOKEN
     [[ -n "$BOT_TOKEN" ]] || error "BOT_TOKEN cannot be empty"
 
-    # ── Step 2: Email for Let's Encrypt (certbot notifications) ───────────────
-    prompt "Step 2/3 — Email for SSL notifications (Let's Encrypt):"
-    read -r EMAIL
-    [[ -n "$EMAIL" ]] || error "EMAIL cannot be empty"
-
-    # ── Step 3: SSH port ──────────────────────────────────────────────────────
-    prompt "Step 3/3 — SSH port (press Enter for default 22):"
+    # ── Step 2: SSH port ──────────────────────────────────────────────────────
+    prompt "Step 2/2 — SSH port (press Enter for default 22):"
     read -r SSH_PORT
     SSH_PORT="${SSH_PORT:-22}"
 

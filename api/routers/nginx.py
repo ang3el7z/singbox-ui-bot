@@ -37,13 +37,11 @@ async def nginx_configure(auth: dict = Depends(require_any_auth)):
 
 @router.post("/ssl")
 async def nginx_ssl(auth: dict = Depends(require_any_auth)):
-    from api.config import settings
-    from api.routers.settings_router import get_runtime, get_setting
+    from api.routers.settings_router import get_runtime
     domain = get_runtime("domain")
-    email = settings.email
-    if not domain or not email:
-        raise HTTPException(status_code=400, detail="Domain not configured or EMAIL not set in .env")
-    ok, output = await nginx_service.issue_ssl_cert(domain, email)
+    if not domain:
+        raise HTTPException(status_code=400, detail="Domain not configured. Set it in Settings first.")
+    ok, output = await nginx_service.issue_ssl_cert(domain)
     await audit(auth["actor"], "nginx_ssl", f"domain={domain}")
     if not ok:
         raise HTTPException(status_code=500, detail=output)

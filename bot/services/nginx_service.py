@@ -230,7 +230,9 @@ async def get_access_logs(lines: int = 50) -> str:
         return str(e)
 
 
-async def issue_ssl_cert(domain: str, email: str) -> tuple[bool, str]:
+async def issue_ssl_cert(domain: str) -> tuple[bool, str]:
+    """Email auto-generated as admin@{domain} — no manual input needed (same as vpnbot)."""
+    email = f"admin@{domain}"
     try:
         result = subprocess.run(
             [

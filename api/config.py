@@ -35,9 +35,6 @@ class Settings(BaseSettings):
     adguard_user: str = "admin"
     adguard_password: str = "changeme"
 
-    # ── SSL email (certbot notification only, not a setting) ──────────────────
-    email: str = ""
-
     # ── Federation ────────────────────────────────────────────────────────────
     federation_secret: str = "change_federation_secret"
     bot_public_url: str = ""
