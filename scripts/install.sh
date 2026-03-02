@@ -396,6 +396,14 @@ setup_cron() {
     (crontab -l 2>/dev/null; echo "0 3 * * * certbot renew --quiet") | sort -u | crontab -
 }
 
+install_cli() {
+    info "Installing management CLI → /usr/local/bin/singbox-ui-bot"
+    cp "$INSTALL_DIR/scripts/manage.sh" /usr/local/bin/singbox-ui-bot
+    chmod +x /usr/local/bin/singbox-ui-bot
+    success() { echo -e "${GREEN}[OK]${NC} $*"; }
+    success "You can now run: singbox-ui-bot"
+}
+
 post_install() {
     # Show generated credentials
     WEB_PASS_SHOWN=$(grep WEB_ADMIN_PASSWORD "$INSTALL_DIR/.env" | cut -d= -f2)
@@ -416,10 +424,16 @@ post_install() {
     echo "  Container status:"
     docker compose -f "$INSTALL_DIR/docker-compose.yml" ps
     echo ""
-    echo "  Useful commands:"
-    echo "    docker compose -f $INSTALL_DIR/docker-compose.yml logs -f app    # App logs"
-    echo "    docker compose -f $INSTALL_DIR/docker-compose.yml logs -f singbox # Singbox logs"
-    echo "    bash $INSTALL_DIR/scripts/update.sh                               # Update"
+    echo "  ─────────────────────────────────────────"
+    echo "  🛠  Management CLI:"
+    echo "    singbox-ui-bot            — interactive menu"
+    echo "    singbox-ui-bot status     — show status"
+    echo "    singbox-ui-bot backup     — create backup"
+    echo "    singbox-ui-bot logs       — view logs"
+    echo "    singbox-ui-bot restart    — restart containers"
+    echo "    singbox-ui-bot update     — pull & rebuild"
+    echo "    singbox-ui-bot uninstall  — clean server"
+    echo "  ─────────────────────────────────────────"
     echo ""
     echo "  ⚠️  Next steps:"
     echo "    1. Send /menu to your bot → Inbounds → Add inbound (e.g. VLESS Reality)"
@@ -450,6 +464,7 @@ main() {
     setup_nginx_init
     setup_cron
     deploy
+    install_cli
     post_install
 }
 
