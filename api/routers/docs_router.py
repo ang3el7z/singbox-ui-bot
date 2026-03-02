@@ -1888,12 +1888,13 @@ geosite:netflix → exit_us-node
 
 ## Шаблоны конфигурации для клиентов
 
-При скачивании конфига клиента (бот: кнопка "Download config") выбирается шаблон устройства.
+При скачивании конфига клиента (бот: кнопка "🔗 Sub URL" или "📄 Config file") выбирается шаблон устройства.
 
 | Шаблон | Устройство | Описание |
 |--------|-----------|---------|
-| `tun` | 📱 Телефон / ПК (Android, iOS, Windows, macOS) | TUN-интерфейс, автоматический захват трафика, DNS hijack |
+| `tun` | 📱 Телефон / ПК (Android, iOS, Linux, macOS) | TUN-интерфейс, автоматический захват трафика, DNS hijack |
 | `tun_fakeip` | 📱 Телефон / ПК (продвинутый) | То же, но с FakeIP DNS — быстрее резолвинг |
+| `windows` | 🪟 Windows Service | WinTun-драйвер + системный HTTP-прокси. Нужны права администратора |
 | `tproxy` | 📡 Роутер (OpenWRT / Linux) | TProxy/redirect, без TUN. Порты 7892/7893. Нужна настройка iptables |
 | `socks` | 🔌 Ручной прокси | SOCKS5 на 7891 и HTTP на 7890. Прописать в настройках браузера/приложения |
 
@@ -1902,13 +1903,36 @@ geosite:netflix → exit_us-node
 - `auto_route: true` — весь трафик системы автоматически идёт через него
 - `strict_route: true` — предотвращает утечки
 - DNS hijack — перехватывает DNS-запросы, отправляет через Sing-Box
-- Подходит для Android/iOS (sing-box client app), Windows, macOS
+- Подходит для Android/iOS (sing-box client app), Linux, macOS
 
 ### TUN + FakeIP — `tun_fakeip`
 - Всё то же, плюс FakeIP DNS:  
   браузер получает фейковый IP → Sing-Box знает реальный домен → быстрее маршрутизация
 - Диапазон: `198.18.0.0/15` (IPv4)
 - Лучший выбор для десктопа при быстром интернете
+
+### Windows Service — `windows`
+- TUN через **WinTun-драйвер** (нужна установка: [wintun.net](https://www.wintun.net))
+- `stack: system` — системный TCP/IP стек Windows
+- `strict_route: true` — блокирует DNS-утечки (Windows Multihomed DNS Behavior)
+- `platform.http_proxy` — автоматически выставляет системный HTTP-прокси на 127.0.0.1:7890  
+  (для приложений, которые не умеют работать через TUN)
+- Порт 7890 — mixed (SOCKS5 + HTTP) как fallback
+- **Запуск:**  
+  ```
+  sing-box.exe run -c config.json
+  ```
+  (от Администратора, или установить как Windows Service)
+- **Установка как сервис (PowerShell, от Администратора):**  
+  ```powershell
+  sc.exe create SingBox binPath= "C:\sing-box\sing-box.exe run -c C:\sing-box\config.json" start= auto
+  sc.exe start SingBox
+  ```
+- **Удаление сервиса:**  
+  ```powershell
+  sc.exe stop SingBox
+  sc.exe delete SingBox
+  ```
 
 ### TProxy — `tproxy`
 - Для Linux-роутеров (OpenWRT, Debian-роутеры)
@@ -2116,12 +2140,13 @@ Which outbound Sing-Box uses to download the rule set file itself:
 
 ## Client config templates
 
-When downloading a client config (bot: "Download config" button), choose a device template:
+When downloading a client config (bot: "🔗 Sub URL" or "📄 Config file"), choose a device template:
 
 | Template | Device | Description |
 |----------|--------|-------------|
-| `tun` | 📱 Phone / PC (Android, iOS, Windows, macOS) | TUN interface, auto traffic capture, DNS hijack |
+| `tun` | 📱 Phone / PC (Android, iOS, Linux, macOS) | TUN interface, auto traffic capture, DNS hijack |
 | `tun_fakeip` | 📱 Phone / PC (advanced) | Same but with FakeIP DNS — faster resolution |
+| `windows` | 🪟 Windows Service | WinTun driver + system HTTP proxy. Requires Administrator |
 | `tproxy` | 📡 Router (OpenWRT / Linux) | TProxy/redirect, no TUN. Ports 7892/7893. Needs iptables |
 | `socks` | 🔌 Manual proxy | SOCKS5 on 7891, HTTP on 7890. Configure apps manually |
 
@@ -2130,13 +2155,35 @@ When downloading a client config (bot: "Download config" button), choose a devic
 - `auto_route: true` — all system traffic automatically routes through it
 - `strict_route: true` — prevents leaks
 - DNS hijack — intercepts DNS queries, processes via Sing-Box
-- Suitable for Android/iOS (sing-box client app), Windows, macOS
+- Suitable for Android/iOS (sing-box client app), Linux, macOS
 
 ### TUN + FakeIP — `tun_fakeip`
 - Same as TUN plus FakeIP DNS:  
   browser gets fake IP → Sing-Box knows real domain → faster routing
 - Range: `198.18.0.0/15` (IPv4)
 - Best choice for desktop with fast internet
+
+### Windows Service — `windows`
+- TUN via **WinTun driver** (install from [wintun.net](https://www.wintun.net))
+- `stack: system` — Windows system TCP/IP stack
+- `strict_route: true` — blocks DNS leaks (Windows Multihomed DNS Behavior)
+- `platform.http_proxy` — automatically sets system HTTP proxy to 127.0.0.1:7890  
+  (for apps that cannot use TUN directly)
+- Port 7890 — mixed inbound (SOCKS5 + HTTP) as fallback
+- **Run** (as Administrator):  
+  ```
+  sing-box.exe run -c config.json
+  ```
+- **Install as Windows Service** (PowerShell, as Administrator):  
+  ```powershell
+  sc.exe create SingBox binPath= "C:\sing-box\sing-box.exe run -c C:\sing-box\config.json" start= auto
+  sc.exe start SingBox
+  ```
+- **Remove service:**  
+  ```powershell
+  sc.exe stop SingBox
+  sc.exe delete SingBox
+  ```
 
 ### TProxy — `tproxy`
 - For Linux routers (OpenWRT, Debian routers)

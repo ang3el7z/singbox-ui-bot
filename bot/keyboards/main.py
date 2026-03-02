@@ -180,8 +180,9 @@ def kb_rule_key_select(keys: dict) -> InlineKeyboardMarkup:
 
 
 _TEMPLATE_LABELS = {
-    "tun":        "📱 TUN — Phone / PC",
-    "tun_fakeip": "📱 TUN + FakeIP — Phone / PC (advanced)",
+    "tun":        "📱 TUN — Phone / PC (Android, iOS, Linux, macOS)",
+    "tun_fakeip": "📱 TUN + FakeIP — Phone / PC (advanced DNS)",
+    "windows":    "🪟 Windows Service (WinTun + system proxy)",
     "tproxy":     "📡 TProxy — Router (OpenWRT/Linux)",
     "socks":      "🔌 SOCKS5 + HTTP — Manual proxy",
 }

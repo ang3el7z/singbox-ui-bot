@@ -280,12 +280,16 @@ class SingBoxService:
 
     CLIENT_TEMPLATES: dict[str, dict] = {
         "tun": {
-            "label": "TUN — Phone / PC (Android, iOS, Windows, macOS)",
-            "description": "Virtual network interface. Full traffic capture, DNS hijack. Recommended for mobile and desktop.",
+            "label": "TUN — Phone / PC (Android, iOS, Linux, macOS)",
+            "description": "Virtual network interface. Full traffic capture, DNS hijack, strict_route. Recommended for mobile and non-Windows desktop.",
         },
         "tun_fakeip": {
             "label": "TUN + FakeIP — Phone / PC (advanced DNS)",
             "description": "Same as TUN but uses FakeIP for faster DNS resolution. Best for high-performance use.",
+        },
+        "windows": {
+            "label": "🪟 Windows Service (WinTun + system proxy)",
+            "description": "For Windows: TUN with WinTun driver + system HTTP proxy fallback on port 7890. Run sing-box.exe as Administrator or install as a Windows Service.",
         },
         "tproxy": {
             "label": "TProxy — Router (OpenWRT / Linux)",
@@ -480,6 +484,58 @@ class SingBoxService:
                         {"inbound": "dns-in", "outbound": "dns-out"},
                         {"ip_is_private": True, "outbound": "direct"},
                     ],
+                    "final": "proxy",
+                    "auto_detect_interface": True,
+                },
+                "experimental": {"cache_file": {"enabled": True}},
+            }
+
+        elif template == "windows":
+            # Windows Service: TUN (WinTun driver) + system HTTP proxy fallback.
+            # Requires Administrator. Run: sing-box.exe run -c config.json
+            # Or install as service: sc create SingBox binPath= "C:\sing-box\sing-box.exe run -c C:\sing-box\config.json"
+            return {
+                "log": {"level": "info"},
+                "dns": {
+                    "servers": [
+                        {"tag": "dns_proxy", "type": "tls", "server": "8.8.8.8"},
+                        {"tag": "dns_direct", "type": "udp", "server": "223.5.5.5", "detour": "direct"},
+                    ],
+                    "rules": [{"outbound": "any", "server": "dns_direct"}],
+                    "strategy": "ipv4_only",
+                    "final": "dns_proxy",
+                    "independent_cache": True,
+                },
+                "inbounds": [
+                    # HTTP/SOCKS proxy on 127.0.0.1 — fallback for apps that ignore TUN
+                    {
+                        "type": "mixed",
+                        "tag": "mixed-in",
+                        "listen": "127.0.0.1",
+                        "listen_port": 7890,
+                        "sniff": True,
+                    },
+                    # TUN interface — main traffic capture
+                    {
+                        "type": "tun",
+                        "tag": "tun-in",
+                        "address": ["172.19.0.1/30"],
+                        "auto_route": True,
+                        "strict_route": True,   # prevents DNS leaks on Windows (multihomed DNS)
+                        "sniff": True,
+                        "stack": "system",      # WinTun uses system stack
+                        "platform": {
+                            "http_proxy": {
+                                "enabled": True,
+                                "server": "127.0.0.1",
+                                "server_port": 7890,
+                            }
+                        },
+                    },
+                ],
+                "outbounds": common_outbounds,
+                "route": {
+                    "rules": common_route_rules,
                     "final": "proxy",
                     "auto_detect_interface": True,
                 },

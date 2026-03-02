@@ -128,8 +128,9 @@ async def cb_client_sub(cq: CallbackQuery):
     cid = int(cq.data.split("_")[-1])
     await cq.message.answer(
         "📱 Choose config template:\n\n"
-        "• <b>TUN</b> — Phone/PC (Android, iOS, Windows, macOS)\n"
-        "• <b>TUN + FakeIP</b> — Phone/PC with faster DNS\n"
+        "• <b>TUN</b> — Android, iOS, Linux, macOS\n"
+        "• <b>TUN + FakeIP</b> — Same + faster DNS\n"
+        "• <b>Windows</b> — WinTun driver + system proxy (run as Administrator)\n"
         "• <b>TProxy</b> — Linux router / OpenWRT\n"
         "• <b>SOCKS5</b> — Manual proxy, configure apps yourself",
         reply_markup=kb_template_select(cid),
