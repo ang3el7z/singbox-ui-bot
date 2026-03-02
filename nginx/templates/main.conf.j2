@@ -116,9 +116,10 @@ server {
         proxy_read_timeout 120;
     }
 
-    # Subscriptions
-    location {{ sub_path }}/ {
-        proxy_pass         http://app:8080/api/clients/;
+    # Public subscriptions — proxied to /api/sub/{sub_id}?template=
+    # URL: https://domain/{hash}/sub/{sub_id}?template=tun
+    location ~ ^{{ sub_path }}/(.+)$ {
+        proxy_pass         http://app:8080/api/sub/$1$is_args$args;
         proxy_set_header   Host $host;
         proxy_set_header   X-Real-IP $remote_addr;
         proxy_set_header   X-Forwarded-For $proxy_add_x_forwarded_for;

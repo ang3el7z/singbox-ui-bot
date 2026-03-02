@@ -154,6 +154,8 @@ function clientsComponent() {
         selected: null,
         showAdd: false,
         showTmpl: false,
+        showSubUrl: false,
+        subUrls: {},
         tmplClientId: null,
         templates: [],
         form: { name: "", inbound_tag: "", total_gb: 0, expire_days: 0 },
@@ -221,6 +223,25 @@ function clientsComponent() {
             await api.resetStats(c.id);
             await this.select(c);
             this.$dispatch("toast", { msg: "Stats reset", type: "success" });
+        },
+
+        async openSubUrl(c) {
+            try {
+                const data = await api.clientSubUrl(c.id);
+                this.subUrls = data.urls || {};
+                this.showSubUrl = true;
+            } catch (e) {
+                this.$dispatch("toast", { msg: e.message, type: "error" });
+            }
+        },
+
+        async copyUrl(url) {
+            try {
+                await navigator.clipboard.writeText(url);
+                this.$dispatch("toast", { msg: "Copied!", type: "success" });
+            } catch {
+                this.$dispatch("toast", { msg: "Copy failed", type: "error" });
+            }
         },
 
         openTemplatePicker(c) {

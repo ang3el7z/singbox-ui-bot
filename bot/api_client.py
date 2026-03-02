@@ -111,6 +111,7 @@ class ClientsAPI:
     async def templates(self):                return await get("/api/clients/templates")
     async def subscription(self, cid, template="tun"):
         return await get(f"/api/clients/{cid}/subscription", template=template)
+    async def sub_url(self, cid):             return await get(f"/api/clients/{cid}/sub-url")
 
 
 class InboundsAPI:

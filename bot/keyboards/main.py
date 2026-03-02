@@ -80,12 +80,12 @@ def kb_clients_list(clients: list, page: int = 0, page_size: int = 8) -> InlineK
 
 def kb_client_detail(client_id: int) -> InlineKeyboardMarkup:
     return _build(
-        [InlineKeyboardButton(text="🔀 Toggle",      callback_data=f"client_toggle_{client_id}"),
-         InlineKeyboardButton(text="📊 Reset stats", callback_data=f"client_reset_stats_{client_id}")],
-        [InlineKeyboardButton(text="📱 QR",          callback_data=f"client_qr_{client_id}"),
-         InlineKeyboardButton(text="📄 Sub config",  callback_data=f"client_sub_{client_id}")],
-        [InlineKeyboardButton(text="🗑 Delete",       callback_data=f"client_delete_{client_id}"),
-         InlineKeyboardButton(text="⬅️ Back",         callback_data="menu_clients")],
+        [InlineKeyboardButton(text="🔀 Toggle",       callback_data=f"client_toggle_{client_id}"),
+         InlineKeyboardButton(text="📊 Reset stats",  callback_data=f"client_reset_stats_{client_id}")],
+        [InlineKeyboardButton(text="🔗 Sub URL",       callback_data=f"client_suburl_{client_id}"),
+         InlineKeyboardButton(text="📄 Config file",  callback_data=f"client_sub_{client_id}")],
+        [InlineKeyboardButton(text="🗑 Delete",        callback_data=f"client_delete_{client_id}"),
+         InlineKeyboardButton(text="⬅️ Back",          callback_data="menu_clients")],
     )
 
 

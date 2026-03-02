@@ -3,7 +3,8 @@ import uuid as uuid_lib
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -13,6 +14,9 @@ from api.services.singbox import singbox, SingBoxError
 from api.deps import require_any_auth, audit
 
 router = APIRouter()
+
+# ── Separate public router (no auth) ──────────────────────────────────────────
+pub_router = APIRouter()
 
 
 class ClientCreate(BaseModel):
@@ -201,6 +205,50 @@ async def reset_client_stats(
     return {"detail": "Stats reset"}
 
 
+@pub_router.get("/sub/{sub_id}")
+async def public_subscription(
+    sub_id: str,
+    template: str = Query(default="tun"),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Public subscription endpoint — no auth required.
+    Access via: https://domain/{hash}/sub/{sub_id}?template=tun
+
+    Supported templates: tun, tun_fakeip, tproxy, socks
+    Response includes headers for sing-box / clash meta clients.
+    """
+    result = await db.execute(select(Client).where(Client.sub_id == sub_id))
+    c = result.scalar_one_or_none()
+    if not c or not c.enable:
+        raise HTTPException(status_code=404, detail="Subscription not found or disabled")
+
+    if template not in singbox.CLIENT_TEMPLATES:
+        template = "tun"
+
+    inbound = singbox.get_inbound(c.inbound_tag)
+    if not inbound:
+        raise HTTPException(status_code=404, detail="Inbound not found")
+
+    client_dict = {"uuid": c.uuid, "password": c.password, "name": c.name}
+    config = singbox.build_client_config(client_dict, inbound, template)
+
+    import json as _json
+    return JSONResponse(
+        content=config,
+        headers={
+            "Content-Disposition": f'attachment; filename="{c.name}_{template}.json"',
+            "Profile-Title": c.name,
+            "Profile-Update-Interval": "24",   # hours; used by some clients
+            "Subscription-Userinfo": (
+                f"upload={c.upload or 0}; download={c.download or 0}; "
+                f"total={int((c.total_gb or 0) * 1024 ** 3)}; "
+                f"expire={int(c.expiry_time / 1000) if c.expiry_time else 0}"
+            ),
+        },
+    )
+
+
 @router.get("/templates")
 async def list_templates(auth: dict = Depends(require_any_auth)):
     """Return available client config templates."""
@@ -208,6 +256,29 @@ async def list_templates(auth: dict = Depends(require_any_auth)):
         {"id": tid, **meta}
         for tid, meta in singbox.CLIENT_TEMPLATES.items()
     ]
+
+
+@router.get("/{client_id}/sub-url")
+async def get_sub_url(
+    client_id: int,
+    db: AsyncSession = Depends(get_db),
+    auth: dict = Depends(require_any_auth),
+):
+    """Return the public subscription URL(s) for a client."""
+    c = await db.get(Client, client_id)
+    if not c:
+        raise HTTPException(status_code=404, detail="Client not found")
+    from api.services.nginx_service import get_hidden_paths
+    paths = get_hidden_paths()
+    sub_base = paths["subscriptions"].rstrip("/")  # https://domain/{hash}/sub
+    return {
+        "sub_id": c.sub_id,
+        "urls": {
+            tid: f"{sub_base}/{c.sub_id}?template={tid}"
+            for tid in singbox.CLIENT_TEMPLATES
+        },
+        "default_url": f"{sub_base}/{c.sub_id}",
+    }
 
 
 @router.get("/{client_id}/subscription")

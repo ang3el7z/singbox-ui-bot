@@ -75,6 +75,7 @@ const api = {
     deleteClient:  (id)             => apiFetch("DELETE", `/api/clients/${id}`),
     resetStats:    (id)             => apiFetch("POST", `/api/clients/${id}/reset-stats`),
     clientTemplates: ()             => apiFetch("GET",  "/api/clients/templates"),
+    clientSubUrl:  (id)             => apiFetch("GET",  `/api/clients/${id}/sub-url`),
     subscription:  (id, tmpl="tun") => apiFetch("GET",  `/api/clients/${id}/subscription?template=${tmpl}`),
 
     // Inbounds

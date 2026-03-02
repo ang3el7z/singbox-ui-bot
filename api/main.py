@@ -82,6 +82,9 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
 
+    # Public subscription endpoint (no auth — accessed via sub_id token)
+    app.include_router(clients.pub_router, prefix="/api", tags=["subscription"])
+
     # API routers
     app.include_router(auth.router,       prefix="/api/auth",       tags=["auth"])
     app.include_router(server.router,     prefix="/api/server",     tags=["server"])

@@ -275,9 +275,30 @@ tailwind.config = {
               </tbody>
             </table>
             <div class="flex gap-2 flex-wrap">
+              <button class="btn btn-primary" @click="openSubUrl(selected)">🔗 Sub URL</button>
               <button class="btn btn-primary" @click="openTemplatePicker(selected)">📄 Download config</button>
               <button class="btn btn-secondary" @click="resetStats(selected)">📊 Reset stats</button>
               <button class="btn btn-danger" @click="deleteClient(selected)">🗑 Delete</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Subscription URL modal -->
+        <div class="modal-overlay" x-show="showSubUrl" @click.self="showSubUrl=false">
+          <div class="modal-box">
+            <h3 class="font-bold text-white text-lg mb-1">🔗 Subscription Links</h3>
+            <p class="text-slate-400 text-sm mb-4">Paste any link into your sing-box / nekobox / clash-meta app.</p>
+            <div class="flex flex-col gap-3">
+              <template x-for="(url, tmpl) in subUrls" :key="tmpl">
+                <div class="bg-slate-800 rounded p-3">
+                  <div class="text-slate-400 text-xs mb-1 uppercase" x-text="tmpl"></div>
+                  <div class="flex gap-2 items-center">
+                    <code class="text-green-400 text-xs break-all flex-1" x-text="url"></code>
+                    <button class="btn btn-ghost text-xs shrink-0" @click="copyUrl(url)">📋 Copy</button>
+                  </div>
+                </div>
+              </template>
+              <button class="btn btn-ghost" @click="showSubUrl=false">Close</button>
             </div>
           </div>
         </div>

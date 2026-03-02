@@ -87,19 +87,38 @@ async def cb_client_toggle(cq: CallbackQuery):
         await cq.answer(f"❌ {e.detail}", show_alert=True)
 
 
-@router.callback_query(F.data.startswith("client_qr_"))
-async def cb_client_qr(cq: CallbackQuery):
+@router.callback_query(F.data.startswith("client_suburl_"))
+async def cb_client_suburl(cq: CallbackQuery):
+    """Show subscription URL and QR code for direct import into sing-box apps."""
     cid = int(cq.data.split("_")[-1])
     try:
-        sub_cfg = await clients_api.subscription(cid)
-        sub_json = json.dumps(sub_cfg, indent=2)
-        try:
-            qr_file = make_qr(sub_json)
-            await cq.message.answer_photo(qr_file, caption="📱 Scan to import config")
-        except Exception:
-            await cq.message.answer("❌ Failed to generate QR")
+        data = await clients_api.sub_url(cid)
     except APIError as e:
         await cq.message.answer(f"❌ {e.detail}")
+        await cq.answer()
+        return
+
+    default_url = data.get("default_url", "")
+    urls = data.get("urls", {})
+
+    lines = ["🔗 <b>Subscription links</b>\n"]
+    lines.append("Paste any link into your sing-box / nekobox / clash-meta app:\n")
+    for tid, url in urls.items():
+        lines.append(f"<b>{tid}</b>\n<code>{url}</code>\n")
+
+    await cq.message.answer("\n".join(lines), parse_mode="HTML")
+
+    # QR for default (tun) URL
+    if default_url:
+        try:
+            qr_file = make_qr(default_url)
+            await cq.message.answer_photo(
+                qr_file,
+                caption="📱 QR — scan to import subscription (TUN template)",
+            )
+        except Exception:
+            pass
+
     await cq.answer()
 
 
