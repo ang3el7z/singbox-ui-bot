@@ -5,8 +5,10 @@ Values are seeded from .env on first startup by api/main.py:_seed_and_apply_sett
 Supported keys:
   tz        — IANA timezone string (e.g. "Europe/Moscow", "UTC")
   bot_lang  — "ru" or "en"
+  domain    — server domain (e.g. "example.com") — changing triggers nginx reload
 """
 import os
+import re
 import time as _time
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -18,10 +20,12 @@ from api.deps import require_any_auth, audit
 router = APIRouter()
 
 # Keys that are allowed to be read/written via this API
-_ALLOWED = {"tz", "bot_lang"}
+_ALLOWED = {"tz", "bot_lang", "domain"}
+
+_DOMAIN_RE = re.compile(r"^[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z]{2,})+$")
 
 
-# ─── Helpers (also imported by bot handlers) ──────────────────────────────────
+# ─── Helpers (also imported by bot handlers and main.py) ──────────────────────
 
 async def get_setting(key: str, default: str = "") -> str:
     """Read a setting from the AppSetting table (seeded from .env on first startup)."""
@@ -43,19 +47,33 @@ async def set_setting(key: str, value: str) -> None:
         else:
             session.add(AppSetting(key=key, value=value))
         await session.commit()
-    # Apply immediately to the running process
-    _apply_setting(key, value)
+    await _apply_setting(key, value)
 
 
-def _apply_setting(key: str, value: str) -> None:
-    """Apply setting changes to the current process without restart."""
+def _apply_setting_sync(key: str, value: str) -> None:
+    """Synchronous part of apply — env vars only (called at startup)."""
     if key == "tz":
         os.environ["TZ"] = value
         try:
-            _time.tzset()  # Linux/macOS only; no-op on Windows
+            _time.tzset()
         except AttributeError:
-            pass  # Windows — timezone env var won't take effect until process restart
-    # bot_lang is read from DB each time, no action needed here
+            pass
+
+
+async def _apply_setting(key: str, value: str) -> None:
+    """Apply setting change immediately: env vars + side effects (nginx reload)."""
+    _apply_setting_sync(key, value)
+    if key == "domain":
+        # Regenerate nginx config and reload — domain affects server_name, SSL paths, etc.
+        try:
+            from api.services import nginx_service
+            config_text = nginx_service.generate_config(domain=value)
+            nginx_service.write_config(config_text)
+            await nginx_service.reload_nginx()
+        except Exception as e:
+            # Log but don't fail — admin can reload manually
+            import logging
+            logging.getLogger(__name__).warning("nginx reload after domain change failed: %s", e)
 
 
 async def get_all_settings() -> dict:
@@ -63,6 +81,7 @@ async def get_all_settings() -> dict:
     return {
         "tz":       await get_setting("tz"),
         "bot_lang": await get_setting("bot_lang"),
+        "domain":   await get_setting("domain"),
     }
 
 
@@ -92,12 +111,20 @@ async def update_setting(key: str, body: SettingUpdate, auth=Depends(require_any
 
     value = body.value.strip()
 
-    # Basic validation
+    # Validation
     if key == "bot_lang" and value not in ("ru", "en"):
         raise HTTPException(status_code=400, detail="bot_lang must be 'ru' or 'en'")
     if key == "tz" and not value:
         raise HTTPException(status_code=400, detail="tz cannot be empty")
+    if key == "domain":
+        if not _DOMAIN_RE.match(value):
+            raise HTTPException(status_code=400, detail="Invalid domain format (e.g. example.com)")
 
     await set_setting(key, value)
     await audit(auth["actor"], f"setting_update_{key}", f"value={value}")
-    return {"key": key, "value": value, "applied": True}
+
+    extra = {}
+    if key == "domain":
+        extra["note"] = "Nginx config regenerated. Re-issue SSL if domain changed."
+
+    return {"key": key, "value": value, "applied": True, **extra}

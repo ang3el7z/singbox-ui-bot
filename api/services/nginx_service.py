@@ -108,7 +108,19 @@ def generate_config(
     site_enabled: bool = None,
 ) -> str:
     from api.services.ip_ban import get_banned_ips
-    domain = domain or settings.domain
+    if not domain:
+        # Try DB first (single source of truth), fall back to .env
+        import asyncio
+        try:
+            from api.routers.settings_router import get_setting
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                # Can't run coroutine synchronously — use env value; async callers pass domain explicitly
+                domain = settings.domain
+            else:
+                domain = loop.run_until_complete(get_setting("domain")) or settings.domain
+        except Exception:
+            domain = settings.domain
     h = _secret_hash()
     ssl_cert, ssl_key = get_ssl_paths(domain)
     if site_enabled is None:

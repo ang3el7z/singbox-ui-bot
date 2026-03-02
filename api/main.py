@@ -42,27 +42,27 @@ async def _seed_and_apply_settings() -> None:
     On subsequent startups: re-apply whatever is already in the DB.
     """
     from api.database import AppSetting, async_session
-    from api.routers.settings_router import _apply_setting
+    from api.routers.settings_router import _apply_setting_sync
 
-    # All settings that should exist in DB; values come from .env on first run.
+    # All settings with their .env defaults for first-run seeding
     _defaults = {
         "tz":       settings.tz,
         "bot_lang": settings.bot_lang,
+        "domain":   settings.domain,
     }
 
     async with async_session() as session:
         for key, env_value in _defaults.items():
             row = await session.get(AppSetting, key)
             if row is None:
-                # First run — seed from .env
                 session.add(AppSetting(key=key, value=env_value))
         await session.commit()
 
-        # Apply every setting to the running process
+        # Apply every setting to the running process (sync-safe at startup)
         for key in _defaults:
             row = await session.get(AppSetting, key)
             if row:
-                _apply_setting(key, row.value)
+                _apply_setting_sync(key, row.value)
 
 
 async def _ensure_default_web_user() -> None:

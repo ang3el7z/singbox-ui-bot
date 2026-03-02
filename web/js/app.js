@@ -614,7 +614,9 @@ function adminComponent() {
 
 function settingsComponent() {
     return {
-        s: { tz: "", bot_lang: "" },
+        s: { tz: "", bot_lang: "", domain: "" },
+        domainInput: "",
+        domainNote: "",
         loading: false,
         saving: null,
         // Grouped timezones — same catalog as the bot
@@ -665,6 +667,7 @@ function settingsComponent() {
             this.loading = true;
             try {
                 this.s = await api.settingsAll();
+                this.domainInput = this.s.domain || "";
             } catch (e) {
                 this.$dispatch("toast", { msg: e.message, type: "error" });
             } finally { this.loading = false; }
@@ -677,6 +680,22 @@ function settingsComponent() {
                 const r = await api.settingsSet(key, value);
                 this.s[key] = r.value;
                 this.$dispatch("toast", { msg: `${key} → ${r.value}`, type: "success" });
+            } catch (e) {
+                this.$dispatch("toast", { msg: e.message, type: "error" });
+            } finally { this.saving = null; }
+        },
+
+        async saveDomain() {
+            const d = this.domainInput.trim().replace(/^https?:\/\//,"").replace(/\/$/,"");
+            if (!d) return;
+            this.saving = "domain";
+            this.domainNote = "";
+            try {
+                const r = await api.settingsSet("domain", d);
+                this.s.domain = r.value;
+                this.domainInput = r.value;
+                this.domainNote = r.note || "Nginx reloaded.";
+                this.$dispatch("toast", { msg: `Domain → ${r.value}`, type: "success" });
             } catch (e) {
                 this.$dispatch("toast", { msg: e.message, type: "error" });
             } finally { this.saving = null; }

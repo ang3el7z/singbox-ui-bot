@@ -1,12 +1,12 @@
 """
-Bot settings: timezone, language, system info (auto-restart / SSL renewal).
-Admin management is in admin.py — linked from here too.
-All inputs are selection-based to prevent typos.
+Bot settings: timezone, language, domain, system info.
+Admin management is in admin.py — linked from here.
 """
 import asyncio
 from aiogram import Router, F
 from aiogram.types import CallbackQuery, Message
 from aiogram.fsm.context import FSMContext
+from aiogram.fsm.state import State, StatesGroup
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
@@ -14,6 +14,10 @@ from bot.api_client import settings_api, APIError
 from bot.keyboards.main import kb_back
 
 router = Router()
+
+
+class DomainFSM(StatesGroup):
+    waiting = State()
 
 # ─── Timezone catalog ─────────────────────────────────────────────────────────
 # Grouped: (display_label, iana_value)
@@ -62,8 +66,12 @@ _TZ_GROUPS = {
 }
 
 
-def _kb_settings_menu(tz: str, lang: str) -> InlineKeyboardMarkup:
+def _kb_settings_menu(tz: str, lang: str, domain: str) -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
+    builder.row(InlineKeyboardButton(
+        text=f"🌍 Domain: {domain or '—'}",
+        callback_data="settings_domain",
+    ))
     builder.row(InlineKeyboardButton(
         text=f"🕐 Timezone: {tz}",
         callback_data="settings_tz_groups",
@@ -105,20 +113,22 @@ def _kb_lang() -> InlineKeyboardMarkup:
 
 # ─── Entry point ──────────────────────────────────────────────────────────────
 
+async def _settings_menu(cq: CallbackQuery):
+    s = await settings_api.get_all()
+    tz     = s.get("tz",       "UTC")
+    lang   = s.get("bot_lang", "ru")
+    domain = s.get("domain",   "—")
+    await cq.message.edit_text(
+        "⚙️ <b>Settings</b>",
+        reply_markup=_kb_settings_menu(tz, lang, domain),
+        parse_mode="HTML",
+    )
+
+
 @router.callback_query(F.data == "menu_settings")
 async def cb_settings_menu(cq: CallbackQuery, state: FSMContext):
     await state.clear()
-    try:
-        s = await settings_api.get_all()
-        tz   = s.get("tz", "UTC")
-        lang = s.get("bot_lang", "ru")
-    except APIError:
-        tz, lang = "UTC", "ru"
-    await cq.message.edit_text(
-        "⚙️ <b>Settings</b>",
-        reply_markup=_kb_settings_menu(tz, lang),
-        parse_mode="HTML",
-    )
+    await _settings_menu(cq)
 
 
 # ─── Timezone — group → list → save (no manual typing) ────────────────────────
@@ -152,12 +162,7 @@ async def cb_tz_set(cq: CallbackQuery):
     try:
         r = await settings_api.set("tz", iana)
         await cq.answer(f"✅ {r['value']}")
-        s = await settings_api.get_all()
-        await cq.message.edit_text(
-            "⚙️ <b>Settings</b>",
-            reply_markup=_kb_settings_menu(s.get("tz", "UTC"), s.get("bot_lang", "ru")),
-            parse_mode="HTML",
-        )
+        await _settings_menu(cq)
     except APIError as e:
         await cq.answer(f"❌ {e.detail}", show_alert=True)
 
@@ -179,14 +184,47 @@ async def cb_lang_set(cq: CallbackQuery):
     try:
         r = await settings_api.set("bot_lang", lang)
         await cq.answer(f"✅ Language: {r['value']}")
-        s = await settings_api.get_all()
-        await cq.message.edit_text(
-            "⚙️ <b>Settings</b>",
-            reply_markup=_kb_settings_menu(s.get("tz", "UTC"), s.get("bot_lang", "ru")),
-            parse_mode="HTML",
-        )
+        await _settings_menu(cq)
     except APIError as e:
         await cq.answer(f"❌ {e.detail}", show_alert=True)
+
+
+# ─── Domain ───────────────────────────────────────────────────────────────────
+
+@router.callback_query(F.data == "settings_domain")
+async def cb_domain_prompt(cq: CallbackQuery, state: FSMContext):
+    await state.set_state(DomainFSM.waiting)
+    try:
+        cur = (await settings_api.get("domain")).get("value", "")
+    except APIError:
+        cur = ""
+    await cq.message.answer(
+        f"🌍 <b>Change domain</b>\n\n"
+        f"Current: <code>{cur}</code>\n\n"
+        "Enter new domain (e.g. <code>example.com</code>):\n"
+        "<i>Nginx config will be regenerated automatically.\n"
+        "Re-issue SSL separately if the domain actually changed.</i>",
+        parse_mode="HTML",
+        reply_markup=kb_back("menu_settings"),
+    )
+    await cq.answer()
+
+
+@router.message(DomainFSM.waiting)
+async def fsm_domain_set(msg: Message, state: FSMContext):
+    await state.clear()
+    domain = msg.text.strip().lower().removeprefix("https://").removeprefix("http://").rstrip("/")
+    try:
+        r = await settings_api.set("domain", domain)
+        note = r.get("note", "")
+        await msg.answer(
+            f"✅ Domain updated: <code>{r['value']}</code>\n"
+            f"<i>{note}</i>",
+            parse_mode="HTML",
+            reply_markup=kb_back("menu_settings"),
+        )
+    except APIError as e:
+        await msg.answer(f"❌ {e.detail}", reply_markup=kb_back("menu_settings"))
 
 
 # ─── System info ──────────────────────────────────────────────────────────────
