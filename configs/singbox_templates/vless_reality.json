@@ -1,0 +1,29 @@
+{
+  "tag": "~tag~",
+  "type": "vless",
+  "listen": "0.0.0.0",
+  "listen_port": ~port~,
+  "users": [],
+  "tls": {
+    "enabled": true,
+    "server_name": "~sni~",
+    "reality": {
+      "enabled": true,
+      "handshake": {
+        "server": "~sni~",
+        "server_port": 443
+      },
+      "private_key": "~private_key~",
+      "short_id": ["~short_id~"]
+    }
+  },
+  "multiplex": {
+    "enabled": true,
+    "padding": true,
+    "brutal": {
+      "enabled": false,
+      "up_mbps": 100,
+      "down_mbps": 100
+    }
+  }
+}

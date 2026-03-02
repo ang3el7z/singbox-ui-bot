@@ -1,0 +1,46 @@
+# Reference repositories (examples only)
+example/
+
+# Secrets and local config
+.env
+*.env.local
+
+# Runtime data
+data/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+dist/
+build/
+venv/
+.venv/
+
+# Nginx generated/runtime files
+nginx/conf.d/*.conf
+nginx/logs/
+nginx/stubs/custom/
+
+# Database files
+*.db
+*.db-shm
+*.db-wal
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Certificates (managed by certbot/Let's Encrypt)
+data/certs/

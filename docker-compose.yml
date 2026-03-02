@@ -1,0 +1,74 @@
+version: "3.9"
+
+services:
+  bot:
+    build: .
+    container_name: singbox_bot
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      - ./data:/app/data
+      - ./nginx:/app/nginx
+      - ./configs:/app/configs
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /etc/letsencrypt:/etc/letsencrypt:ro
+    ports:
+      - "8080:8080"
+    depends_on:
+      - sui
+      - adguard
+    networks:
+      - singbox_net
+
+  sui:
+    image: alireza7/s-ui:latest
+    container_name: singbox_sui
+    restart: unless-stopped
+    volumes:
+      - ./data/sui:/app/db
+      - ./data/certs:/app/cert
+    ports:
+      - "2095:2095"
+      - "2096:2096"
+    networks:
+      - singbox_net
+
+  adguard:
+    image: adguard/adguardhome:latest
+    container_name: singbox_adguard
+    restart: unless-stopped
+    volumes:
+      - ./data/adguard/work:/opt/adguardhome/work
+      - ./data/adguard/conf:/opt/adguardhome/conf
+    ports:
+      - "3000:3000"
+      - "53:53/tcp"
+      - "53:53/udp"
+    networks:
+      - singbox_net
+
+  nginx:
+    image: nginx:alpine
+    container_name: singbox_nginx
+    restart: unless-stopped
+    volumes:
+      - ./nginx/conf.d:/etc/nginx/conf.d
+      - ./nginx/stubs:/var/www/stubs
+      - ./data/certs:/etc/nginx/certs:ro
+      - /etc/letsencrypt:/etc/letsencrypt:ro
+      - ./nginx/logs:/var/log/nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    depends_on:
+      - sui
+      - bot
+    networks:
+      - singbox_net
+
+networks:
+  singbox_net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
