@@ -378,6 +378,11 @@ post_install() {
 # ─── Main ─────────────────────────────────────────────────────────────────────
 
 main() {
+    # When the script is run via "curl | bash", stdin is the pipe carrying the
+    # script body, so read(1) gets EOF immediately. Reconnect stdin to the
+    # controlling terminal so interactive prompts work correctly.
+    exec < /dev/tty
+
     check_root
     check_os
     collect_input
