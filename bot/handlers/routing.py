@@ -26,6 +26,8 @@ class AddRuleFSM(StatesGroup):
     rule_key = State()
     value = State()
     outbound = State()
+    srs_interval = State()  # only for rule_set type
+    srs_detour   = State()  # only for rule_set type
 
 
 class ImportRulesFSM(StatesGroup):
@@ -96,12 +98,68 @@ async def fsm_rule_value(msg: Message, state: FSMContext):
 @router.callback_query(AddRuleFSM.outbound, F.data.startswith("outbound_"))
 async def fsm_rule_outbound(cq: CallbackQuery, state: FSMContext):
     outbound = cq.data.replace("outbound_", "")
+    await state.update_data(outbound=outbound)
     data = await state.get_data()
+
+    # For rule_set, ask update_interval and download_detour
+    if data.get("rule_key") == "rule_set":
+        await state.set_state(AddRuleFSM.srs_interval)
+        from bot.keyboards.main import kb_srs_interval
+        await cq.message.answer(
+            "⏱ How often should Sing-Box update this rule set?",
+            reply_markup=kb_srs_interval(),
+        )
+        await cq.answer()
+        return
+
     await state.clear()
     try:
         await routing_api.add_rule(data["rule_key"], data["value"], outbound)
         await cq.message.answer(
             f"✅ Rule added: <b>{data['rule_key']}</b> = <code>{data['value']}</code> → {outbound}",
+            parse_mode="HTML",
+            reply_markup=kb_back("menu_routing"),
+        )
+    except APIError as e:
+        await cq.message.answer(f"❌ {e.detail}", reply_markup=kb_back("menu_routing"))
+    await cq.answer()
+
+
+@router.callback_query(AddRuleFSM.srs_interval, F.data.startswith("srsiv_"))
+async def fsm_srs_interval(cq: CallbackQuery, state: FSMContext):
+    interval = cq.data.replace("srsiv_", "")
+    await state.update_data(srs_interval=interval)
+    await state.set_state(AddRuleFSM.srs_detour)
+    from bot.keyboards.main import kb_srs_detour
+    await cq.message.answer(
+        "📥 How should Sing-Box download this rule set?\n\n"
+        "• <b>Direct</b> — download straight from the internet (fast, use if GitHub is reachable)\n"
+        "• <b>Proxy</b> — download via VPN (use if GitHub/CDN is blocked on your server)",
+        reply_markup=kb_srs_detour(),
+        parse_mode="HTML",
+    )
+    await cq.answer()
+
+
+@router.callback_query(AddRuleFSM.srs_detour, F.data.startswith("srsdt_"))
+async def fsm_srs_detour(cq: CallbackQuery, state: FSMContext):
+    detour = cq.data.replace("srsdt_", "")
+    data = await state.get_data()
+    await state.clear()
+    interval = data.get("srs_interval", "1d")
+    outbound = data.get("outbound", "proxy")
+    url = data.get("value", "")
+
+    # Build tag from URL
+    import hashlib
+    tag = "custom_" + hashlib.md5(url.encode()).hexdigest()[:8]
+    try:
+        from bot.api_client import routing_api as rapi
+        await rapi.add_rule_set_full(tag, url, "binary" if url.endswith(".srs") else "source", detour, interval)
+        await cq.message.answer(
+            f"✅ Rule set added:\n"
+            f"URL: <code>{url}</code>\n"
+            f"Outbound: {outbound} | Interval: {interval} | Download: {detour}",
             parse_mode="HTML",
             reply_markup=kb_back("menu_routing"),
         )

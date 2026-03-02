@@ -24,7 +24,8 @@ class RuleSetCreate(BaseModel):
     tag: str
     url: str
     format: Literal["binary", "source"] = "binary"
-    download_detour: str = "direct"
+    download_detour: str = "direct"   # "direct" or "proxy" (use proxy if GitHub is blocked)
+    update_interval: str = "1d"       # "1h","6h","12h","1d","7d","30d"
 
 
 @router.get("/outbounds")
@@ -87,6 +88,7 @@ async def add_rule_set(body: RuleSetCreate, auth: dict = Depends(require_any_aut
             "format": body.format,
             "url": body.url,
             "download_detour": body.download_detour,
+            "update_interval": body.update_interval,
         })
         singbox.write_config(cfg)
         await singbox.reload()

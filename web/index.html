@@ -275,9 +275,25 @@ tailwind.config = {
               </tbody>
             </table>
             <div class="flex gap-2 flex-wrap">
-              <button class="btn btn-primary" @click="downloadSub(selected)">📄 Download config</button>
+              <button class="btn btn-primary" @click="openTemplatePicker(selected)">📄 Download config</button>
               <button class="btn btn-secondary" @click="resetStats(selected)">📊 Reset stats</button>
               <button class="btn btn-danger" @click="deleteClient(selected)">🗑 Delete</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Template picker modal -->
+        <div class="modal-overlay" x-show="showTmpl" @click.self="showTmpl=false">
+          <div class="modal-box">
+            <h3 class="font-bold text-white text-lg mb-4">📄 Select Config Template</h3>
+            <div class="flex flex-col gap-3">
+              <template x-for="t in templates" :key="t.id">
+                <button class="btn btn-secondary text-left w-full" @click="downloadSub(t.id)">
+                  <div class="font-semibold text-sm" x-text="t.label"></div>
+                  <div class="text-slate-400 text-xs mt-1" x-text="t.description"></div>
+                </button>
+              </template>
+              <button class="btn btn-ghost" @click="showTmpl=false">Cancel</button>
             </div>
           </div>
         </div>

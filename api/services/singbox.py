@@ -183,6 +183,7 @@ class SingBoxService:
                 "format": "binary" if value.endswith(".srs") else "source",
                 "url": value,
                 "download_detour": "direct",
+                "update_interval": "1d",
             })
             target = self._find_or_create_rule(rules, outbound, "rule_set")
             target["rule_set"].append(tag)
@@ -275,81 +276,244 @@ class SingBoxService:
         ok, out = await self._exec(["sing-box", "generate", "rand", "--hex", "8"])
         return out.strip() if ok else "abcdef01"
 
-    # ─── Subscription ─────────────────────────────────────────────────────────
+    # ─── Client config templates ──────────────────────────────────────────────
 
-    def build_client_config(self, client_data: dict, inbound: dict) -> dict:
-        """
-        Build a client-side sing-box config for a given client + inbound.
-        Returns a dict ready to be serialized as JSON.
-        """
-        from api.routers.settings_router import get_runtime
-        domain = get_runtime("domain")
+    CLIENT_TEMPLATES: dict[str, dict] = {
+        "tun": {
+            "label": "TUN — Phone / PC (Android, iOS, Windows, macOS)",
+            "description": "Virtual network interface. Full traffic capture, DNS hijack. Recommended for mobile and desktop.",
+        },
+        "tun_fakeip": {
+            "label": "TUN + FakeIP — Phone / PC (advanced DNS)",
+            "description": "Same as TUN but uses FakeIP for faster DNS resolution. Best for high-performance use.",
+        },
+        "tproxy": {
+            "label": "TProxy — Router (OpenWRT / Linux)",
+            "description": "Transparent proxy via TProxy/redirect. For Linux routers; no TUN interface needed.",
+        },
+        "socks": {
+            "label": "SOCKS5 + HTTP — Manual proxy",
+            "description": "Simple proxy on ports 7891 (SOCKS5) and 7890 (HTTP). No auto-routing; configure apps manually.",
+        },
+    }
 
+    def _build_outbound(self, client_data: dict, inbound: dict, domain: str) -> dict:
+        """Build the proxy outbound block for a given protocol."""
         proto = inbound.get("type", "vless")
         port = inbound.get("listen_port", 443)
         tls = inbound.get("tls", {})
         transport = inbound.get("transport", {})
 
-        outbound: dict = {
-            "tag": "proxy",
-            "type": proto,
-            "server": domain,
-            "server_port": port,
-        }
+        ob: dict = {"tag": "proxy", "type": proto, "server": domain, "server_port": port}
 
         if proto == "vless":
-            outbound["uuid"] = client_data.get("uuid", "")
-            outbound["flow"] = ""
+            ob["uuid"] = client_data.get("uuid", "")
+            ob["flow"] = ""
             if tls.get("enabled"):
                 reality = tls.get("reality", {})
                 if reality.get("enabled"):
-                    outbound["tls"] = {
+                    ob["tls"] = {
                         "enabled": True,
                         "server_name": tls.get("server_name", domain),
                         "utls": {"enabled": True, "fingerprint": "chrome"},
                         "reality": {
                             "enabled": True,
                             "public_key": reality.get("public_key", ""),
-                            "short_id": reality.get("short_id", [""])[0],
+                            "short_id": (reality.get("short_id", [""])[0]),
                         },
                     }
                 else:
-                    outbound["tls"] = {"enabled": True, "server_name": domain}
+                    ob["tls"] = {"enabled": True, "server_name": domain}
             if transport.get("type") == "ws":
-                outbound["transport"] = {"type": "ws", "path": transport.get("path", "/")}
+                ob["transport"] = {"type": "ws", "path": transport.get("path", "/")}
 
         elif proto == "trojan":
-            outbound["password"] = client_data.get("password", "")
-            outbound["tls"] = {"enabled": True, "server_name": domain}
+            ob["password"] = client_data.get("password", "")
+            ob["tls"] = {"enabled": True, "server_name": domain}
             if transport.get("type") == "ws":
-                outbound["transport"] = {"type": "ws", "path": transport.get("path", "/")}
+                ob["transport"] = {"type": "ws", "path": transport.get("path", "/")}
 
         elif proto == "shadowsocks":
-            outbound["method"] = inbound.get("method", "aes-256-gcm")
-            outbound["password"] = client_data.get("password", "")
+            ob["method"] = inbound.get("method", "aes-256-gcm")
+            ob["password"] = client_data.get("password", "")
 
         elif proto == "hysteria2":
-            outbound["password"] = client_data.get("password", "")
-            outbound["tls"] = {"enabled": True, "server_name": domain}
+            ob["password"] = client_data.get("password", "")
+            ob["tls"] = {"enabled": True, "server_name": domain}
 
         elif proto == "tuic":
-            outbound["uuid"] = client_data.get("uuid", "")
-            outbound["password"] = client_data.get("password", "")
-            outbound["tls"] = {"enabled": True, "server_name": domain}
-            outbound["congestion_control"] = "bbr"
+            ob["uuid"] = client_data.get("uuid", "")
+            ob["password"] = client_data.get("password", "")
+            ob["tls"] = {"enabled": True, "server_name": domain}
+            ob["congestion_control"] = "bbr"
 
-        return {
-            "log": {"level": "info"},
-            "inbounds": [
-                {"tag": "tun-in", "type": "tun", "address": ["172.19.0.1/30"], "auto_route": True, "sniff": True}
-            ],
-            "outbounds": [
-                outbound,
-                {"tag": "direct", "type": "direct"},
-                {"tag": "block",  "type": "block"},
-            ],
-            "route": {"rules": [], "final": "proxy"},
-        }
+        return ob
+
+    def build_client_config(self, client_data: dict, inbound: dict, template: str = "tun") -> dict:
+        """
+        Build a client-side sing-box config for a given client + inbound.
+
+        Templates:
+          tun        — TUN interface (Android/iOS/Windows/macOS)
+          tun_fakeip — TUN + FakeIP DNS (faster DNS, advanced)
+          tproxy     — TProxy transparent proxy (OpenWRT / Linux router)
+          socks      — SOCKS5/HTTP manual proxy (no auto-routing)
+        """
+        from api.routers.settings_router import get_runtime
+        domain = get_runtime("domain")
+
+        proxy_ob = self._build_outbound(client_data, inbound, domain)
+        common_outbounds = [
+            proxy_ob,
+            {"tag": "direct", "type": "direct"},
+            {"tag": "block",  "type": "block"},
+        ]
+        common_route_rules = [
+            {"action": "sniff"},
+            {"protocol": "dns", "action": "hijack-dns"},
+            {"ip_is_private": True, "outbound": "direct"},
+        ]
+
+        if template == "tun":
+            return {
+                "log": {"level": "info"},
+                "dns": {
+                    "servers": [
+                        {"tag": "dns_proxy", "type": "tls", "server": "8.8.8.8"},
+                        {"tag": "dns_direct", "type": "udp", "server": "223.5.5.5", "detour": "direct"},
+                    ],
+                    "rules": [{"outbound": "any", "server": "dns_direct"}],
+                    "strategy": "ipv4_only",
+                    "final": "dns_proxy",
+                    "independent_cache": True,
+                },
+                "inbounds": [{
+                    "type": "tun",
+                    "tag": "tun-in",
+                    "address": ["172.19.0.1/30"],
+                    "auto_route": True,
+                    "strict_route": True,
+                    "sniff": True,
+                }],
+                "outbounds": common_outbounds,
+                "route": {
+                    "rules": common_route_rules,
+                    "final": "proxy",
+                    "auto_detect_interface": True,
+                },
+                "experimental": {"cache_file": {"enabled": True}},
+            }
+
+        elif template == "tun_fakeip":
+            return {
+                "log": {"level": "info"},
+                "dns": {
+                    "servers": [
+                        {"tag": "dns_proxy", "type": "tls", "server": "8.8.8.8"},
+                        {"tag": "dns_direct", "type": "udp", "server": "223.5.5.5", "detour": "direct"},
+                        {"tag": "dns_fakeip", "type": "fakeip",
+                         "inet4_range": "198.18.0.0/15", "inet6_range": "fc00::/18"},
+                    ],
+                    "rules": [
+                        {"query_type": ["A", "AAAA"], "server": "dns_fakeip"},
+                        {"outbound": "any", "server": "dns_direct"},
+                    ],
+                    "strategy": "ipv4_only",
+                    "final": "dns_proxy",
+                    "independent_cache": True,
+                },
+                "inbounds": [{
+                    "type": "tun",
+                    "tag": "tun-in",
+                    "address": ["172.19.0.1/30"],
+                    "auto_route": True,
+                    "strict_route": True,
+                    "sniff": True,
+                }],
+                "outbounds": common_outbounds,
+                "route": {
+                    "rules": common_route_rules,
+                    "final": "proxy",
+                    "auto_detect_interface": True,
+                },
+                "experimental": {"cache_file": {"enabled": True}},
+            }
+
+        elif template == "tproxy":
+            return {
+                "log": {"level": "info"},
+                "dns": {
+                    "servers": [
+                        {"tag": "dns_proxy", "type": "tls", "server": "8.8.8.8"},
+                        {"tag": "dns_direct", "type": "udp", "server": "223.5.5.5", "detour": "direct"},
+                    ],
+                    "rules": [{"outbound": "any", "server": "dns_direct"}],
+                    "final": "dns_proxy",
+                    "independent_cache": True,
+                },
+                "inbounds": [
+                    {
+                        "type": "tproxy",
+                        "tag": "tproxy-in",
+                        "listen": "0.0.0.0",
+                        "listen_port": 7893,
+                        "network": "tcp udp",
+                        "sniff": True,
+                    },
+                    {
+                        "type": "redirect",
+                        "tag": "redirect-in",
+                        "listen": "0.0.0.0",
+                        "listen_port": 7892,
+                        "sniff": True,
+                    },
+                    {
+                        "type": "dns",
+                        "tag": "dns-in",
+                        "listen": "0.0.0.0",
+                        "listen_port": 5353,
+                    },
+                ],
+                "outbounds": common_outbounds + [{"tag": "dns-out", "type": "dns"}],
+                "route": {
+                    "rules": [
+                        {"inbound": "dns-in", "outbound": "dns-out"},
+                        {"ip_is_private": True, "outbound": "direct"},
+                    ],
+                    "final": "proxy",
+                    "auto_detect_interface": True,
+                },
+                "experimental": {"cache_file": {"enabled": True}},
+            }
+
+        elif template == "socks":
+            return {
+                "log": {"level": "info"},
+                "inbounds": [
+                    {
+                        "type": "socks",
+                        "tag": "socks-in",
+                        "listen": "127.0.0.1",
+                        "listen_port": 7891,
+                        "sniff": True,
+                    },
+                    {
+                        "type": "http",
+                        "tag": "http-in",
+                        "listen": "127.0.0.1",
+                        "listen_port": 7890,
+                        "sniff": True,
+                    },
+                ],
+                "outbounds": common_outbounds,
+                "route": {
+                    "rules": [{"ip_is_private": True, "outbound": "direct"}],
+                    "final": "proxy",
+                },
+            }
+
+        # fallback: return tun
+        return self.build_client_config(client_data, inbound, "tun")
 
     # ─── Helper ───────────────────────────────────────────────────────────────
 

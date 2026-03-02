@@ -153,12 +153,16 @@ function clientsComponent() {
         inbounds: [],
         selected: null,
         showAdd: false,
+        showTmpl: false,
+        tmplClientId: null,
+        templates: [],
         form: { name: "", inbound_tag: "", total_gb: 0, expire_days: 0 },
         loading: false,
         search: "",
 
         async init() {
             await this.load();
+            try { this.templates = await api.clientTemplates(); } catch (e) {}
         },
 
         async load() {
@@ -219,14 +223,22 @@ function clientsComponent() {
             this.$dispatch("toast", { msg: "Stats reset", type: "success" });
         },
 
-        async downloadSub(c) {
+        openTemplatePicker(c) {
+            this.tmplClientId = c.id;
+            this.showTmpl = true;
+        },
+
+        async downloadSub(tmpl) {
+            const cid = this.tmplClientId;
+            this.showTmpl = false;
             try {
-                const cfg = await api.subscription(c.id);
+                const cfg = await api.subscription(cid, tmpl);
                 const blob = new Blob([JSON.stringify(cfg, null, 2)], { type: "application/json" });
                 const url = URL.createObjectURL(blob);
                 const a = document.createElement("a");
                 a.href = url;
-                a.download = `${c.name}.json`;
+                const c = this.clients.find(x => x.id === cid);
+                a.download = `${c ? c.name : cid}_${tmpl}.json`;
                 a.click();
                 URL.revokeObjectURL(url);
             } catch (e) {

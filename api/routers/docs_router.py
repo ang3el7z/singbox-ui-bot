@@ -1851,6 +1851,74 @@ geosite:netflix → exit_us-node
 - **После добавления** Sing-Box перезагружается автоматически (graceful reload — соединения не рвутся).
 - **Ноды в outbound** появляются только после настройки Federation + Create Bridge.
 - **`dns`** — используй только для перенаправления DNS-запросов, не для обычного трафика.
+
+---
+
+## SRS: интервал обновления и загрузка
+
+При добавлении SRS-списка через **бот** или **Web UI** выбирается:
+
+### Интервал обновления (`update_interval`)
+
+Как часто Sing-Box будет скачивать свежую версию списка:
+
+| Значение | Описание |
+|----------|---------|
+| `1h`  | Каждый час (для очень динамичных блокировок) |
+| `6h`  | Каждые 6 часов |
+| `12h` | Каждые 12 часов |
+| `1d`  | Раз в сутки (рекомендуется, **по умолчанию**) |
+| `3d`  | Раз в 3 дня |
+| `7d`  | Раз в неделю |
+
+> Если не указать — Sing-Box использует `1d` автоматически.  
+> Обновление происходит в фоне при старте и далее по расписанию.  
+> Кеш хранится в `/etc/sing-box/cache.db`.
+
+### Detour для загрузки (`download_detour`)
+
+Через какой outbound Sing-Box будет скачивать сам файл правил:
+
+| Значение | Когда использовать |
+|----------|--------------------|
+| `direct` | GitHub / CDN доступны напрямую с сервера (**по умолчанию**) |
+| `proxy`  | Если GitHub заблокирован на сервере — скачать через прокси |
+
+---
+
+## Шаблоны конфигурации для клиентов
+
+При скачивании конфига клиента (бот: кнопка "Download config") выбирается шаблон устройства.
+
+| Шаблон | Устройство | Описание |
+|--------|-----------|---------|
+| `tun` | 📱 Телефон / ПК (Android, iOS, Windows, macOS) | TUN-интерфейс, автоматический захват трафика, DNS hijack |
+| `tun_fakeip` | 📱 Телефон / ПК (продвинутый) | То же, но с FakeIP DNS — быстрее резолвинг |
+| `tproxy` | 📡 Роутер (OpenWRT / Linux) | TProxy/redirect, без TUN. Порты 7892/7893. Нужна настройка iptables |
+| `socks` | 🔌 Ручной прокси | SOCKS5 на 7891 и HTTP на 7890. Прописать в настройках браузера/приложения |
+
+### TUN (стандартный) — `tun`
+- Поднимает виртуальный сетевой интерфейс
+- `auto_route: true` — весь трафик системы автоматически идёт через него
+- `strict_route: true` — предотвращает утечки
+- DNS hijack — перехватывает DNS-запросы, отправляет через Sing-Box
+- Подходит для Android/iOS (sing-box client app), Windows, macOS
+
+### TUN + FakeIP — `tun_fakeip`
+- Всё то же, плюс FakeIP DNS:  
+  браузер получает фейковый IP → Sing-Box знает реальный домен → быстрее маршрутизация
+- Диапазон: `198.18.0.0/15` (IPv4)
+- Лучший выбор для десктопа при быстром интернете
+
+### TProxy — `tproxy`
+- Для Linux-роутеров (OpenWRT, Debian-роутеры)
+- Запускается как сервис, iptables перенаправляет трафик на порты 7892/7893
+- Пример iptables для OpenWRT — см. документацию sing-box official
+
+### SOCKS5 — `socks`
+- Простейший вариант: Sing-Box слушает 127.0.0.1:7891 (SOCKS5) и :7890 (HTTP)
+- Нет автоматического перехвата — вручную прописать в браузере / приложении
+- Полезен для тестирования или точечного проксирования
 """,
     "en": """
 # Routing, SRS Rule Sets and Node-based Routing
@@ -2011,6 +2079,74 @@ geosite:netflix → exit_us-node
 - **After adding** — Sing-Box reloads automatically (graceful reload — no connection drops).
 - **Node outbounds** only appear after setting up Federation + Create Bridge.
 - **`dns`** — use only for DNS query forwarding, not for regular traffic.
+
+---
+
+## SRS: update interval and download detour
+
+When adding an SRS rule set (bot or Web UI), you choose:
+
+### Update interval (`update_interval`)
+
+How often Sing-Box re-downloads the rule set:
+
+| Value | Description |
+|-------|-------------|
+| `1h`  | Every hour (very dynamic blocklists) |
+| `6h`  | Every 6 hours |
+| `12h` | Every 12 hours |
+| `1d`  | Once per day (recommended, **default**) |
+| `3d`  | Every 3 days |
+| `7d`  | Weekly |
+
+> If not set — Sing-Box defaults to `1d`.  
+> Updates happen in background at startup and then on schedule.  
+> Cache is stored in `/etc/sing-box/cache.db`.
+
+### Download detour (`download_detour`)
+
+Which outbound Sing-Box uses to download the rule set file itself:
+
+| Value | When to use |
+|-------|------------|
+| `direct` | GitHub / CDN reachable directly from server (**default**) |
+| `proxy`  | GitHub is blocked on the server — download via proxy |
+
+---
+
+## Client config templates
+
+When downloading a client config (bot: "Download config" button), choose a device template:
+
+| Template | Device | Description |
+|----------|--------|-------------|
+| `tun` | 📱 Phone / PC (Android, iOS, Windows, macOS) | TUN interface, auto traffic capture, DNS hijack |
+| `tun_fakeip` | 📱 Phone / PC (advanced) | Same but with FakeIP DNS — faster resolution |
+| `tproxy` | 📡 Router (OpenWRT / Linux) | TProxy/redirect, no TUN. Ports 7892/7893. Needs iptables |
+| `socks` | 🔌 Manual proxy | SOCKS5 on 7891, HTTP on 7890. Configure apps manually |
+
+### TUN (standard) — `tun`
+- Creates a virtual network interface
+- `auto_route: true` — all system traffic automatically routes through it
+- `strict_route: true` — prevents leaks
+- DNS hijack — intercepts DNS queries, processes via Sing-Box
+- Suitable for Android/iOS (sing-box client app), Windows, macOS
+
+### TUN + FakeIP — `tun_fakeip`
+- Same as TUN plus FakeIP DNS:  
+  browser gets fake IP → Sing-Box knows real domain → faster routing
+- Range: `198.18.0.0/15` (IPv4)
+- Best choice for desktop with fast internet
+
+### TProxy — `tproxy`
+- For Linux routers (OpenWRT, Debian routers)
+- Runs as a service, iptables redirects traffic to ports 7892/7893
+- See the official sing-box documentation for OpenWRT iptables examples
+
+### SOCKS5 — `socks`
+- Simplest option: Sing-Box listens on 127.0.0.1:7891 (SOCKS5) and :7890 (HTTP)
+- No automatic traffic capture — configure manually in browser/app settings
+- Useful for testing or per-app proxying
 """,
 }
 

@@ -39,7 +39,7 @@ services:
 
   # ── Sing-Box ─────────────────────────────────────────────────────────────────
   singbox:
-    image: ghcr.io/sagernet/sing-box:latest
+    image: ghcr.io/sagernet/sing-box:1.11
     container_name: singbox_core
     restart: unless-stopped
     volumes:

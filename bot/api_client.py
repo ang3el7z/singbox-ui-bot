@@ -108,7 +108,9 @@ class ClientsAPI:
     async def update(self, cid, **kw):        return await patch(f"/api/clients/{cid}", json=kw)
     async def delete(self, cid):              return await delete(f"/api/clients/{cid}")
     async def reset_stats(self, cid):         return await post(f"/api/clients/{cid}/reset-stats")
-    async def subscription(self, cid):        return await get(f"/api/clients/{cid}/subscription")
+    async def templates(self):                return await get("/api/clients/templates")
+    async def subscription(self, cid, template="tun"):
+        return await get(f"/api/clients/{cid}/subscription", template=template)
 
 
 class InboundsAPI:
@@ -126,6 +128,8 @@ class RoutingAPI:
     async def add_rule(self, key, val, out):  return await post("/api/routing/rules", json={"rule_key": key, "value": val, "outbound": out})
     async def del_rule(self, key, val):       return await delete("/api/routing/rules", rule_key=key, value=val)
     async def add_rule_set(self, tag, url, fmt="binary"): return await post("/api/routing/rule-sets", json={"tag": tag, "url": url, "format": fmt})
+    async def add_rule_set_full(self, tag, url, fmt="binary", download_detour="direct", update_interval="1d"):
+        return await post("/api/routing/rule-sets", json={"tag": tag, "url": url, "format": fmt, "download_detour": download_detour, "update_interval": update_interval})
     async def del_rule_set(self, tag):        return await delete(f"/api/routing/rule-sets/{tag}")
     async def export(self):                   return await get("/api/routing/export")
     async def import_rules(self, data):       return await post("/api/routing/import", json=data)

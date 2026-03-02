@@ -179,6 +179,42 @@ def kb_rule_key_select(keys: dict) -> InlineKeyboardMarkup:
     return builder.as_markup()
 
 
+_TEMPLATE_LABELS = {
+    "tun":        "📱 TUN — Phone / PC",
+    "tun_fakeip": "📱 TUN + FakeIP — Phone / PC (advanced)",
+    "tproxy":     "📡 TProxy — Router (OpenWRT/Linux)",
+    "socks":      "🔌 SOCKS5 + HTTP — Manual proxy",
+}
+
+_SRS_INTERVALS = ["1h", "6h", "12h", "1d", "3d", "7d"]
+_SRS_DETOURS   = [("direct", "⬇️ Direct (GitHub reachable)"), ("proxy", "🔀 Proxy (if GitHub blocked)")]
+
+
+def kb_template_select(client_id: int) -> InlineKeyboardMarkup:
+    builder = InlineKeyboardBuilder()
+    for tid, label in _TEMPLATE_LABELS.items():
+        builder.button(text=label, callback_data=f"sub_tmpl_{client_id}_{tid}")
+    builder.adjust(1)
+    builder.row(InlineKeyboardButton(text="⬅️ Cancel", callback_data=f"client_detail_{client_id}"))
+    return builder.as_markup()
+
+
+def kb_srs_interval() -> InlineKeyboardMarkup:
+    builder = InlineKeyboardBuilder()
+    for iv in _SRS_INTERVALS:
+        builder.button(text=iv, callback_data=f"srsiv_{iv}")
+    builder.adjust(3)
+    builder.row(InlineKeyboardButton(text="⬅️ Cancel", callback_data="menu_routing"))
+    return builder.as_markup()
+
+
+def kb_srs_detour() -> InlineKeyboardMarkup:
+    return _build(
+        [InlineKeyboardButton(text=label, callback_data=f"srsdt_{key}") for key, label in _SRS_DETOURS],
+        [InlineKeyboardButton(text="⬅️ Cancel", callback_data="menu_routing")],
+    )
+
+
 _OUTBOUND_ICONS = {
     "proxy":  "🚀",
     "direct": "✅",

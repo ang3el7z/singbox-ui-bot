@@ -68,13 +68,14 @@ const api = {
     keypair:       ()           => apiFetch("GET",  "/api/server/keypair"),
 
     // Clients
-    clients:       ()           => apiFetch("GET",  "/api/clients/"),
-    client:        (id)         => apiFetch("GET",  `/api/clients/${id}`),
-    createClient:  (data)       => apiFetch("POST", "/api/clients/", data),
-    updateClient:  (id, data)   => apiFetch("PATCH", `/api/clients/${id}`, data),
-    deleteClient:  (id)         => apiFetch("DELETE", `/api/clients/${id}`),
-    resetStats:    (id)         => apiFetch("POST", `/api/clients/${id}/reset-stats`),
-    subscription:  (id)         => apiFetch("GET",  `/api/clients/${id}/subscription`),
+    clients:       ()               => apiFetch("GET",  "/api/clients/"),
+    client:        (id)             => apiFetch("GET",  `/api/clients/${id}`),
+    createClient:  (data)           => apiFetch("POST", "/api/clients/", data),
+    updateClient:  (id, data)       => apiFetch("PATCH", `/api/clients/${id}`, data),
+    deleteClient:  (id)             => apiFetch("DELETE", `/api/clients/${id}`),
+    resetStats:    (id)             => apiFetch("POST", `/api/clients/${id}/reset-stats`),
+    clientTemplates: ()             => apiFetch("GET",  "/api/clients/templates"),
+    subscription:  (id, tmpl="tun") => apiFetch("GET",  `/api/clients/${id}/subscription?template=${tmpl}`),
 
     // Inbounds
     inbounds:      ()           => apiFetch("GET",  "/api/inbounds/"),

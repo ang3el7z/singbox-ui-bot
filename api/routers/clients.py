@@ -201,13 +201,28 @@ async def reset_client_stats(
     return {"detail": "Stats reset"}
 
 
+@router.get("/templates")
+async def list_templates(auth: dict = Depends(require_any_auth)):
+    """Return available client config templates."""
+    return [
+        {"id": tid, **meta}
+        for tid, meta in singbox.CLIENT_TEMPLATES.items()
+    ]
+
+
 @router.get("/{client_id}/subscription")
 async def get_subscription(
     client_id: int,
+    template: str = "tun",
     db: AsyncSession = Depends(get_db),
     auth: dict = Depends(require_any_auth),
 ):
-    """Return client-side config for this client."""
+    """Return client-side sing-box config.
+
+    template: tun | tun_fakeip | tproxy | socks
+    """
+    if template not in singbox.CLIENT_TEMPLATES:
+        raise HTTPException(status_code=400, detail=f"Unknown template '{template}'. Available: {list(singbox.CLIENT_TEMPLATES)}")
     c = await db.get(Client, client_id)
     if not c:
         raise HTTPException(status_code=404, detail="Client not found")
@@ -215,5 +230,5 @@ async def get_subscription(
     if not inbound:
         raise HTTPException(status_code=404, detail="Inbound not found")
     client_dict = {"uuid": c.uuid, "password": c.password, "name": c.name}
-    config = singbox.build_client_config(client_dict, inbound)
+    config = singbox.build_client_config(client_dict, inbound, template)
     return config
