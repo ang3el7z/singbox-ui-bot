@@ -267,9 +267,36 @@ setup_sysctl() {
 }
 
 
+# ─── Free ports 80/443 (like vpnbot: only Docker nginx binds them) ──────────────
+#
+# If nginx or apache is running on the host, our container cannot bind 80/443.
+# Stop and disable them so Docker has exclusive use for masking.
+
+release_ports_80_443() {
+    local freed=
+    for svc in nginx apache2; do
+        if systemctl is-active --quiet "$svc" 2>/dev/null; then
+            info "Stopping and disabling $svc on host so Docker can use ports 80/443..."
+            systemctl stop "$svc" 2>/dev/null || true
+            systemctl disable "$svc" 2>/dev/null || true
+            freed=1
+        fi
+    done
+    if [[ -n "$freed" ]]; then
+        info "Ports 80/443 released for Docker."
+    fi
+    # Optional: check if something else is still listening
+    if command -v ss &>/dev/null; then
+        if ss -tlnp 2>/dev/null | grep -q -E ':80\s|:443\s'; then
+            warn "Port 80 or 443 still in use. Free it manually (e.g. stop the process) and run: docker compose up -d"
+        fi
+    fi
+}
+
 # ─── Deploy ───────────────────────────────────────────────────────────────────
 
 deploy() {
+    release_ports_80_443
     info "Starting containers..."
     cd "$INSTALL_DIR"
     docker compose pull --quiet || true

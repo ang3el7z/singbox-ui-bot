@@ -11,13 +11,12 @@ volumes:
 services:
 
   # ── App (FastAPI + aiogram bot) ──────────────────────────────────────────────
+  # No host ports — access only via nginx on 80/443 (masking, same as vpnbot).
   app:
     build: .
     container_name: singbox_app
     restart: unless-stopped
     env_file: .env
-    ports:
-      - "8080:8080"       # FastAPI / bot webhook
     volumes:
       - ./config/sing-box:/etc/sing-box       # shared with singbox container
       - ./data:/app/host_data                 # ssh_port etc. — read by manage.sh on host
@@ -69,8 +68,7 @@ services:
     ports:
       - "53:53/tcp"
       - "53:53/udp"
-      - "3000:3000"   # AdGuard Web UI (internal only, proxied via Nginx)
-                      # AdGuard DoH: http://adguard:3000/dns-query (used by Nginx DoH proxy)
+    # Web UI only via nginx at secret path (no 3000 on host, same as vpnbot)
     networks:
       - singbox_net
 
