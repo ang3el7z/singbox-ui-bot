@@ -257,7 +257,7 @@ setup_sysctl() {
         sed -i 's/^#*\s*net\.ipv4\.ip_forward\s*=.*/net.ipv4.ip_forward=1/' /etc/sysctl.conf
     fi
 
-    # Same for IPv6 forwarding (needed for dual-stack VPN setups)
+    # Same for IPv6 forwarding (needed for dual-stack deployments)
     sysctl -w net.ipv6.conf.all.forwarding=1 >/dev/null 2>&1 || true
     if ! grep -q "net.ipv6.conf.all.forwarding" /etc/sysctl.conf 2>/dev/null; then
         echo "net.ipv6.conf.all.forwarding=1" >> /etc/sysctl.conf
@@ -269,7 +269,7 @@ setup_sysctl() {
 }
 
 
-# ─── Free ports 80/443 (like vpnbot: only Docker nginx binds them) ──────────────
+# ─── Free ports 80/443 (Docker nginx should bind them exclusively) ──────────────
 #
 # If nginx or apache is running on the host, our container cannot bind 80/443.
 # Stop and disable them so Docker has exclusive use for masking.

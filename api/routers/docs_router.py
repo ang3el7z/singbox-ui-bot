@@ -26,7 +26,7 @@ _DOCS["overview"] = {
 
 ### Что это такое
 
-**Singbox UI Bot** — это система управления VPN-сервером на базе [Sing-Box](https://github.com/SagerNet/sing-box) с двумя интерфейсами:
+**Singbox UI Bot** — это система управления сетевым шлюзом на базе [Sing-Box](https://github.com/SagerNet/sing-box) с двумя интерфейсами:
 
 - **Telegram-бот** — управление через мессенджер с любого устройства
 - **Web UI** — браузерная панель управления на том же сервере
@@ -39,12 +39,12 @@ _DOCS["overview"] = {
 
 | Проблема | Решение |
 |----------|---------|
-| Нужно управлять VPN-клиентами удалённо | Telegram-бот доступен с любого телефона |
+| Нужно управлять клиентскими профилями удалённо | Telegram-бот доступен с любого телефона |
 | Telegram может быть заблокирован | Web UI работает напрямую через браузер |
 | Сложно настраивать Sing-Box вручную | Бот/UI автоматически пишет config.json |
 | Нужен DNS-фильтр для рекламы | Встроенная интеграция с AdGuard Home |
 | Один сервер — мало | Федерация позволяет объединить серверы в сеть |
-| Сервер выглядит как VPN-сервер | Nginx с заглушкой скрывает назначение |
+| Назначение сервера не должно бросаться в глаза | Nginx с заглушкой скрывает роль сервиса |
 
 ---
 
@@ -81,7 +81,7 @@ _DOCS["overview"] = {
           │
           ▼
    ┌─────────────┐
-   │  Sing-Box   │  ← VPN-ядро (отдельный контейнер)
+   │  Sing-Box   │  ← сетевое ядро (отдельный контейнер)
    │  контейнер  │    читает config.json
    └─────────────┘
 ```
@@ -97,7 +97,7 @@ _DOCS["overview"] = {
 | Контейнер | Образ | Порты | Роль |
 |-----------|-------|-------|------|
 | `singbox_app` | собственный Python 3.11 | `8080` | FastAPI + aiogram в одном процессе |
-| `singbox_core` | ghcr.io/sagernet/sing-box | сетевые порты VPN | VPN-ядро, читает config.json |
+| `singbox_core` | ghcr.io/sagernet/sing-box | транспортные порты | сетевое ядро, читает config.json |
 | `singbox_adguard` | adguard/adguardhome | `53`, `3000` | DNS-сервер с фильтрацией |
 | `singbox_nginx` | nginx:alpine | `80`, `443` | Reverse proxy, SSL, публичный сайт |
 
@@ -105,7 +105,7 @@ _DOCS["overview"] = {
 
 | Таблица | Содержимое |
 |---------|-----------|
-| `clients` | VPN-пользователи: имя, uuid/пароль, лимиты, статистика |
+| `clients` | Клиентские профили: имя, uuid/пароль, лимиты, статистика |
 | `inbounds` | Метаданные inbound-конфигураций |
 | `web_users` | Учётные записи Web UI |
 | `admins` | Telegram-администраторы (первый — из мастера /start) |
@@ -177,7 +177,7 @@ _DOCS["overview"] = {
 - Удаление inbound (вместе с пользователями)
 - Просмотр конфигурации
 
-#### 👥 Clients (пользователи VPN)
+#### 👥 Clients (клиентские профили)
 - Создание с выбором протокола, лимита трафика, срока действия
 - Просмотр статистики (upload/download)
 - Скачать client-side config.json для импорта в Sing-Box app
@@ -211,7 +211,7 @@ _DOCS["overview"] = {
 #### 🔗 Federation
 - Добавление удалённых серверов-нод
 - Ping всех нод
-- Создание bridge-цепочки (multi-hop VPN)
+- Создание bridge-цепочки (multi-hop маршрут)
 - Просмотр топологии сети
 
 #### 👑 Admin
@@ -239,7 +239,7 @@ _DOCS["overview"] = {
     "en": """
 ### What is this
 
-**Singbox UI Bot** is a management system for a [Sing-Box](https://github.com/SagerNet/sing-box) VPN server with two interfaces:
+**Singbox UI Bot** is a management system for a [Sing-Box](https://github.com/SagerNet/sing-box) network gateway with two interfaces:
 
 - **Telegram Bot** — manage via messenger from any device
 - **Web UI** — browser-based admin panel on the same server
@@ -252,12 +252,12 @@ Both interfaces share **one backend (FastAPI)** and have **exactly the same func
 
 | Problem | Solution |
 |---------|----------|
-| Need to manage VPN clients remotely | Telegram bot works from any phone |
+| Need to manage client profiles remotely | Telegram bot works from any phone |
 | Telegram might be blocked | Web UI works directly in a browser |
 | Manually editing Sing-Box config is hard | Bot/UI writes config.json automatically |
 | Need DNS-based ad blocking | Built-in AdGuard Home integration |
 | One server is not enough | Federation lets you link servers into a network |
-| Server looks like a VPN server | Nginx with a stub site hides its purpose |
+| Server purpose should stay unobtrusive | Nginx with a stub site hides the service role |
 
 ---
 
@@ -294,7 +294,7 @@ Both interfaces share **one backend (FastAPI)** and have **exactly the same func
           │
           ▼
    ┌─────────────┐
-   │  Sing-Box   │  ← VPN core (separate container)
+   │  Sing-Box   │  ← network core (separate container)
    │  container  │    reads config.json
    └─────────────┘
 ```
@@ -310,7 +310,7 @@ Both interfaces share **one backend (FastAPI)** and have **exactly the same func
 | Container | Image | Ports | Role |
 |-----------|-------|-------|------|
 | `singbox_app` | Custom Python 3.11 | `8080` | FastAPI + aiogram in one process |
-| `singbox_core` | ghcr.io/sagernet/sing-box | VPN ports | VPN core, reads config.json |
+| `singbox_core` | ghcr.io/sagernet/sing-box | transport ports | network core, reads config.json |
 | `singbox_adguard` | adguard/adguardhome | `53`, `3000` | DNS server with filtering |
 | `singbox_nginx` | nginx:alpine | `80`, `443` | Reverse proxy, SSL, public site |
 
@@ -318,7 +318,7 @@ Both interfaces share **one backend (FastAPI)** and have **exactly the same func
 
 | Table | Contents |
 |-------|---------|
-| `clients` | VPN users: name, uuid/password, limits, stats |
+| `clients` | Client profiles: name, uuid/password, limits, stats |
 | `inbounds` | Inbound config metadata |
 | `web_users` | Web UI accounts |
 | `admins` | Telegram administrators (first admin registered via /start wizard) |
@@ -404,7 +404,7 @@ Both interfaces share **one backend (FastAPI)** and have **exactly the same func
 #### 🔗 Federation
 - Add remote server nodes
 - Ping all nodes
-- Create bridge chain (multi-hop VPN)
+- Create bridge chain (multi-hop route)
 - View network topology
 
 #### 👑 Admin
@@ -447,7 +447,7 @@ _DOCS["install"] = {
 | Docker | 24+ | последняя версия |
 | Docker Compose | v2+ | последняя версия |
 | Домен | необязателен при установке | A-запись → IP сервера (настраивается через бота) |
-| Порты открыты | 80, 443, 53 (TCP+UDP) | + порты VPN (443, 8443 и т.д.) |
+| Порты открыты | 80, 443, 53 (TCP+UDP) | + транспортные порты (443, 8443 и т.д.) |
 
 > **Домен не нужен заранее.** Установка работает без домена — на IP. Домен, timezone и язык настраиваются через мастер первого запуска `/start` в боте.
 
@@ -466,7 +466,7 @@ curl -fsSL https://raw.githubusercontent.com/ang3el7z/singbox-ui-bot/main/script
 
 > **SSH порт** — по умолчанию 22. Сменить можно в боте: **🖥 Server → 🔐 SSH port**. Чтобы применить на сервере: `singbox-ui-bot firewall`.
 
-> Email для certbot **не нужен** — генерируется автоматически как `admin@{domain}` (как в vpnbot).
+> Email для certbot **не нужен** — генерируется автоматически как `admin@{domain}`.
 
 ---
 
@@ -480,7 +480,7 @@ curl -fsSL https://raw.githubusercontent.com/ang3el7z/singbox-ui-bot/main/script
 
 **Шаг 3 — Домен (на выбор):**
 - `🔗 Использовать X-X-X-X.nip.io` — автоматически работает без DNS, IP сервера определяется автоматически
-- `✏️ Ввести свой домен` — введи `vpn.example.com` текстом
+- `✏️ Ввести свой домен` — введи `edge.example.com` текстом
 - `⏭️ Пропустить` — настроить позже через ⚙️ Настройки
 
 **Результат:** ты зарегистрирован как первый администратор, настройки сохранены в БД.
@@ -638,7 +638,7 @@ ufw --force enable
 ```bash
 # Логи контейнеров
 docker compose logs -f app       # FastAPI + бот
-docker compose logs -f singbox   # VPN ядро
+docker compose logs -f singbox   # сетевое ядро
 docker compose logs -f nginx     # Nginx
 docker compose logs -f adguard   # AdGuard
 
@@ -685,7 +685,7 @@ docker exec singbox_core sing-box check -c /etc/sing-box/config.json
 | Docker | 24+ | latest |
 | Docker Compose | v2+ | latest |
 | Domain | not required at install time | A-record → server IP (set via bot) |
-| Open ports | 80, 443, 53 (TCP+UDP) | + VPN ports (443, 8443 etc.) |
+| Open ports | 80, 443, 53 (TCP+UDP) | + transport ports (443, 8443 etc.) |
 
 > **No domain required upfront.** Installation works on a bare IP. Domain, timezone and language are configured through the first-run `/start` wizard in the bot.
 
@@ -704,7 +704,7 @@ Without the token the script exits with an error. Domain, language, and timezone
 
 > **SSH port** — default is 22. You can change it in the bot: **🖥 Server → 🔐 SSH port**. To apply on the server run: `singbox-ui-bot firewall`.
 
-> Email for certbot is **not required** — auto-generated as `admin@{domain}` (same approach as vpnbot).
+> Email for certbot is **not required** — auto-generated as `admin@{domain}`.
 
 ---
 
@@ -718,7 +718,7 @@ After installation, find your bot in Telegram and send `/start`. A setup wizard 
 
 **Step 3 — Domain (choose one):**
 - `🔗 Use X-X-X-X.nip.io` — works immediately without DNS, server IP is auto-detected
-- `✏️ Enter custom domain` — type `vpn.example.com`
+- `✏️ Enter custom domain` — type `edge.example.com`
 - `⏭️ Skip` — configure later via ⚙️ Settings
 
 **Result:** you are registered as the first administrator, settings saved to DB.
@@ -854,7 +854,7 @@ ufw --force enable
 ```bash
 # Container logs
 docker compose logs -f app       # FastAPI + bot
-docker compose logs -f singbox   # VPN core
+docker compose logs -f singbox   # network core
 docker compose logs -f nginx
 docker compose logs -f adguard
 
@@ -1033,7 +1033,7 @@ curl https://домен/api/server/status \\
 
 #### `POST /api/server/reload` — Перезагрузить конфиг (graceful)
 
-Перечитывает `config.json` без разрыва текущих VPN-соединений.
+Перечитывает `config.json` без разрыва текущих активных соединений.
 
 ```bash
 curl -X POST https://домен/api/server/reload \\
@@ -1166,7 +1166,7 @@ curl -X PATCH https://домен/api/clients/1 \\
     {
       "tag": "proxy",
       "type": "vless",
-      "server": "vpn.example.com",
+      "server": "edge.example.com",
       "server_port": 443,
       "uuid": "550e8400-...",
       "tls": {
@@ -1375,7 +1375,7 @@ curl -X POST https://домен/api/routing/rule-sets \\
 
 #### `POST /api/adguard/sync-clients` — Синхронизировать клиентов
 
-Создаёт записи клиентов в AdGuard для всех VPN-пользователей из БД.
+Создаёт записи клиентов в AdGuard для всех клиентских профилей из БД.
 
 ---
 
@@ -1390,11 +1390,11 @@ curl -X POST https://домен/api/routing/rule-sets \\
     "files": []
   },
   "paths": {
-    "web_ui": "https://vpn.example.com/web/",
-    "subscriptions": "https://vpn.example.com/a1b2c3d4e5f6/sub/",
-    "adguard": "https://vpn.example.com/f6e5d4c3b2a1/adg/",
-    "api": "https://vpn.example.com/abcdef123456/api/",
-    "api_docs": "https://vpn.example.com/api/docs"
+    "web_ui": "https://edge.example.com/web/",
+    "subscriptions": "https://edge.example.com/a1b2c3d4e5f6/sub/",
+    "adguard": "https://edge.example.com/f6e5d4c3b2a1/adg/",
+    "api": "https://edge.example.com/abcdef123456/api/",
+    "api_docs": "https://edge.example.com/api/docs"
   }
 }
 ```
@@ -1503,7 +1503,7 @@ curl -X POST https://домен/api/federation/bridge \\
 
 ```json
 {
-  "master": "vpn.example.com",
+  "master": "edge.example.com",
   "nodes": [
     {"id": 1, "name": "node-amsterdam", "role": "node", "is_active": true, "url": "..."}
   ]
@@ -1700,8 +1700,8 @@ domain_suffix: youtube.com, googlevideo.com, ytimg.com → direct
 
 | Действие | Что происходит |
 |----------|---------------|
-| `proxy` | Через основной VPN outbound |
-| `direct` | Напрямую, без VPN |
+| `proxy` | Через основной outbound |
+| `direct` | Напрямую, в обход основного outbound |
 | `block` | Заблокировать |
 | `dns` | Перенаправить в DNS |
 | `exit_node-name` | ⭐ Через конкретную ноду федерации |
@@ -1713,13 +1713,13 @@ domain_suffix: youtube.com, googlevideo.com, ytimg.com → direct
 
 ## Сценарии использования
 
-### Сценарий 1: Рунет напрямую, остальное через VPN
+### Сценарий 1: Рунет напрямую, остальное через основной outbound
 
 Добавляем SRS-список российских сайтов, выставляем `direct`:
 
 ```
-rule_set:ru-bundle.srs  → direct   ← российские сайты без VPN
-(default)               → proxy    ← весь остальной трафик через VPN
+rule_set:ru-bundle.srs  → direct   ← российские сайты идут напрямую
+(default)               → proxy    ← весь остальной трафик через основной outbound
 ```
 
 Добавить в боте:
@@ -1979,8 +1979,8 @@ If no rule matches — traffic goes via `final` (default: `proxy`).
 
 | Action | What happens |
 |--------|-------------|
-| `proxy` | Through the main VPN outbound |
-| `direct` | Directly, bypassing VPN |
+| `proxy` | Through the main outbound |
+| `direct` | Directly, bypassing the main outbound |
 | `block` | Block the traffic |
 | `dns` | Forward to DNS resolver |
 | `exit_node-name` | ⭐ Through a specific federation node |
@@ -1992,13 +1992,13 @@ If no rule matches — traffic goes via `final` (default: `proxy`).
 
 ## Use cases
 
-### Scenario 1: Russian sites direct, everything else through VPN
+### Scenario 1: Russian sites direct, everything else through the main outbound
 
 Add an SRS rule set with the Russian domains bundle, action `direct`:
 
 ```
-rule_set:ru-bundle.srs  → direct   ← Russian sites without VPN
-(default)               → proxy    ← everything else through VPN
+rule_set:ru-bundle.srs  → direct   ← Russian sites go directly
+(default)               → proxy    ← everything else through the main outbound
 ```
 
 Add in bot:
@@ -2241,7 +2241,7 @@ _DOCS["federation"] = {
 ```
 ┌─────────────────────────────────────────────────────┐
 │                    MASTER сервер                     │
-│  vpn.example.com                                     │
+│  edge.example.com                                    │
 │  ┌─────────────────────────────────────────────┐    │
 │  │  api/ FastAPI                               │    │
 │  │  ┌────────────────────────────────────────┐ │    │
@@ -2324,7 +2324,7 @@ curl -X POST https://нода.example.com/federation/ping \\
 
 #### `node` — Точка выхода
 
-Нода используется как конечная точка VPN. Трафик клиента идёт:
+Нода используется как конечная точка выхода. Трафик клиента идёт:
 ```
 Клиент → MASTER → NODE (выход в интернет)
 ```
@@ -2332,12 +2332,12 @@ curl -X POST https://нода.example.com/federation/ping \\
 Когда мастер создаёт конфиг для этого сценария:
 1. Запрашивает inbounds у ноды через `/federation/inbounds`
 2. Создаёт у себя outbound-конфиг, указывающий на ноду
-3. Создаёт у ноды через `/federation/clients` нового VPN-клиента
+3. Создаёт у ноды через `/federation/clients` новый клиентский профиль
 4. Отдаёт клиенту конфиг, где трафик проксируется через ноду
 
 #### `bridge` — Промежуточный хоп
 
-Нода стоит в середине цепочки. Используется для multi-hop VPN:
+Нода стоит в середине цепочки. Используется для multi-hop маршрута:
 ```
 Клиент → MASTER → BRIDGE 1 → BRIDGE 2 → NODE (выход)
 ```
@@ -2445,7 +2445,7 @@ Content-Type: application/json
 {
   "tag": "bridge-next",
   "type": "vless",
-  "server": "vpn2.example.com",
+  "server": "edge2.example.com",
   "server_port": 443,
   "uuid": "...",
   "tls": {...}
@@ -2459,7 +2459,7 @@ Content-Type: application/json
 Топология показывает схему соединения серверов:
 
 ```
-Master: vpn.example.com
+Master: edge.example.com
 ├── node-amsterdam (node, 🟢 online)  https://amsterdam.example.com
 ├── node-frankfurt (node, 🟢 online)  https://frankfurt.example.com
 └── node-london    (bridge, 🔴 offline) https://london.example.com
@@ -2563,7 +2563,7 @@ Via **Telegram bot**:
 2. Select nodes in order (e.g. node 1 → node 2)
 
 What happens automatically:
-1. Master creates a VPN client on the exit node
+1. Master creates a client profile on the exit node
 2. Configures intermediate node(s) to forward to exit
 3. Writes outbound config to master's `config.json`
 4. Reloads Sing-Box
@@ -2575,7 +2575,7 @@ Result: `Client → master → bridge → exit node → internet`
 ### Viewing Topology
 
 ```
-Master: vpn.example.com
+Master: edge.example.com
 ├── node-amsterdam (node, 🟢 online)
 ├── node-frankfurt (node, 🟢 online)
 └── node-london    (bridge, 🔴 offline)
@@ -2782,8 +2782,8 @@ Sing-Box проверяет правила **сверху вниз** и прим
 
 | Действие | Что происходит |
 |----------|---------------|
-| `proxy` | Трафик идёт через VPN (зашифровано) |
-| `direct` | Трафик идёт напрямую, мимо VPN |
+| `proxy` | Трафик идёт через основной маршрут (зашифровано) |
+| `direct` | Трафик идёт напрямую, мимо основного маршрута |
 | `block` | Трафик заблокирован |
 | `dns` | Перенаправить на DNS-резолвер |
 
@@ -2791,10 +2791,10 @@ Sing-Box проверяет правила **сверху вниз** и прим
 
 #### Практические примеры
 
-**Пример 1: Российские сайты — напрямую, остальное — через VPN**
+**Пример 1: Российские сайты — напрямую, остальное — через основной outbound**
 ```
-rule_set:ru-bundle.srs → direct   (рунет без VPN, через SRS-список)
-default (final)        → proxy    (весь остальной трафик через VPN)
+rule_set:ru-bundle.srs → direct   (рунет идёт напрямую, через SRS-список)
+default (final)        → proxy    (весь остальной трафик идёт через основной outbound)
 ```
 > `geosite`/`geoip` — концепции Xray, в sing-box не поддерживаются.
 > Используй `rule_set` с `.srs` файлом.
@@ -2804,7 +2804,7 @@ default (final)        → proxy    (весь остальной трафик ч
 rule_set: https://github.com/SagerNet/sing-geosite/releases/latest/download/geosite-category-ads-all.srs → block
 ```
 
-**Пример 3: Конкретный домен через VPN**
+**Пример 3: Конкретный домен через основной outbound**
 ```
 domain: blocked-site.com  → proxy
 ```
@@ -2927,7 +2927,7 @@ Federation позволяет объединить несколько серве
 
 ---
 
-#### Режим Bridge (multi-hop VPN)
+#### Режим Bridge (multi-hop маршрут)
 
 Трафик: `клиент → мастер → нода1 (bridge) → нода2 (exit) → интернет`
 
@@ -2961,7 +2961,7 @@ Federation позволяет объединить несколько серве
 
 **Топология:**
 ```
-Master: vpn.example.com
+Master: edge.example.com
 ├── node-amsterdam [node] 🟢
 ├── node-frankfurt [node] 🟢
 └── node-london    [bridge] 🔴
@@ -2996,7 +2996,7 @@ Master: vpn.example.com
 ### Раздел: ⚙️ Settings
 
 **Domain:**
-- Поле ввода домена (например `vpn.example.com`)
+- Поле ввода домена (например `edge.example.com`)
 - После сохранения Nginx автоматически перегенерируется и перезагружается
 - Выпустить SSL нужно отдельно: **Nginx → Issue SSL Certificate**
 

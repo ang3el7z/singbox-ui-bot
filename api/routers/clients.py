@@ -337,8 +337,8 @@ async def winsw_xml(
 
     xml = f"""<service>
     <id>singbox</id>
-    <name>Sing-Box VPN ({c.name})</name>
-    <description>Sing-Box VPN client — managed by singbox-ui-bot</description>
+    <name>Sing-Box Client ({c.name})</name>
+    <description>Sing-Box client profile — managed by singbox-ui-bot</description>
     <executable>%BASE%\\sing-box.exe</executable>
     <arguments>run -c %BASE%\\config.json</arguments>
     <logmode>rotate</logmode>

@@ -39,11 +39,11 @@ SINGBOX_ZIP_URL = (
 )
 SINGBOX_EXE_IN_ZIP = f"sing-box-{SINGBOX_VERSION}-windows-amd64/sing-box.exe"
 
-# WinSW v3 — latest stable alpha (used by vpnbot)
+# WinSW v3 — latest stable alpha
 WINSW_URL = "https://github.com/winsw/winsw/releases/download/v3.0.0-alpha.11/WinSW-x64.exe"
 
 
-# ─── CMD scripts (identical to vpnbot) ───────────────────────────────────────
+# ─── CMD scripts ──────────────────────────────────────────────────────────────
 
 _SCRIPTS: dict[str, str] = {
     "install.cmd":   "winsw3.exe install\r\npause\r\n",
@@ -59,8 +59,8 @@ def _winsw_xml(sub_url: str, client_name: str) -> str:
     return (
         f"<service>\r\n"
         f"    <id>singbox</id>\r\n"
-        f"    <name>Sing-Box VPN ({client_name})</name>\r\n"
-        f"    <description>Sing-Box VPN client — managed by singbox-ui-bot</description>\r\n"
+        f"    <name>Sing-Box Client ({client_name})</name>\r\n"
+        f"    <description>Sing-Box client profile — managed by singbox-ui-bot</description>\r\n"
         f"    <executable>%BASE%\\sing-box.exe</executable>\r\n"
         f"    <arguments>run -c %BASE%\\config.json</arguments>\r\n"
         f"    <logmode>rotate</logmode>\r\n"

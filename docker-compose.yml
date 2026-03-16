@@ -11,7 +11,7 @@ volumes:
 services:
 
   # ── App (FastAPI + aiogram bot) ──────────────────────────────────────────────
-  # No host ports — access only via nginx on 80/443 (masking, same as vpnbot).
+  # No host ports — access only via nginx on 80/443 to reduce exposure.
   app:
     build: .
     container_name: singbox_app
@@ -52,7 +52,7 @@ services:
     command: run -c /etc/sing-box/config.json
     cap_add:
       - NET_ADMIN
-    network_mode: host                        # need host network for VPN
+    network_mode: host                        # host network required for traffic handling
     # NOTE: net.ipv4.ip_forward must be enabled on the HOST, not here.
     # With network_mode: host the container shares the host's network namespace
     # and Docker cannot set sysctls on it. install.sh handles this automatically.
@@ -69,7 +69,7 @@ services:
     ports:
       - "53:53/tcp"
       - "53:53/udp"
-    # Web UI only via nginx at secret path (no 3000 on host, same as vpnbot)
+    # Web UI only via nginx at secret path (no 3000 on host)
     networks:
       - singbox_net
 

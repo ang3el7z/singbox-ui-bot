@@ -290,7 +290,7 @@ async def get_access_logs(lines: int = 50) -> str:
 async def issue_ssl_cert(domain: str, email: str | None = None) -> tuple[bool, str]:
     """
     Issue Let's Encrypt certificate via certbot.
-    If email is not provided, auto-generated as admin@{domain} (same as vpnbot).
+    If email is not provided, auto-generated as admin@{domain}.
     Let's Encrypt uses it only for expiry notifications.
     """
     email = email or f"admin@{domain}"

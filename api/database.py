@@ -39,11 +39,11 @@ class Admin(Base):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
 
 
-# ─── VPN Clients ──────────────────────────────────────────────────────────────
+# ─── Client Profiles ──────────────────────────────────────────────────────────
 
 class Client(Base):
     """
-    Metadata for VPN clients.
+    Metadata for client profiles.
     Credentials (uuid/password) live in sing-box config.json → inbounds[].users.
     This table stores limits, expiry, sub URLs, and traffic counters.
     """

@@ -143,7 +143,7 @@ async def fsm_srs_interval(cq: CallbackQuery, state: FSMContext):
     await cq.message.answer(
         "📥 How should Sing-Box download this rule set?\n\n"
         "• <b>Direct</b> — download straight from the internet (fast, use if GitHub is reachable)\n"
-        "• <b>Proxy</b> — download via VPN (use if GitHub/CDN is blocked on your server)",
+        "• <b>Proxy</b> — download through the proxy path (use if GitHub/CDN is blocked on your server)",
         reply_markup=kb_srs_detour(),
         parse_mode="HTML",
     )

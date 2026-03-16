@@ -1,7 +1,7 @@
 """
 Built-in client subscription templates.
 
-Architecture mirrors vpnbot's sing.json:
+Architecture mirrors the reference sing.json layout:
   - TUN inbound (stack: mixed) for Android/iOS/Linux/macOS/Windows
   - mixed inbound on 127.0.0.1:2080 for HTTP/SOCKS5 proxy mode
   - AdGuard DoH DNS via __dns_url__ placeholder (per-user URL injected at subscription time)
@@ -18,7 +18,7 @@ PRESET_TEMPLATES:  additional presets users can add manually via Web UI (not aut
 """
 import json
 
-# ─── Single default template (mirrors vpnbot's sing.json) ────────────────────
+# ─── Single default template (reference sing.json layout) ─────────────────────
 
 _DEFAULT_CONFIG = {
     "log": {
@@ -96,12 +96,12 @@ _DEFAULT_CONFIG = {
             {"protocol": "dns", "action": "hijack-dns"},
             # 3. Resolve domain names for traffic from the mixed proxy inbound
             {"inbound": "in", "action": "resolve", "strategy": "prefer_ipv4"},
-            # 4. LAN / private IPs always go direct (never through VPN)
+            # 4. LAN / private IPs always go direct
             {"ip_is_private": True, "outbound": "direct"},
             # NOTE: Additional user-defined routing rules are inserted here by the
             # server-side routing system (bot/web UI → singbox config.json route.rules).
         ],
-        "final": "direct",              # Unmatched traffic goes direct (split-tunnel like vpnbot)
+        "final": "direct",              # Unmatched traffic goes direct by default
         "auto_detect_interface": True,
         "override_android_vpn": True,   # Needed on Android for TUN mode
     },

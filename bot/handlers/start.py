@@ -209,9 +209,9 @@ async def setup_dom_custom(cq: CallbackQuery, state: FSMContext):
     lang = data.get("lang", "en")
     await state.set_state(SetupFSM.domain)
     text = (
-        "Введите ваш домен (например: <code>vpn.example.com</code>):"
+        "Введите ваш домен (например: <code>edge.example.com</code>):"
         if lang == "ru"
-        else "Enter your domain (e.g. <code>vpn.example.com</code>):"
+        else "Enter your domain (e.g. <code>edge.example.com</code>):"
     )
     await cq.message.edit_text(text, parse_mode="HTML")
     await cq.answer()

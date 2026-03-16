@@ -1,4 +1,4 @@
-# sing-box VPN server container
+# sing-box server container
 # Pinned version — update SINGBOX_VERSION here to upgrade.
 # We build our own image instead of relying on ghcr.io/sagernet/sing-box
 # so the version is fully under our control.

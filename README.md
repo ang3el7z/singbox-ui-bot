@@ -16,7 +16,7 @@ The bot and web panel are thin clients. Both work through the same API and opera
 ## Main Features
 
 - create and manage `sing-box` inbounds
-- create VPN clients and issue subscription URLs
+- create client profiles and issue subscription URLs
 - build client configs from templates
 - manage Nginx masking site and SSL
 - integrate with AdGuard Home
@@ -29,7 +29,7 @@ The bot and web panel are thin clients. Both work through the same API and opera
 The default Docker setup starts:
 
 - `app` - FastAPI + Telegram bot
-- `singbox` - VPN core
+- `singbox` - network core
 - `adguard` - DNS filtering
 - `nginx` - public entrypoint on `80/443`
 
