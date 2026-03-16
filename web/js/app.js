@@ -1000,6 +1000,8 @@ function maintenanceComponent() {
         suspicious: [],
         newIp: "",
         newReason: "manual",
+        restoreFile: null,
+        restoreCreateBackup: true,
         tab: "backup",   // backup | logs | ipban | windows
         loading: false,
         msg: "",
@@ -1052,6 +1054,30 @@ function maintenanceComponent() {
             try { await api.maintRunBackup(); this.msg = "✅ Backup sent to admins"; }
             catch(e) { this.msg = e.message; }
             finally { this.loading = false; }
+        },
+
+        pickRestoreFile(event) {
+            this.restoreFile = event.target.files?.[0] || null;
+        },
+
+        async startRestore() {
+            if (!this.restoreFile) {
+                this.msg = "Select a recovery ZIP first";
+                return;
+            }
+            if (!confirm("Restore from this ZIP? The stack will restart and the panel may disconnect for up to a minute.")) return;
+
+            this.loading = true;
+            try {
+                const result = await api.maintRestore(this.restoreFile, this.restoreCreateBackup);
+                this.msg = "✅ Restore started. Wait 30-60 seconds, then reconnect.";
+                this.$dispatch("toast", { msg: result.message || "Restore started", type: "success" });
+                this.restoreFile = null;
+                if (this.$refs.restoreZipInput) this.$refs.restoreZipInput.value = "";
+            } catch(e) {
+                this.msg = e.message;
+                this.$dispatch("toast", { msg: e.message, type: "error" });
+            } finally { this.loading = false; }
         },
 
         async setCleanHours(h) {

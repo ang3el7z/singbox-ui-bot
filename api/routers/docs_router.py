@@ -227,7 +227,7 @@ _DOCS["overview"] = {
 - Статус автоперезапуска Docker и автообновления SSL
 
 #### 🔧 Maintenance (Обслуживание)
-- **Backup:** скачать/отправить recovery ZIP (.env, config, app.db, Nginx/AdGuard state), автобэкап по расписанию
+- **Backup:** скачать/отправить recovery ZIP (.env, config, app.db, Nginx/AdGuard state), восстановить его через Web UI или Telegram, автобэкап по расписанию
 - **Logs:** скачать, очистить отдельный или все логи Nginx, авто-очистка по расписанию
 - **IP Ban:** ручная блокировка IP, автоанализ логов на подозрительные IP, массовый бан
 
@@ -421,7 +421,7 @@ Both interfaces share **one backend (FastAPI)** and have **exactly the same func
 - View Docker auto-restart and SSL auto-renewal status
 
 #### 🔧 Maintenance
-- **Backup:** download/send recovery ZIP (.env, config, app.db, Nginx/AdGuard state), scheduled auto-backup
+- **Backup:** download/send recovery ZIP (.env, config, app.db, Nginx/AdGuard state), restore it via Web UI or Telegram, scheduled auto-backup
 - **Logs:** download, clear individual or all Nginx logs, scheduled auto-cleanup
 - **IP Ban:** manual IP blocking, auto-analyze logs for suspicious IPs, bulk ban
 
@@ -1676,6 +1676,7 @@ Used only by the bot (same process as API).
 | DELETE | `/api/admin/admins/{tg_id}` | Remove admin |
 | GET | `/api/admin/audit-log` | Audit log |
 | GET | `/api/admin/backup` | Download backup ZIP |
+| POST | `/api/maintenance/restore` | Schedule restore from uploaded ZIP |
 | GET | `/health` | Health check (no auth) |
 """,
 }
@@ -3034,11 +3035,12 @@ Master: edge.example.com
 
 ### Раздел: 🔧 Maintenance
 
-Три вкладки:
+Основные вкладки:
 
 #### 💾 Backup
 - **Download ZIP** — скачать recovery ZIP (.env, config, app.db, Nginx/AdGuard state) прямо в браузер
 - **Send to admins** — отослать такой же recovery ZIP всем Telegram-администраторам немедленно
+- **Choose recovery ZIP / Start restore** — загрузить recovery ZIP из браузера и запустить восстановление с safety backup по умолчанию
 - **Auto-backup interval** — выпадающий список: Off / 6h / 12h / 24h / 48h / 7 days
 
 #### 📋 Logs
@@ -3162,7 +3164,7 @@ Change password: ☰ menu → top-right profile → **Change Password**
 | 🔗 Federation | Nodes table, show local secret, add node, ping all, create bridge, view topology |
 | 👑 Admin | Admins list, audit log, change Web UI password |
 | ⚙️ Settings | Domain input (auto-reloads Nginx), timezone dropdown, bot language buttons, system status |
-| 🔧 Maintenance | Backup (download/send/schedule), log management, IP ban with log analysis |
+| 🔧 Maintenance | Backup/restore, log management, IP ban with log analysis |
 | 📚 Docs | Built-in documentation browser with markdown rendering |
 
 ---
@@ -3238,6 +3240,13 @@ _DOCS["maintenance"] = {
 
 - **В боте:** кнопка `💾 Backup now` — recovery ZIP отправляется прямо в чат
 - **В Web UI:** кнопка `⬇️ Download ZIP` — браузер скачивает recovery ZIP; кнопка `📤 Send to admins` — такой же архив отсылается всем Telegram-администраторам
+
+#### Восстановление из бэкапа
+
+- **В боте:** `♻️ Restore ZIP` — загрузить recovery ZIP, подтвердить restore, после чего стек перезапустится автоматически
+- **В Web UI:** `📥 Choose recovery ZIP` + `♻️ Start restore` — загрузить архив, по умолчанию создать safety backup и запустить восстановление
+- **Простой:** бот и Web UI могут быть недоступны 30-60 секунд, пока пересоздаются контейнеры
+- **Логи:** restore-задача пишет лог в `data/recovery/`
 
 #### Автоматический бэкап по расписанию
 
@@ -3367,6 +3376,13 @@ The **Maintenance** section provides tools for automatic and manual server upkee
 
 - **In bot:** `💾 Backup now` button — the recovery ZIP is sent directly to the chat
 - **In Web UI:** `⬇️ Download ZIP` — browser downloads the recovery ZIP; `📤 Send to admins` — sends the same archive to all Telegram admins
+
+#### Restore from backup
+
+- **In bot:** `♻️ Restore ZIP` — upload the recovery ZIP, confirm restore, and the stack will restart automatically
+- **In Web UI:** `📥 Choose recovery ZIP` + `♻️ Start restore` — uploads the archive, creates a safety backup by default, then starts restore
+- **Downtime:** the bot and Web UI can be unavailable for 30-60 seconds while containers are recreated
+- **Logs:** the restore job writes a log file under `data/recovery/`
 
 #### Scheduled auto-backup
 

@@ -18,6 +18,7 @@ services:
     restart: unless-stopped
     env_file: .env
     volumes:
+      - ./:/opt/singbox-ui-bot                # host install root for backup/restore helper jobs
       - ./config/sing-box:/etc/sing-box       # shared with singbox container
       - ./config/adguard:/app/config/adguard  # AdGuard bootstrap/password seeding
       - ./data:/app/host_data                 # ssh_port etc. — read by manage.sh on host

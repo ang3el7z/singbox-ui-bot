@@ -9,6 +9,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     certbot \
     python3-certbot-nginx \
     docker.io \
+    docker-compose \
     jq \
     && rm -rf /var/lib/apt/lists/*
 

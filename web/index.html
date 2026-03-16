@@ -1205,7 +1205,7 @@ tailwind.config = {
     <section x-show="page==='maintenance'" x-cloak x-data="maintenanceSection()" x-init="init()">
       <div class="p-6">
         <h2 class="text-xl font-bold text-white mb-2">🔧 Maintenance</h2>
-        <p class="text-slate-400 text-sm mb-5">Backup, log management, IP ban.</p>
+        <p class="text-slate-400 text-sm mb-5">Backup, restore, log management, IP ban.</p>
 
         <!-- Status bar -->
         <div x-show="status" class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-5">
@@ -1249,6 +1249,37 @@ tailwind.config = {
               <button class="btn" @click="runBackup()" :disabled="loading" title="Send to all Telegram admins">
                 📤 Send to admins
               </button>
+            </div>
+          </div>
+          <div class="card mb-4">
+            <h3 class="font-semibold text-white mb-3">Restore from ZIP</h3>
+            <p class="text-slate-400 text-sm mb-3">
+              Upload a recovery ZIP from Maintenance backup or CLI backup. The stack will restart during restore.
+            </p>
+            <div class="flex flex-col gap-3">
+              <label class="btn btn-secondary w-full cursor-pointer text-center">
+                📥 Choose recovery ZIP
+                <input
+                  x-ref="restoreZipInput"
+                  type="file"
+                  class="hidden"
+                  accept=".zip,application/zip"
+                  @change="pickRestoreFile($event)"/>
+              </label>
+              <div class="bg-slate-800 rounded p-3 text-sm">
+                <span class="text-slate-400">Selected:</span>
+                <span class="text-white" x-text="restoreFile ? restoreFile.name : 'No file selected'"></span>
+              </div>
+              <label class="flex items-center gap-2 text-sm text-slate-300">
+                <input type="checkbox" class="rounded" x-model="restoreCreateBackup"/>
+                <span>Create a safety backup before restore</span>
+              </label>
+              <button class="btn btn-danger w-full" @click="startRestore()" :disabled="loading || !restoreFile">
+                ♻️ Start restore
+              </button>
+              <p class="text-slate-500 text-xs">
+                The panel can be unavailable for 30-60 seconds while containers are recreated.
+              </p>
             </div>
           </div>
           <div class="card">

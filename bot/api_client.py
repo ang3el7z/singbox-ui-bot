@@ -225,6 +225,17 @@ class MaintenanceAPI:
         return await post("/api/maintenance/backup/settings", json={"hours": hours})
     async def run_backup(self):
         return await post("/api/maintenance/backup/run")
+    async def restore(self, filename: str, content: bytes, create_safety_backup: bool = True):
+        async with httpx.AsyncClient(base_url=_BASE, headers=_HEADERS, timeout=120.0) as c:
+            files = {"file": (filename, content, "application/zip")}
+            r = await c.post(
+                "/api/maintenance/restore",
+                params={"create_safety_backup": str(create_safety_backup).lower()},
+                files=files,
+            )
+            if not r.is_success:
+                raise APIError(r.status_code, _extract_detail(r))
+            return r.json()
 
     # Logs
     async def logs_list(self):

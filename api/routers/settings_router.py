@@ -55,9 +55,12 @@ async def get_setting(key: str, default: str = "") -> str:
 
 
 async def set_setting(key: str, value: str) -> None:
-    """Upsert a setting into AppSetting table and apply it to the running process."""
-    if key not in _ALLOWED:
-        raise ValueError(f"Setting '{key}' is not allowed")
+    """
+    Upsert a setting into AppSetting table and apply side effects when relevant.
+
+    Public API validation happens in `update_setting()`. Internal services also use
+    this helper for maintenance/scheduler keys such as `backup_auto_hours`.
+    """
     async with async_session() as session:
         row = await session.get(AppSetting, key)
         if row:

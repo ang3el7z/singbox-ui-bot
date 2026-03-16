@@ -8,14 +8,18 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from api.deps import require_any_auth, audit
 from api.services import ip_ban as ip_ban_svc
 from api.services import nginx_service
-from api.services.backup_service import build_backup_zip
+from api.services.backup_service import (
+    RestoreError,
+    build_backup_zip,
+    schedule_restore_job,
+)
 from api.routers.settings_router import get_setting, set_setting
 
 router = APIRouter()
@@ -90,6 +94,36 @@ async def backup_run_now(auth=Depends(require_any_auth)):
     ok = await run_backup_job()
     await audit(auth["actor"], "backup_run_now")
     return {"success": ok}
+
+
+@router.post("/restore")
+async def restore_from_backup(
+    file: UploadFile = File(...),
+    create_safety_backup: bool = True,
+    auth=Depends(require_any_auth),
+):
+    filename = file.filename or "backup.zip"
+    if not filename.lower().endswith(".zip"):
+        raise HTTPException(status_code=400, detail="Upload a .zip recovery archive")
+
+    content = await file.read()
+    try:
+        result = await schedule_restore_job(
+            content,
+            filename=filename,
+            create_safety_backup=create_safety_backup,
+        )
+    except RestoreError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Restore scheduling failed: {exc}")
+
+    await audit(
+        auth["actor"],
+        "maintenance_restore_scheduled",
+        f"file={filename} safety_backup={create_safety_backup}",
+    )
+    return result
 
 
 @router.post("/backup/settings")

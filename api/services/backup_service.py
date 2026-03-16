@@ -1,14 +1,17 @@
 """
 Backup helpers for API, bot-triggered maintenance tasks, and restore bundles.
 
-The API container cannot read the host `.env` file directly, so we export the
-current environment-derived settings into a synthetic `.env` inside the backup.
-This makes the bundle usable for full server recovery on a fresh install.
+The app container can always read mounted runtime state (sing-box config, nginx,
+AdGuard, DB volume). When the host install root is mounted at
+`/opt/singbox-ui-bot`, we also back up the real `.env` file and can schedule a
+detached restore helper that survives the app container restart.
 """
 from __future__ import annotations
 
+import asyncio
 import io
 import json
+import os
 import sqlite3
 import tempfile
 import zipfile
@@ -22,8 +25,21 @@ BASE_DIR = Path(__file__).resolve().parent.parent.parent
 APP_DATA_DIR = BASE_DIR / "data"
 HOST_DATA_DIR = BASE_DIR / "host_data"
 NGINX_DIR = BASE_DIR / "nginx"
+INSTALL_DIR = Path("/opt/singbox-ui-bot")
+HOST_ENV_FILE = INSTALL_DIR / ".env"
+RECOVERY_DIR = INSTALL_DIR / "data" / "recovery"
 
 BACKUP_FORMAT = "singbox-ui-bot-backup-v2"
+MAX_RESTORE_UPLOAD_BYTES = 100 * 1024 * 1024
+MAX_RESTORE_UNPACKED_BYTES = 250 * 1024 * 1024
+RESTORE_HELPER_PREFIX = "singbox_restore_"
+APP_CONTAINER_CANDIDATES = [name for name in (os.getenv("HOSTNAME"), "singbox_app") if name]
+REQUIRED_RESTORE_ENTRIES = {
+    ".env",
+    "manifest.json",
+    "config/sing-box/config.json",
+    "data/app.db",
+}
 
 _ENV_EXPORT_GROUPS = [
     (
@@ -103,6 +119,10 @@ _DIRECTORIES = [
 ]
 
 
+class RestoreError(RuntimeError):
+    """Raised when a restore archive cannot be validated or scheduled."""
+
+
 def export_env_text() -> str:
     lines = [
         "# Auto-generated recovery export for singbox-ui-bot",
@@ -124,10 +144,13 @@ def build_restore_notes() -> str:
             "singbox-ui-bot restore workflow",
             "",
             "1. Install singbox-ui-bot on the new server first.",
-            "2. Copy this ZIP to the new server.",
-            "3. Run: singbox-ui-bot restore /path/to/backup.zip",
-            "4. The CLI will restore .env, config, DB, AdGuard state, Nginx state,",
-            "   then restart the stack.",
+            "2. Copy this ZIP to the new server, or upload it via Web UI / Telegram Maintenance.",
+            "3. Restore from one of the supported entry points:",
+            "   - singbox-ui-bot restore /path/to/backup.zip",
+            "   - Web UI -> Maintenance -> Backup -> Restore from ZIP",
+            "   - Telegram -> Maintenance -> Restore ZIP",
+            "4. The restore job will replace .env, config, DB, AdGuard state,",
+            "   and Nginx state, then restart the stack.",
             "",
         ]
     )
@@ -177,11 +200,17 @@ def _write_sqlite_snapshot(zf: zipfile.ZipFile, src: Path, arcname: str, include
     included.append(arcname)
 
 
+def _env_backup_bytes() -> bytes:
+    if HOST_ENV_FILE.exists() and HOST_ENV_FILE.is_file():
+        return HOST_ENV_FILE.read_bytes()
+    return export_env_text().encode("utf-8")
+
+
 def build_backup_zip() -> bytes:
     included: List[str] = []
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
-        zf.writestr(".env", export_env_text())
+        zf.writestr(".env", _env_backup_bytes())
         included.append(".env")
 
         _write_sqlite_snapshot(zf, APP_DATA_DIR / "app.db", "data/app.db", included)
@@ -199,3 +228,154 @@ def build_backup_zip() -> bytes:
 
     buf.seek(0)
     return buf.getvalue()
+
+
+def inspect_backup_zip(content: bytes) -> dict:
+    if len(content) > MAX_RESTORE_UPLOAD_BYTES:
+        raise RestoreError("Backup archive is too large (max 100 MB).")
+
+    try:
+        with zipfile.ZipFile(io.BytesIO(content), "r") as zf:
+            names: set[str] = set()
+            total_unpacked = 0
+            for info in zf.infolist():
+                if info.is_dir():
+                    continue
+                normalized = Path(info.filename)
+                if normalized.is_absolute() or ".." in normalized.parts:
+                    raise RestoreError("Backup archive contains unsafe paths.")
+                arcname = normalized.as_posix().strip("/")
+                if not arcname:
+                    continue
+                names.add(arcname)
+                total_unpacked += info.file_size
+                if total_unpacked > MAX_RESTORE_UNPACKED_BYTES:
+                    raise RestoreError("Backup archive expands to more than 250 MB.")
+
+            if "manifest.json" not in names:
+                raise RestoreError("Unsupported backup format: manifest.json is missing.")
+
+            try:
+                manifest = json.loads(zf.read("manifest.json").decode("utf-8"))
+            except json.JSONDecodeError as exc:
+                raise RestoreError("manifest.json is corrupted.") from exc
+    except zipfile.BadZipFile as exc:
+        raise RestoreError("Invalid ZIP archive.") from exc
+
+    if manifest.get("format") != BACKUP_FORMAT:
+        raise RestoreError("Unsupported backup format. Create a new recovery ZIP first.")
+
+    missing = sorted(REQUIRED_RESTORE_ENTRIES - names)
+    if missing:
+        raise RestoreError(
+            "Backup archive is missing required files: " + ", ".join(missing)
+        )
+
+    return {"manifest": manifest, "entries": sorted(names)}
+
+
+def ensure_install_root() -> Path:
+    if not INSTALL_DIR.exists() or not INSTALL_DIR.is_dir():
+        raise RestoreError(
+            "Host install root is not mounted inside the app container. "
+            "Update docker-compose and recreate the app container first."
+        )
+    compose_file = INSTALL_DIR / "docker-compose.yml"
+    if not compose_file.exists():
+        raise RestoreError(f"docker-compose.yml not found in {INSTALL_DIR}")
+    scripts_dir = INSTALL_DIR / "scripts"
+    if not scripts_dir.exists():
+        raise RestoreError(f"scripts/ not found in {INSTALL_DIR}")
+    return INSTALL_DIR
+
+
+async def _run(*cmd: str, timeout: int = 60) -> tuple[bool, str]:
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.STDOUT,
+        )
+        stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=timeout)
+        return proc.returncode == 0, stdout.decode(errors="replace")
+    except asyncio.TimeoutError:
+        return False, "timeout"
+    except Exception as exc:
+        return False, str(exc)
+
+
+async def _current_app_image() -> str:
+    for candidate in APP_CONTAINER_CANDIDATES:
+        ok, out = await _run("docker", "inspect", "--format", "{{.Config.Image}}", candidate)
+        image = out.strip()
+        if ok and image:
+            return image
+    raise RestoreError("Cannot determine the running app image for the restore helper.")
+
+
+async def _start_restore_helper(backup_path: Path, log_path: Path) -> tuple[str, str]:
+    image = await _current_app_image()
+    job_name = f"{RESTORE_HELPER_PREFIX}{datetime.now().strftime('%Y%m%d%H%M%S')}"
+    helper_cmd = [
+        "docker",
+        "run",
+        "-d",
+        "--rm",
+        "--name",
+        job_name,
+        "-v",
+        "/var/run/docker.sock:/var/run/docker.sock",
+        "-v",
+        f"{INSTALL_DIR}:{INSTALL_DIR}",
+        image,
+        "sh",
+        str(INSTALL_DIR / "scripts" / "restore-worker.sh"),
+        str(backup_path),
+        str(log_path),
+    ]
+    ok, out = await _run(*helper_cmd, timeout=30)
+    if not ok:
+        raise RestoreError(f"Failed to start restore helper: {out.strip() or 'unknown error'}")
+    return job_name, out.strip()
+
+
+async def schedule_restore_job(
+    content: bytes,
+    filename: str | None = None,
+    *,
+    create_safety_backup: bool = True,
+) -> dict:
+    install_dir = ensure_install_root()
+    inspected = inspect_backup_zip(content)
+
+    RECOVERY_DIR.mkdir(parents=True, exist_ok=True)
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    upload_path = RECOVERY_DIR / f"restore_upload_{timestamp}.zip"
+    log_path = RECOVERY_DIR / f"restore_{timestamp}.log"
+    upload_path.write_bytes(content)
+
+    safety_backup_path: Path | None = None
+    if create_safety_backup:
+        safety_backup_path = RECOVERY_DIR / f"safety_backup_{timestamp}.zip"
+        safety_backup_path.write_bytes(build_backup_zip())
+
+    job_name, container_id = await _start_restore_helper(upload_path, log_path)
+
+    return {
+        "scheduled": True,
+        "message": (
+            "Restore job started. Web UI and Telegram bot may disconnect for "
+            "30-60 seconds while the stack is recreated."
+        ),
+        "source_file": filename or upload_path.name,
+        "format": inspected["manifest"].get("format"),
+        "backup_created_at": inspected["manifest"].get("created_at"),
+        "entries_count": len(inspected["entries"]),
+        "create_safety_backup": create_safety_backup,
+        "safety_backup_path": str(safety_backup_path) if safety_backup_path else None,
+        "restore_log_path": str(log_path),
+        "helper_container": job_name,
+        "helper_container_id": container_id,
+        "install_dir": str(install_dir),
+        "expected_downtime_seconds": 60,
+    }

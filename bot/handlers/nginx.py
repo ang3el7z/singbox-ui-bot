@@ -1,5 +1,6 @@
 """Nginx management — thin wrapper over /api/nginx/"""
 from aiogram import Router, F
+from aiogram.filters import StateFilter
 from aiogram.types import CallbackQuery, Message, Document
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
@@ -138,7 +139,7 @@ async def cb_nginx_upload_site(cq: CallbackQuery):
     await cq.answer()
 
 
-@router.message(F.document)
+@router.message(StateFilter(None), F.document)
 async def handle_site_upload(msg: Message):
     doc = msg.document
     name = doc.file_name or ""

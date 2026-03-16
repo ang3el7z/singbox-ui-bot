@@ -190,6 +190,22 @@ const api = {
         URL.revokeObjectURL(url);
     },
 
+    async maintRestore(file, createSafetyBackup = true) {
+        const token = getToken();
+        const fd = new FormData();
+        fd.append("file", file);
+        const res = await fetch(
+            BASE + `/api/maintenance/restore?create_safety_backup=${encodeURIComponent(createSafetyBackup)}`,
+            {
+                method: "POST",
+                headers: { "Authorization": `Bearer ${token}` },
+                body: fd,
+            },
+        );
+        if (!res.ok) throw new Error((await res.json()).detail || res.statusText);
+        return res.json();
+    },
+
     async maintLogDownload(name) {
         const token = getToken();
         const res = await fetch(BASE + `/api/maintenance/logs/download/${name}`, {
