@@ -3,10 +3,7 @@ Admin management router — accessible only via internal token (bot) or web JWT.
 Handles: TG admin list, audit log, backup.
 """
 import io
-import json
-import zipfile
 from datetime import datetime
-from pathlib import Path
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -16,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, desc
 
 from api.database import get_db, Admin, AuditLog
-from api.services.singbox import singbox
+from api.services.backup_service import build_backup_zip
 from api.deps import require_any_auth, audit
 
 router = APIRouter()
@@ -90,18 +87,8 @@ async def get_audit_log(
 
 @router.get("/backup")
 async def create_backup(auth: dict = Depends(require_any_auth)):
-    """Create a ZIP backup of sing-box config.json + SQLite DB."""
-    buf = io.BytesIO()
-    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
-        try:
-            cfg = singbox.read_config()
-            zf.writestr("config.json", json.dumps(cfg, indent=2, ensure_ascii=False))
-        except Exception:
-            pass
-        db_path = Path("data/app.db")
-        if db_path.exists():
-            zf.write(db_path, "app.db")
-    buf.seek(0)
+    """Create a recovery ZIP with secrets, config, DB, and related state."""
+    buf = io.BytesIO(build_backup_zip())
     filename = f"backup_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.zip"
     await audit(auth["actor"], "create_backup")
     return StreamingResponse(

@@ -309,6 +309,9 @@ def kb_federation_menu(nodes: list = None) -> InlineKeyboardMarkup:
     builder.row(
         InlineKeyboardButton(text="⬅️ Back",            callback_data="main_menu"),
     )
+    builder.row(
+        InlineKeyboardButton(text="My secret", callback_data="federation_secret"),
+    )
     return builder.as_markup()
 
 

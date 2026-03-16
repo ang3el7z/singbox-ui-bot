@@ -117,6 +117,114 @@ cmd_backup() {
 
     info "Creating backup at: $BACKUP_FILE"
 
+    mkdir -p \
+        "$TMP_DIR/config/sing-box" \
+        "$TMP_DIR/config/adguard" \
+        "$TMP_DIR/data" \
+        "$TMP_DIR/nginx/conf.d" \
+        "$TMP_DIR/nginx/htpasswd"
+
+    [[ -f "$INSTALL_DIR/.env" ]] && cp "$INSTALL_DIR/.env" "$TMP_DIR/.env"
+    [[ -f "$INSTALL_DIR/config/sing-box/config.json" ]] && cp "$INSTALL_DIR/config/sing-box/config.json" "$TMP_DIR/config/sing-box/config.json"
+    [[ -f "$INSTALL_DIR/config/adguard/AdGuardHome.yaml" ]] && cp "$INSTALL_DIR/config/adguard/AdGuardHome.yaml" "$TMP_DIR/config/adguard/AdGuardHome.yaml"
+    [[ -f "$INSTALL_DIR/data/adguard_admin_password" ]] && cp "$INSTALL_DIR/data/adguard_admin_password" "$TMP_DIR/data/adguard_admin_password"
+    [[ -f "$INSTALL_DIR/data/ssh_port" ]] && cp "$INSTALL_DIR/data/ssh_port" "$TMP_DIR/data/ssh_port"
+    [[ -f "$INSTALL_DIR/nginx/.banned_ips.json" ]] && cp "$INSTALL_DIR/nginx/.banned_ips.json" "$TMP_DIR/nginx/.banned_ips.json"
+    [[ -f "$INSTALL_DIR/nginx/.site_enabled" ]] && cp "$INSTALL_DIR/nginx/.site_enabled" "$TMP_DIR/nginx/.site_enabled"
+    [[ -f "$INSTALL_DIR/nginx/conf.d/singbox.conf" ]] && cp "$INSTALL_DIR/nginx/conf.d/singbox.conf" "$TMP_DIR/nginx/conf.d/singbox.conf"
+    [[ -f "$INSTALL_DIR/nginx/htpasswd/.htpasswd" ]] && cp "$INSTALL_DIR/nginx/htpasswd/.htpasswd" "$TMP_DIR/nginx/htpasswd/.htpasswd"
+
+    if [[ -d "$INSTALL_DIR/nginx/override" ]] && find "$INSTALL_DIR/nginx/override" -mindepth 1 -print -quit | grep -q .; then
+        mkdir -p "$TMP_DIR/nginx/override"
+        cp -a "$INSTALL_DIR/nginx/override/." "$TMP_DIR/nginx/override/"
+    fi
+
+    if [[ -d "$INSTALL_DIR/nginx/certs" ]] && find "$INSTALL_DIR/nginx/certs" -mindepth 1 -print -quit | grep -q .; then
+        mkdir -p "$TMP_DIR/nginx/certs"
+        cp -a "$INSTALL_DIR/nginx/certs/." "$TMP_DIR/nginx/certs/"
+    fi
+
+    APP_CID=$(app_container_id)
+    if [[ -n "${APP_CID:-}" ]]; then
+        DB_CONTAINER_TMP="/tmp/singbox-ui-bot-backup-$$.db"
+        if docker exec "$APP_CID" python -c "import sqlite3; src = sqlite3.connect('file:/app/data/app.db?mode=ro', uri=True); dst = sqlite3.connect('$DB_CONTAINER_TMP'); src.backup(dst); dst.close(); src.close()" >/dev/null 2>&1; then
+            docker cp "${APP_CID}:${DB_CONTAINER_TMP}" "$TMP_DIR/data/app.db" >/dev/null 2>&1 || true
+            docker exec "$APP_CID" rm -f "$DB_CONTAINER_TMP" >/dev/null 2>&1 || true
+        else
+            docker cp "${APP_CID}:/app/data/app.db" "$TMP_DIR/data/app.db" >/dev/null 2>&1 || true
+        fi
+    fi
+
+    cat > "$TMP_DIR/RESTORE.txt" <<'EOF'
+singbox-ui-bot restore workflow
+
+1. Install singbox-ui-bot on the new server first.
+2. Copy this ZIP to the new server.
+3. Run: singbox-ui-bot restore /path/to/backup.zip
+4. The CLI will restore .env, config, DB, AdGuard state, and Nginx state.
+
+If you changed the SSH port before, review sshd first and then run:
+  singbox-ui-bot firewall
+EOF
+
+    if [[ ! -f "$TMP_DIR/.env" || ! -f "$TMP_DIR/config/sing-box/config.json" || ! -f "$TMP_DIR/data/app.db" ]]; then
+        warn "Backup is missing one of the required recovery files (.env, config/sing-box/config.json, data/app.db)"
+        return 1
+    fi
+
+    FILE_LIST=$(cd "$TMP_DIR" && find . -type f | sed 's#^\./##' | sort)
+    MANIFEST_PATH="$TMP_DIR/manifest.json"
+    {
+        echo "{"
+        echo '  "format": "singbox-ui-bot-backup-v2",'
+        printf '  "created_at": "%s",\n' "$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+        echo '  "entries": ['
+        FIRST=1
+        while IFS= read -r ITEM; do
+            [[ -z "$ITEM" ]] && continue
+            if [[ $FIRST -eq 0 ]]; then
+                echo ","
+            fi
+            FIRST=0
+            printf '    "%s"' "$ITEM"
+        done <<< "$FILE_LIST"
+        echo
+        echo "  ]"
+        echo "}"
+    } > "$MANIFEST_PATH"
+
+    if command -v zip &>/dev/null; then
+        (
+            cd "$TMP_DIR"
+            zip -qr "$BACKUP_FILE" .
+        )
+    else
+        python3 - "$TMP_DIR" "$BACKUP_FILE" <<'PYEOF'
+import os
+import sys
+import zipfile
+
+src_root = sys.argv[1]
+out_path = sys.argv[2]
+
+with zipfile.ZipFile(out_path, "w", zipfile.ZIP_DEFLATED) as zf:
+    for root, _, files in os.walk(src_root):
+        for name in files:
+            full = os.path.join(root, name)
+            arc = os.path.relpath(full, src_root)
+            zf.write(full, arc)
+PYEOF
+    fi
+
+    SIZE=$(du -sh "$BACKUP_FILE" | cut -f1)
+    success "Backup created: $BACKUP_FILE ($SIZE)"
+    echo
+    echo -e "${BOLD}Contents:${RESET}"
+    while IFS= read -r ITEM; do
+        [[ -n "$ITEM" ]] && echo "  - $ITEM"
+    done <<< "$(cd "$TMP_DIR" && find . -type f | sed 's#^\./##' | sort)"
+    return 0
+
     # Files to include
     FILES=()
     [[ -f "$INSTALL_DIR/config/sing-box/config.json" ]] && FILES+=("$INSTALL_DIR/config/sing-box/config.json")
@@ -156,6 +264,124 @@ PYEOF
 }
 
 # ── Logs ──────────────────────────────────────────────────────────────────────
+extract_backup_zip() {
+    local backup_file="$1"
+    local output_dir="$2"
+
+    if command -v unzip &>/dev/null; then
+        unzip -oq "$backup_file" -d "$output_dir" >/dev/null
+    else
+        python3 - "$backup_file" "$output_dir" <<'PYEOF'
+import sys
+import zipfile
+
+backup_file = sys.argv[1]
+output_dir = sys.argv[2]
+
+with zipfile.ZipFile(backup_file, "r") as zf:
+    zf.extractall(output_dir)
+PYEOF
+    fi
+}
+
+cmd_restore() {
+    header "Restore"
+
+    BACKUP_SOURCE="${1:-}"
+    if [[ -z "${BACKUP_SOURCE:-}" ]]; then
+        read -rp "Path to backup ZIP: " BACKUP_SOURCE
+    fi
+
+    if [[ ! -f "${BACKUP_SOURCE:-}" ]]; then
+        error "Backup file not found: ${BACKUP_SOURCE:-<empty>}"
+        return 1
+    fi
+
+    TMP_DIR=$(mktemp -d)
+    trap 'rm -rf "$TMP_DIR"' RETURN
+
+    info "Extracting backup..."
+    extract_backup_zip "$BACKUP_SOURCE" "$TMP_DIR"
+
+    if [[ ! -f "$TMP_DIR/.env" || ! -f "$TMP_DIR/config/sing-box/config.json" || ! -f "$TMP_DIR/data/app.db" ]]; then
+        error "Unsupported backup format. Expected .env, config/sing-box/config.json, and data/app.db."
+        return 1
+    fi
+
+    read -rp "Create a safety backup before restore? [Y/n]: " DO_BACKUP
+    if [[ "$DO_BACKUP" != [nN] ]]; then
+        cmd_backup || warn "Safety backup failed, continuing anyway..."
+        echo
+    fi
+
+    read -rp "This will overwrite the current server state. Continue? [y/N]: " CONFIRM
+    [[ "$CONFIRM" != [yY] ]] && { info "Restore cancelled."; return 0; }
+
+    info "Restoring host files..."
+    mkdir -p \
+        "$INSTALL_DIR/config/sing-box" \
+        "$INSTALL_DIR/config/adguard" \
+        "$INSTALL_DIR/data" \
+        "$INSTALL_DIR/nginx/conf.d" \
+        "$INSTALL_DIR/nginx/override" \
+        "$INSTALL_DIR/nginx/htpasswd" \
+        "$INSTALL_DIR/nginx/certs"
+
+    cp "$TMP_DIR/.env" "$INSTALL_DIR/.env"
+    chmod 600 "$INSTALL_DIR/.env"
+    cp "$TMP_DIR/config/sing-box/config.json" "$INSTALL_DIR/config/sing-box/config.json"
+
+    [[ -f "$TMP_DIR/config/adguard/AdGuardHome.yaml" ]] && cp "$TMP_DIR/config/adguard/AdGuardHome.yaml" "$INSTALL_DIR/config/adguard/AdGuardHome.yaml"
+    [[ -f "$TMP_DIR/data/adguard_admin_password" ]] && cp "$TMP_DIR/data/adguard_admin_password" "$INSTALL_DIR/data/adguard_admin_password"
+    [[ -f "$TMP_DIR/data/ssh_port" ]] && cp "$TMP_DIR/data/ssh_port" "$INSTALL_DIR/data/ssh_port"
+    if [[ -f "$TMP_DIR/nginx/.banned_ips.json" ]]; then
+        cp "$TMP_DIR/nginx/.banned_ips.json" "$INSTALL_DIR/nginx/.banned_ips.json"
+    else
+        rm -f "$INSTALL_DIR/nginx/.banned_ips.json"
+    fi
+    [[ -f "$TMP_DIR/nginx/conf.d/singbox.conf" ]] && cp "$TMP_DIR/nginx/conf.d/singbox.conf" "$INSTALL_DIR/nginx/conf.d/singbox.conf"
+    [[ -f "$TMP_DIR/nginx/htpasswd/.htpasswd" ]] && cp "$TMP_DIR/nginx/htpasswd/.htpasswd" "$INSTALL_DIR/nginx/htpasswd/.htpasswd"
+
+    if [[ -f "$TMP_DIR/nginx/.site_enabled" ]]; then
+        cp "$TMP_DIR/nginx/.site_enabled" "$INSTALL_DIR/nginx/.site_enabled"
+    else
+        rm -f "$INSTALL_DIR/nginx/.site_enabled"
+    fi
+
+    rm -rf "$INSTALL_DIR/nginx/override"
+    mkdir -p "$INSTALL_DIR/nginx/override"
+    if [[ -d "$TMP_DIR/nginx/override" ]]; then
+        cp -a "$TMP_DIR/nginx/override/." "$INSTALL_DIR/nginx/override/"
+    fi
+
+    rm -rf "$INSTALL_DIR/nginx/certs"
+    mkdir -p "$INSTALL_DIR/nginx/certs"
+    if [[ -d "$TMP_DIR/nginx/certs" ]]; then
+        cp -a "$TMP_DIR/nginx/certs/." "$INSTALL_DIR/nginx/certs/"
+    fi
+
+    info "Recreating containers to apply restored environment..."
+    DC up -d --force-recreate app singbox nginx adguard
+
+    APP_CID=$(app_container_id)
+    if [[ -z "${APP_CID:-}" ]]; then
+        error "App container is not running after restore."
+        return 1
+    fi
+
+    info "Restoring SQLite database into the app volume..."
+    docker cp "$TMP_DIR/data/app.db" "${APP_CID}:/app/data/app.db"
+
+    info "Restarting the stack..."
+    DC restart app singbox nginx adguard
+
+    success "Restore complete."
+    echo
+    echo "Next steps:"
+    echo "  - Verify the bot and web UI can log in"
+    echo "  - If SSH port was customized before, run: singbox-ui-bot firewall"
+}
+
 cmd_logs() {
     header "Logs"
     echo "Which container?"
@@ -329,6 +555,7 @@ main() {
         case "$1" in
             status)    cmd_status ;;
             backup)    cmd_backup ;;
+            restore)   shift; cmd_restore "${1:-}" ;;
             logs)      cmd_logs ;;
             restart)   cmd_restart ;;
             update)    cmd_update ;;
@@ -336,7 +563,7 @@ main() {
             uninstall) cmd_uninstall ;;
             *)
                 error "Unknown command: $1"
-                echo "Usage: singbox-ui-bot [status|backup|logs|restart|update|firewall|uninstall]"
+                echo "Usage: singbox-ui-bot [status|backup|restore <backup.zip>|logs|restart|update|firewall|uninstall]"
                 exit 1
                 ;;
         esac

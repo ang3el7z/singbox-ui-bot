@@ -649,7 +649,9 @@ function federationComponent() {
     return {
         nodes: [],
         topology: null,
+        localSecret: null,
         showAdd: false,
+        showLocalSecret: false,
         showBridge: false,
         bridgeSelected: [],    // ordered list of node IDs for the bridge chain
         bridgeResult: null,
@@ -707,6 +709,26 @@ function federationComponent() {
             } catch (e) {
                 this.$dispatch("toast", { msg: e.message, type: "error" });
             } finally { this.loading = false; }
+        },
+
+        async loadLocalSecret() {
+            this.loading = true;
+            try {
+                this.localSecret = await api.fedLocalSecret();
+                this.showLocalSecret = true;
+            } catch (e) {
+                this.$dispatch("toast", { msg: e.message, type: "error" });
+            } finally { this.loading = false; }
+        },
+
+        async copyLocalSecret() {
+            if (!this.localSecret?.secret) return;
+            try {
+                await navigator.clipboard.writeText(this.localSecret.secret);
+                this.$dispatch("toast", { msg: "Federation secret copied", type: "success" });
+            } catch (e) {
+                this.$dispatch("toast", { msg: e.message || "Copy failed", type: "error" });
+            }
         },
 
         async deleteNode(n) {

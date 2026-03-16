@@ -6,9 +6,11 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
+from api.config import settings
 from api.database import get_db, FederationNode
 from api.services.federation_service import fed_client
 from api.deps import require_any_auth, audit
+from api.routers.settings_router import get_runtime
 
 router = APIRouter()
 
@@ -35,6 +37,17 @@ class NodeResponse(BaseModel):
 
 class BridgeCreate(BaseModel):
     node_ids: List[int]  # ordered list of node IDs to chain
+
+
+@router.get("/local-secret")
+async def get_local_secret(auth: dict = Depends(require_any_auth)):
+    domain = get_runtime("domain")
+    return {
+        "secret": settings.federation_secret,
+        "domain": domain,
+        "public_url": settings.bot_public_url,
+        "display_name": domain or settings.bot_public_url or "this server",
+    }
 
 
 @router.get("/", response_model=List[NodeResponse])
@@ -129,7 +142,6 @@ async def create_bridge(body: BridgeCreate, db: AsyncSession = Depends(get_db), 
 
 @router.get("/topology")
 async def topology(db: AsyncSession = Depends(get_db), auth: dict = Depends(require_any_auth)):
-    from api.routers.settings_router import get_runtime
     result = await db.execute(select(FederationNode).order_by(FederationNode.created_at))
     nodes = result.scalars().all()
     return {

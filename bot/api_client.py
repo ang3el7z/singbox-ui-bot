@@ -186,6 +186,7 @@ class NginxAPI:
 
 class FederationAPI:
     async def list(self):                     return await get("/api/federation/")
+    async def local_secret(self):             return await get("/api/federation/local-secret")
     async def add(self, name, url, secret, role="node"): return await post("/api/federation/", json={"name": name, "url": url, "secret": secret, "role": role})
     async def delete(self, nid):              return await delete(f"/api/federation/{nid}")
     async def ping(self, nid):                return await post(f"/api/federation/{nid}/ping")

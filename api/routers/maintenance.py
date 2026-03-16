@@ -4,7 +4,6 @@ Maintenance router — backup, log management, IP ban.
 import io
 import ipaddress
 import time
-import zipfile
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
@@ -16,6 +15,7 @@ from pydantic import BaseModel
 from api.deps import require_any_auth, audit
 from api.services import ip_ban as ip_ban_svc
 from api.services import nginx_service
+from api.services.backup_service import build_backup_zip
 from api.routers.settings_router import get_setting, set_setting
 
 router = APIRouter()
@@ -72,16 +72,8 @@ async def maintenance_status(auth=Depends(require_any_auth)):
 
 @router.get("/backup/download")
 async def backup_download(auth=Depends(require_any_auth)):
-    """Create and stream a backup ZIP (config.json + app.db)."""
-    buf = io.BytesIO()
-    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
-        cfg = BASE_DIR / "config" / "sing-box" / "config.json"
-        if cfg.exists():
-            zf.write(cfg, "config.json")
-        db = BASE_DIR / "data" / "app.db"
-        if db.exists():
-            zf.write(db, "app.db")
-    buf.seek(0)
+    """Create and stream a recovery ZIP."""
+    buf = io.BytesIO(build_backup_zip())
     ts = datetime.now().strftime("%Y%m%d_%H%M")
     await audit(auth["actor"], "backup_download")
     return StreamingResponse(

@@ -11,11 +11,11 @@ Last-run timestamps are stored in AppSetting (key: backup_last_at / logs_clean_l
 Values of 0 (or missing) mean "disabled".
 """
 import asyncio
-import io
 import logging
 import time
-import zipfile
 from pathlib import Path
+
+from api.services.backup_service import build_backup_zip
 
 logger = logging.getLogger(__name__)
 
@@ -46,19 +46,6 @@ async def _set_setting(key: str, value: str) -> None:
         else:
             session.add(AppSetting(key=key, value=value))
         await session.commit()
-
-
-def _build_backup_zip() -> bytes:
-    """Create an in-memory ZIP with config.json and app.db."""
-    buf = io.BytesIO()
-    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
-        cfg = BASE_DIR / "config" / "sing-box" / "config.json"
-        if cfg.exists():
-            zf.write(cfg, "config.json")
-        db = BASE_DIR / "data" / "app.db"
-        if db.exists():
-            zf.write(db, "app.db")
-    return buf.getvalue()
 
 
 async def _send_backup_to_admins(zip_bytes: bytes) -> None:
@@ -117,7 +104,7 @@ async def run_backup_job() -> bool:
     """Create backup and send to admins. Returns True on success."""
     logger.info("Scheduler: running auto-backup")
     try:
-        zip_bytes = _build_backup_zip()
+        zip_bytes = build_backup_zip()
         await _send_backup_to_admins(zip_bytes)
         await _set_setting("backup_last_at", str(int(time.time())))
         logger.info("Scheduler: auto-backup sent (%d bytes)", len(zip_bytes))

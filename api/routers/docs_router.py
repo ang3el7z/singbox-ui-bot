@@ -210,6 +210,7 @@ _DOCS["overview"] = {
 
 #### 🔗 Federation
 - Добавление удалённых серверов-нод
+- Просмотр локального `FEDERATION_SECRET` через `My secret`
 - Ping всех нод
 - Создание bridge-цепочки (multi-hop маршрут)
 - Просмотр топологии сети
@@ -226,7 +227,7 @@ _DOCS["overview"] = {
 - Статус автоперезапуска Docker и автообновления SSL
 
 #### 🔧 Maintenance (Обслуживание)
-- **Backup:** скачать/отправить ZIP (config.json + app.db), автобэкап по расписанию
+- **Backup:** скачать/отправить recovery ZIP (.env, config, app.db, Nginx/AdGuard state), автобэкап по расписанию
 - **Logs:** скачать, очистить отдельный или все логи Nginx, авто-очистка по расписанию
 - **IP Ban:** ручная блокировка IP, автоанализ логов на подозрительные IP, массовый бан
 
@@ -403,6 +404,7 @@ Both interfaces share **one backend (FastAPI)** and have **exactly the same func
 
 #### 🔗 Federation
 - Add remote server nodes
+- View the local `FEDERATION_SECRET` via `My secret`
 - Ping all nodes
 - Create bridge chain (multi-hop route)
 - View network topology
@@ -419,7 +421,7 @@ Both interfaces share **one backend (FastAPI)** and have **exactly the same func
 - View Docker auto-restart and SSL auto-renewal status
 
 #### 🔧 Maintenance
-- **Backup:** download/send ZIP (config.json + app.db), scheduled auto-backup
+- **Backup:** download/send recovery ZIP (.env, config, app.db, Nginx/AdGuard state), scheduled auto-backup
 - **Logs:** download, clear individual or all Nginx logs, scheduled auto-cleanup
 - **IP Ban:** manual IP blocking, auto-analyze logs for suspicious IPs, bulk ban
 
@@ -1499,6 +1501,19 @@ curl -X POST https://домен/api/federation/bridge \\
 
 Создаёт outbound-конфиги для цепочки: `этот сервер → нода 1 → нода 2 → интернет`
 
+#### `GET /api/federation/local-secret` — Показать локальный federation secret
+
+Возвращает локальный `FEDERATION_SECRET` текущего сервера и его отображаемое имя.
+
+```json
+{
+  "secret": "fed_secret_here",
+  "domain": "edge.example.com",
+  "public_url": "https://edge.example.com",
+  "display_name": "edge.example.com"
+}
+```
+
 #### `GET /api/federation/topology` — Топология сети
 
 ```json
@@ -1544,7 +1559,7 @@ curl -X POST https://домен/api/federation/bridge \\
 
 #### `GET /api/admin/backup` — Скачать резервную копию
 
-Возвращает ZIP-файл с `config.json` и `app.db`.
+Возвращает recovery ZIP с `.env`, `config/sing-box/config.json`, `data/app.db` и связанным состоянием Nginx/AdGuard.
 
 ```bash
 curl https://домен/api/admin/backup \\
@@ -1649,6 +1664,7 @@ Used only by the bot (same process as API).
 | POST | `/api/nginx/override/upload` | Upload custom site |
 | DELETE | `/api/nginx/override` | Remove custom site |
 | GET | `/api/federation/` | List nodes |
+| GET | `/api/federation/local-secret` | Show local federation secret |
 | POST | `/api/federation/` | Add node |
 | DELETE | `/api/federation/{id}` | Delete node |
 | POST | `/api/federation/{id}/ping` | Ping node |
@@ -2280,7 +2296,7 @@ Signature: HMAC-SHA256(secret, timestamp)  ← подписанный timestamp
 - Каждый запрос содержит timestamp в заголовке `X-Federation-Timestamp`
 - Каждый запрос содержит подпись в заголовке `X-Federation-Signature`
 - Нода проверяет, что timestamp не старше **60 секунд** (защита от replay-атак)
-- `FEDERATION_SECRET` должен быть одинаковым на мастере и всех нодах, иначе запросы отклоняются
+- у каждой ноды может быть свой локальный `FEDERATION_SECRET`; master должен знать secret именно удалённой ноды, к которой подключается
 
 ---
 
@@ -2290,7 +2306,7 @@ Signature: HMAC-SHA256(secret, timestamp)  ← подписанный timestamp
 
 1. На ноде установлен `singbox-ui-bot`
 2. Нода доступна по HTTPS на `https://нода.example.com`
-3. На ноде и мастере один и тот же `FEDERATION_SECRET` в `.env`
+3. На мастер-сервере должен быть известен локальный `FEDERATION_SECRET` именно этой удалённой ноды
 
 Проверить, что нода принимает federation запросы:
 ```bash
@@ -2310,13 +2326,15 @@ curl -X POST https://нода.example.com/federation/ping \\
 2. Ввести имя ноды (например `amsterdam`)
 3. Ввести URL ноды: `https://нода.example.com`
 4. Ввести роль: `node` (точка выхода) или `bridge` (промежуточный хоп)
-5. Ввести `FEDERATION_SECRET` с ноды
-6. Бот автоматически пингует ноду и показывает статус
+5. Ввести локальный `FEDERATION_SECRET` этой ноды
+6. Если не знаешь его: открой на ноде `Federation → My secret`
+7. Бот автоматически пингует ноду и показывает статус
 
 #### Через Web UI:
 1. Меню **Federation** → кнопка **Add Node**
-2. Заполнить форму: имя, URL, роль, секрет
-3. Нажать **Save**
+2. При необходимости сначала нажать **Show My Secret** на удалённой ноде
+3. Заполнить форму: имя, URL, `Remote Node Secret`, роль
+4. Нажать **Save**
 
 ---
 
@@ -2479,10 +2497,9 @@ Master: edge.example.com
 
 #### Шаги:
 
-**1. На всех серверах** установить `singbox-ui-bot` и указать одинаковый `FEDERATION_SECRET`:
-```env
-FEDERATION_SECRET=одинаковый_секрет_на_всех_серверах
-```
+**1. На всех серверах** установить `singbox-ui-bot`.
+Локальный `FEDERATION_SECRET` у каждой ноды может быть своим.
+Master должен знать secret именно удалённой ноды, которую он добавляет.
 
 **2. На мастере** добавить ноды через бота:
 - Имя: `amsterdam`, URL: `https://amsterdam.example.com`, роль: `bridge`
@@ -2532,7 +2549,7 @@ Headers:
 
 Protection features:
 - Timestamp is checked to be no older than **60 seconds** (replay protection)
-- `FEDERATION_SECRET` must be identical on master and all nodes
+- every node may have its own local `FEDERATION_SECRET`; the master must know the remote node's secret it is calling
 - Any request with wrong signature returns `403 Forbidden`
 
 ---
@@ -2542,15 +2559,16 @@ Protection features:
 Prerequisites:
 1. `singbox-ui-bot` installed on the node
 2. Node accessible at `https://node.example.com`
-3. Same `FEDERATION_SECRET` in `.env` on both servers
+3. The master must know the remote node's local `FEDERATION_SECRET`
 
 Via **Telegram bot**:
 1. `/menu` → 🔗 **Federation** → ➕ **Add Node**
-2. Enter name, URL, role (`node` or `bridge`), secret
+2. Enter name, URL, role (`node` or `bridge`), and the remote node's secret
+3. If needed, open `Federation → My secret` on the remote server first
 
 Via **Web UI**:
 1. **Federation** → **Add Node** button
-2. Fill the form and save
+2. Fill in name, URL, `Remote Node Secret`, and role, then save
 
 ---
 
@@ -2588,7 +2606,7 @@ Web UI: **Federation** → **Topology** tab
 
 ### Example Setup: 2-Hop Chain
 
-1. All servers: same `FEDERATION_SECRET` in `.env`
+1. Install `singbox-ui-bot` on all servers; each node may keep its own local `FEDERATION_SECRET`
 2. On master: add `amsterdam` (role: `bridge`) and `usa` (role: `node`)
 3. Ping all nodes to verify connectivity
 4. Create bridge: select `amsterdam` → `usa`
@@ -2920,7 +2938,7 @@ Federation позволяет объединить несколько серве
 
 #### Режим Node (простое подключение)
 
-1. Мастер добавляет ноду: имя, URL, shared secret
+1. Мастер добавляет ноду: имя, URL, secret удалённой ноды
 2. Мастер получает список inbounds ноды через `/federation/inbounds`
 3. В Sing-Box мастера создаётся **outbound** → этот сервер
 4. Клиенты мастера могут выходить через эту ноду
@@ -2954,7 +2972,8 @@ Federation позволяет объединить несколько серве
 | Действия | 📡 Ping / Delete |
 
 **Кнопки:**
-- **+ Add Node** — форма: имя, URL, shared secret, роль
+- **My secret** — показать локальный `FEDERATION_SECRET` этого сервера
+- **+ Add Node** — форма: имя, URL, secret удалённой ноды, роль
 - **📡 Ping All** — проверить доступность всех нод
 - **📡 Ping** (у каждой ноды) — проверить одну ноду
 - **🗺 Topology** — схема сети: мастер + все ноды со статусом
@@ -3018,8 +3037,8 @@ Master: edge.example.com
 Три вкладки:
 
 #### 💾 Backup
-- **Download ZIP** — скачать бэкап (config.json + app.db) прямо в браузер
-- **Send to admins** — отослать ZIP всем Telegram-администраторам немедленно
+- **Download ZIP** — скачать recovery ZIP (.env, config, app.db, Nginx/AdGuard state) прямо в браузер
+- **Send to admins** — отослать такой же recovery ZIP всем Telegram-администраторам немедленно
 - **Auto-backup interval** — выпадающий список: Off / 6h / 12h / 24h / 48h / 7 days
 
 #### 📋 Logs
@@ -3140,7 +3159,7 @@ Change password: ☰ menu → top-right profile → **Change Password**
 | 🗺 Routing | Rules table, add/delete, rule sets, import/export JSON |
 | 🛡 AdGuard | Stats cards, toggle protection, manage DNS, filter rules, sync clients |
 | 🌐 Nginx | Override status, hidden paths, configure, SSL, upload/remove custom site, logs |
-| 🔗 Federation | Nodes table, add node, ping all, create bridge, view topology |
+| 🔗 Federation | Nodes table, show local secret, add node, ping all, create bridge, view topology |
 | 👑 Admin | Admins list, audit log, change Web UI password |
 | ⚙️ Settings | Domain input (auto-reloads Nginx), timezone dropdown, bot language buttons, system status |
 | 🔧 Maintenance | Backup (download/send/schedule), log management, IP ban with log analysis |
@@ -3207,13 +3226,18 @@ _DOCS["maintenance"] = {
 
 | Файл | Содержимое |
 |------|-----------|
-| `config.json` | Конфигурация Sing-Box (все входящие, маршруты, ключи) |
-| `app.db` | База данных SQLite (клиенты, администраторы, настройки, логи аудита) |
+| `.env` | Токены и секреты для полного восстановления |
+| `config/sing-box/config.json` | Текущий конфиг Sing-Box |
+| `data/app.db` | SQLite snapshot базы данных |
+| `config/adguard/AdGuardHome.yaml` и `data/adguard_admin_password` | Состояние AdGuard |
+| `data/ssh_port` | Сохранённый SSH-порт |
+| `nginx/.site_enabled`, `nginx/.banned_ips.json`, `nginx/conf.d/singbox.conf` | Состояние Nginx |
+| `nginx/htpasswd/.htpasswd`, `nginx/override/*`, `nginx/certs/*` | Камуфляж, override-сайт и SSL |
 
 #### Ручной бэкап
 
-- **В боте:** кнопка `💾 Backup now` — ZIP-архив отправляется прямо в чат
-- **В Web UI:** кнопка `⬇️ Download ZIP` — браузер скачивает архив; кнопка `📤 Send to admins` — архив отсылается всем Telegram-администраторам
+- **В боте:** кнопка `💾 Backup now` — recovery ZIP отправляется прямо в чат
+- **В Web UI:** кнопка `⬇️ Download ZIP` — браузер скачивает recovery ZIP; кнопка `📤 Send to admins` — такой же архив отсылается всем Telegram-администраторам
 
 #### Автоматический бэкап по расписанию
 
@@ -3331,13 +3355,18 @@ The **Maintenance** section provides tools for automatic and manual server upkee
 
 | File | Contents |
 |------|----------|
-| `config.json` | Sing-Box configuration (inbounds, routes, keys) |
-| `app.db` | SQLite database (clients, admins, settings, audit logs) |
+| `.env` | Tokens and secrets required for full recovery |
+| `config/sing-box/config.json` | Current Sing-Box config |
+| `data/app.db` | SQLite snapshot of the database |
+| `config/adguard/AdGuardHome.yaml` and `data/adguard_admin_password` | AdGuard state |
+| `data/ssh_port` | Saved SSH port |
+| `nginx/.site_enabled`, `nginx/.banned_ips.json`, `nginx/conf.d/singbox.conf` | Nginx state |
+| `nginx/htpasswd/.htpasswd`, `nginx/override/*`, `nginx/certs/*` | Camouflage, override site, and SSL |
 
 #### Manual backup
 
-- **In bot:** `💾 Backup now` button — ZIP is sent directly to the chat
-- **In Web UI:** `⬇️ Download ZIP` — browser downloads the archive; `📤 Send to admins` — sends ZIP to all Telegram admins
+- **In bot:** `💾 Backup now` button — the recovery ZIP is sent directly to the chat
+- **In Web UI:** `⬇️ Download ZIP` — browser downloads the recovery ZIP; `📤 Send to admins` — sends the same archive to all Telegram admins
 
 #### Scheduled auto-backup
 
@@ -3478,7 +3507,8 @@ singbox-ui-bot
   4) 🔄 Restart
   5) ⬆️  Update
   6) 🧹 Clear logs
-  7) 🗑  Uninstall (cleanup server)
+  7) 🔐 Apply firewall (SSH port from bot)
+  8) 🗑  Uninstall (cleanup server)
   0) Exit
 ```
 
@@ -3491,9 +3521,11 @@ singbox-ui-bot
 ```bash
 singbox-ui-bot status     # статус контейнеров
 singbox-ui-bot backup     # создать бэкап
+singbox-ui-bot restore /path/to/backup.zip  # восстановить recovery ZIP
 singbox-ui-bot logs       # просмотр логов
 singbox-ui-bot restart    # перезапустить контейнеры
 singbox-ui-bot update     # обновить до последней версии
+singbox-ui-bot firewall   # применить сохранённый SSH-порт
 singbox-ui-bot uninstall  # полная очистка сервера
 ```
 
@@ -3515,15 +3547,15 @@ singbox-ui-bot status
 ---
 
 #### 💾 Backup
-Создаёт ZIP-архив в домашней папке (`~/singbox-backup_YYYY-MM-DD_HH-MM-SS.zip`).
+Создаёт recovery ZIP-архив в домашней папке (`~/singbox-backup_YYYY-MM-DD_HH-MM-SS.zip`).
 
 Что входит в архив:
 
-| Файл | Содержимое |
-|------|-----------|
-| `config.json` | Конфигурация Sing-Box (inbounds, routes, ключи) |
-| `app.db` | База данных (клиенты, настройки, аудит) |
-| `.env` | Секреты: токен бота, пароли, SECRET_KEY |
+- `.env` — токены и секреты для полного восстановления
+- `config/sing-box/config.json` — текущий конфиг Sing-Box
+- `data/app.db` — база данных (клиенты, настройки, аудит)
+- `config/adguard/AdGuardHome.yaml` и `data/adguard_admin_password` — состояние AdGuard
+- `nginx/override`, `nginx/.site_enabled`, `nginx/.banned_ips.json`, `nginx/htpasswd`, `nginx/certs` — состояние маскировки, IP-ban list и SSL, если они были настроены
 
 ```bash
 singbox-ui-bot backup
@@ -3531,6 +3563,30 @@ singbox-ui-bot backup
 ```
 
 > Всегда делай бэкап перед обновлением или экспериментами.
+
+---
+
+#### Restore
+
+Восстановление на новый сервер:
+1. Установить `singbox-ui-bot`
+2. Перенести backup ZIP
+3. Выполнить:
+
+```bash
+singbox-ui-bot restore /path/to/backup.zip
+```
+
+Во время restore CLI:
+- предложит safety backup
+- восстановит `.env`, host-файлы и `app.db`
+- перезапустит `app`, `singbox`, `nginx`, `adguard`
+
+Если раньше менялся SSH-порт, после restore при необходимости выполни:
+
+```bash
+singbox-ui-bot firewall
+```
 
 ---
 
@@ -3636,16 +3692,9 @@ rsync -avz root@твой-ip:~/singbox-backup_*.zip ./
 curl -fsSL https://raw.githubusercontent.com/ang3el7z/singbox-ui-bot/main/scripts/install.sh | bash
 ```
 
-Если есть бэкап — после установки можно восстановить данные:
+Если есть бэкап — после установки можно восстановить данные одной командой:
 ```bash
-# Скопировать config.json обратно:
-cp ./config.json /opt/singbox-ui-bot/config/sing-box/config.json
-
-# Скопировать базу данных:
-cp ./app.db /opt/singbox-ui-bot/data/app.db
-
-# Перезапустить:
-singbox-ui-bot restart
+singbox-ui-bot restore /path/to/backup.zip
 ```
 
 ---
@@ -3680,7 +3729,8 @@ Useful when:
   4) 🔄 Restart
   5) ⬆️  Update
   6) 🧹 Clear logs
-  7) 🗑  Uninstall (cleanup server)
+  7) 🔐 Apply firewall (SSH port from bot)
+  8) 🗑  Uninstall (cleanup server)
   0) Exit
 ```
 
@@ -3693,9 +3743,11 @@ Pass a subcommand to skip the menu:
 ```bash
 singbox-ui-bot status     # container status
 singbox-ui-bot backup     # create backup
+singbox-ui-bot restore /path/to/backup.zip  # restore recovery ZIP
 singbox-ui-bot logs       # view logs
 singbox-ui-bot restart    # restart containers
 singbox-ui-bot update     # pull & rebuild
+singbox-ui-bot firewall   # apply saved SSH port
 singbox-ui-bot uninstall  # full server cleanup
 ```
 
@@ -3713,15 +3765,39 @@ Shows:
 ---
 
 #### 💾 Backup
-Creates `~/singbox-backup_YYYY-MM-DD_HH-MM-SS.zip` containing:
+Creates a recovery ZIP at `~/singbox-backup_YYYY-MM-DD_HH-MM-SS.zip` containing:
 
-| File | Contents |
-|------|----------|
-| `config.json` | Sing-Box configuration |
-| `app.db` | Database (clients, settings, audit) |
-| `.env` | Secrets: bot token, passwords, SECRET_KEY |
+- `.env` — tokens and secrets required for full recovery
+- `config/sing-box/config.json` — current Sing-Box config
+- `data/app.db` — database (clients, settings, audit)
+- `config/adguard/AdGuardHome.yaml` and `data/adguard_admin_password` — AdGuard state
+- `nginx/override`, `nginx/.site_enabled`, `nginx/.banned_ips.json`, `nginx/htpasswd`, `nginx/certs` — camouflage, IP-ban list, and SSL state when present
 
 > Always backup before updates or experiments.
+
+---
+
+#### Restore
+
+To restore on a new server:
+1. Install `singbox-ui-bot`
+2. Copy the backup ZIP
+3. Run:
+
+```bash
+singbox-ui-bot restore /path/to/backup.zip
+```
+
+During restore the CLI:
+- offers a safety backup
+- restores `.env`, host files, and `app.db`
+- restarts `app`, `singbox`, `nginx`, and `adguard`
+
+If the SSH port had been changed before, run:
+
+```bash
+singbox-ui-bot firewall
+```
 
 ---
 
@@ -3776,9 +3852,7 @@ curl -fsSL https://raw.githubusercontent.com/ang3el7z/singbox-ui-bot/main/script
 
 To restore from a backup after reinstalling:
 ```bash
-cp ./config.json /opt/singbox-ui-bot/config/sing-box/config.json
-cp ./app.db /opt/singbox-ui-bot/data/app.db
-singbox-ui-bot restart
+singbox-ui-bot restore /path/to/backup.zip
 ```
 """,
 }

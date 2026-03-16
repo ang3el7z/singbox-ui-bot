@@ -694,9 +694,37 @@ tailwind.config = {
           <h2 class="text-xl font-bold text-white">Federation</h2>
           <div class="flex gap-2 flex-wrap">
             <button class="btn btn-secondary" @click="loadTopology()" :disabled="loading">🗺 Topology</button>
+            <button class="btn btn-secondary" @click="loadLocalSecret()" :disabled="loading">Show My Secret</button>
             <button class="btn btn-secondary" @click="pingAll()" :disabled="loading">📡 Ping All</button>
             <button class="btn btn-secondary" @click="openBridge()" :disabled="!nodes.some(n=>n.is_active)">🌉 Create Bridge</button>
             <button class="btn btn-primary"   @click="showAdd=true">➕ Add Node</button>
+          </div>
+        </div>
+
+        <div class="card mb-4" x-show="showLocalSecret && localSecret">
+          <div class="flex items-start justify-between gap-3 mb-3">
+            <div>
+              <h3 class="font-semibold text-white">Local Federation Secret</h3>
+              <p class="text-slate-400 text-sm">
+                Open this on the remote server, then paste it into
+                <b>Add Node -> Secret</b> on the server that will connect to it.
+              </p>
+            </div>
+            <button class="btn btn-ghost text-xs" @click="showLocalSecret=false">Close</button>
+          </div>
+          <div class="bg-slate-800 rounded p-3 flex gap-2 items-center mb-3">
+            <code class="text-green-400 text-xs break-all flex-1" x-text="localSecret?.secret"></code>
+            <button class="btn btn-secondary text-xs shrink-0" @click="copyLocalSecret()">Copy</button>
+          </div>
+          <div class="text-sm text-slate-400">
+            <p>
+              This server:
+              <code class="text-indigo-300" x-text="localSecret?.display_name"></code>
+            </p>
+            <p x-show="localSecret?.public_url">
+              Public URL:
+              <code class="text-indigo-300" x-text="localSecret?.public_url"></code>
+            </p>
           </div>
         </div>
 
@@ -733,7 +761,7 @@ tailwind.config = {
             <p class="mb-2">Master: <code class="text-indigo-300" x-text="topology?.master"></code></p>
             <template x-for="n in (topology?.nodes || [])" :key="n.id">
               <div class="flex items-center gap-2 py-1 border-t border-slate-700">
-                <span :class="n.online ? 'badge-green' : 'badge-red'" class="stat-badge" x-text="n.online ? '🟢' : '🔴'"></span>
+                <span :class="n.is_active ? 'badge-green' : 'badge-red'" class="stat-badge" x-text="n.is_active ? '🟢' : '🔴'"></span>
                 <code x-text="n.name"></code>
                 <span class="text-slate-500 text-xs" x-text="n.url"></span>
               </div>
@@ -823,8 +851,11 @@ tailwind.config = {
                 <input type="url" x-model="form.url" class="form-input" required placeholder="https://node.example.com"/>
               </div>
               <div>
-                <label class="text-slate-400 text-sm block mb-1">Shared Secret</label>
+                <label class="text-slate-400 text-sm block mb-1">Remote Node Secret</label>
                 <input type="text" x-model="form.secret" class="form-input" required/>
+                <p class="text-slate-500 text-xs mt-1">
+                  Open Federation -> Show My Secret on that remote server and paste the value here.
+                </p>
               </div>
               <div>
                 <label class="text-slate-400 text-sm block mb-1">Role</label>

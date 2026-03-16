@@ -51,6 +51,32 @@ async def cb_federation_topology(cq: CallbackQuery):
     await cq.message.answer(text, parse_mode="HTML", reply_markup=kb_back("menu_federation"))
 
 
+@router.callback_query(F.data == "federation_secret")
+async def cb_federation_secret(cq: CallbackQuery):
+    try:
+        data = await federation_api.local_secret()
+        display_name = data.get("display_name", "this server")
+        lines = [
+            f"<b>{display_name}</b>",
+            "",
+            "Local federation secret:",
+            f"<code>{data.get('secret', '')}</code>",
+        ]
+        if data.get("domain"):
+            lines.extend(["", f"Domain: <code>{data['domain']}</code>"])
+        elif data.get("public_url"):
+            lines.extend(["", f"URL: <code>{data['public_url']}</code>"])
+        lines.extend([
+            "",
+            "Use this value on another server in Federation -> Add Node -> Secret.",
+        ])
+        text = "\n".join(lines)
+    except APIError as e:
+        text = f"❌ {e.detail}"
+    await cq.answer()
+    await cq.message.answer(text, parse_mode="HTML", reply_markup=kb_back("menu_federation"))
+
+
 @router.callback_query(F.data == "federation_ping_all")
 async def cb_federation_ping_all(cq: CallbackQuery):
     await cq.answer("Pinging…")
@@ -106,7 +132,10 @@ async def fsm_node_name(msg: Message, state: FSMContext):
 async def fsm_node_url(msg: Message, state: FSMContext):
     await state.update_data(url=msg.text.strip())
     await state.set_state(AddNodeFSM.secret)
-    await msg.answer("Enter shared federation secret:")
+    await msg.answer(
+        "Enter the remote node federation secret:\n\n"
+        "Tip: open Federation -> My secret on that remote server.",
+    )
 
 
 @router.message(AddNodeFSM.secret)

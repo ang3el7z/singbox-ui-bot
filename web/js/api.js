@@ -143,6 +143,7 @@ const api = {
 
     // Federation
     fedNodes:     ()            => apiFetch("GET",  "/api/federation/"),
+    fedLocalSecret: ()          => apiFetch("GET",  "/api/federation/local-secret"),
     addFedNode:   (data)        => apiFetch("POST", "/api/federation/", data),
     deleteFedNode:(id)          => apiFetch("DELETE", `/api/federation/${id}`),
     pingNode:     (id)          => apiFetch("POST", `/api/federation/${id}/ping`),
