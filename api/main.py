@@ -3,8 +3,9 @@ FastAPI application — single source of truth for all business logic.
 Both the Telegram bot and Web UI are thin clients of this API.
 """
 from contextlib import asynccontextmanager
+import logging
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pathlib import Path
@@ -17,6 +18,8 @@ from api.routers import docs_router, settings_router, client_templates
 from api.routers import maintenance as maintenance_router
 from sqlalchemy import select
 
+logger = logging.getLogger(__name__)
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -25,6 +28,11 @@ async def lifespan(app: FastAPI):
     await _ensure_default_web_user()
     await _seed_and_apply_settings()
     await _seed_default_templates()
+    try:
+        from api.services.adguard_api import adguard
+        await adguard.bootstrap_admin_password()
+    except Exception as e:
+        logger.warning("AdGuard bootstrap skipped: %s", e)
     # Start background scheduler
     from api.services.scheduler import scheduler_loop
     _sched_task = asyncio.create_task(scheduler_loop())
@@ -97,7 +105,7 @@ def create_app() -> FastAPI:
     app.add_middleware(
         CORSMiddleware,
         allow_origins=["*"],
-        allow_credentials=True,
+        allow_credentials=False,
         allow_methods=["*"],
         allow_headers=["*"],
     )
@@ -132,6 +140,33 @@ def create_app() -> FastAPI:
     @app.get("/health")
     async def health():
         return {"status": "ok", "version": "2.0.0"}
+
+    @app.post(settings.webhook_path, include_in_schema=False)
+    async def telegram_webhook(
+        request: Request,
+        x_telegram_bot_api_secret_token: str = Header(default=""),
+    ):
+        if not settings.use_webhook:
+            raise HTTPException(status_code=404, detail="Webhook mode is disabled")
+        if settings.webhook_secret and x_telegram_bot_api_secret_token != settings.webhook_secret:
+            raise HTTPException(status_code=403, detail="Invalid webhook secret")
+
+        from aiogram.types import Update
+        from api.services.bot_holder import get_bot, get_dispatcher
+
+        bot = get_bot()
+        dp = get_dispatcher()
+        if not bot or not dp:
+            raise HTTPException(status_code=503, detail="Bot runtime is not initialized")
+
+        try:
+            payload = await request.json()
+        except Exception as e:
+            raise HTTPException(status_code=400, detail="Invalid webhook payload") from e
+
+        update = Update.model_validate(payload, context={"bot": bot})
+        await dp.feed_update(bot, update)
+        return {"ok": True}
 
     return app
 

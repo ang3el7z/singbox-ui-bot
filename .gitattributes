@@ -1,0 +1,2 @@
+# Shell scripts must use LF (avoid "syntax error near unexpected token" on Linux)
+*.sh text eol=lf

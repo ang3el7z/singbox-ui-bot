@@ -243,6 +243,61 @@ class SingBoxService:
         self.write_config(cfg)
         return removed
 
+    def upsert_auth_user_route(self, auth_user: str, outbound: str) -> None:
+        """
+        Route all traffic for a specific authenticated inbound user to `outbound`.
+
+        Used by federation bridges on intermediate nodes, where traffic for the
+        dedicated bridge client must always continue to the next hop.
+        """
+        cfg = self.read_config()
+        route = cfg.setdefault("route", {})
+        rules = route.setdefault("rules", [])
+
+        for rule in rules:
+            if rule.get("outbound") != outbound:
+                continue
+            users = rule.get("auth_user")
+            if isinstance(users, list):
+                if auth_user not in users:
+                    users.append(auth_user)
+                    self.write_config(cfg)
+                return
+
+        rule = {"auth_user": [auth_user], "outbound": outbound}
+        rules.insert(self._bridge_rule_insert_index(rules), rule)
+        self.write_config(cfg)
+
+    def remove_auth_user_route(self, auth_user: str, outbound: Optional[str] = None) -> bool:
+        cfg = self.read_config()
+        route = cfg.setdefault("route", {})
+        rules = route.setdefault("rules", [])
+        removed = False
+        new_rules = []
+
+        for rule in rules:
+            users = rule.get("auth_user")
+            if not isinstance(users, list):
+                new_rules.append(rule)
+                continue
+            if outbound is not None and rule.get("outbound") != outbound:
+                new_rules.append(rule)
+                continue
+            if auth_user not in users:
+                new_rules.append(rule)
+                continue
+
+            users = [u for u in users if u != auth_user]
+            removed = True
+            if users:
+                rule["auth_user"] = users
+                new_rules.append(rule)
+
+        if removed:
+            route["rules"] = new_rules
+            self.write_config(cfg)
+        return removed
+
     def get_route_rules(self, rule_key: str) -> list[tuple[str, str]]:
         """Return list of (value, outbound) for a given rule_key."""
         rules = self.get_route().get("rules", [])
@@ -261,6 +316,26 @@ class SingBoxService:
         new_rule = {"outbound": outbound, rule_key: []}
         rules.append(new_rule)
         return new_rule
+
+    def _bridge_rule_insert_index(self, rules: list[dict]) -> int:
+        """
+        Insert federation bridge rules after the built-in system rules
+        (sniff, DNS hijack, private IP direct), but before user-defined rules.
+        """
+        idx = 0
+        while idx < len(rules):
+            rule = rules[idx]
+            if rule.get("action") == "sniff":
+                idx += 1
+                continue
+            if rule.get("protocol") == "dns":
+                idx += 1
+                continue
+            if rule.get("ip_is_private") is True:
+                idx += 1
+                continue
+            break
+        return idx
 
     # ─── Outbounds ────────────────────────────────────────────────────────────
 

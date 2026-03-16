@@ -2,6 +2,7 @@
 Maintenance router — backup, log management, IP ban.
 """
 import io
+import ipaddress
 import time
 import zipfile
 from datetime import datetime
@@ -128,7 +129,7 @@ async def logs_list(auth=Depends(require_any_auth)):
 @router.get("/logs/download/{name}")
 async def log_download(name: str, auth=Depends(require_any_auth)):
     """Download a specific log file."""
-    if "/" in name or name.startswith("."):
+    if "/" in name or "\\" in name or name.startswith("."):
         raise HTTPException(status_code=400, detail="Invalid filename")
     path = LOGS_DIR / name
     if not path.exists() or not path.suffix == ".log":
@@ -145,7 +146,7 @@ async def log_download(name: str, auth=Depends(require_any_auth)):
 @router.post("/logs/clear/{name}")
 async def log_clear_one(name: str, auth=Depends(require_any_auth)):
     """Truncate a specific log file."""
-    if "/" in name or name.startswith("."):
+    if "/" in name or "\\" in name or name.startswith("."):
         raise HTTPException(status_code=400, detail="Invalid filename")
     path = LOGS_DIR / name
     if not path.exists():
@@ -184,13 +185,14 @@ async def ip_ban_list(auth=Depends(require_any_auth)):
 
 @router.post("/ip-ban/add")
 async def ip_ban_add(body: IpBanAddBody, auth=Depends(require_any_auth)):
-    import re
-    if not re.match(r"^\d{1,3}(\.\d{1,3}){3}$", body.ip):
+    try:
+        ip = str(ipaddress.ip_address(body.ip))
+    except ValueError:
         raise HTTPException(status_code=400, detail="Invalid IP address")
-    ip_ban_svc.add_ip(body.ip, reason=body.reason or "manual")
+    ip_ban_svc.add_ip(ip, reason=body.reason or "manual")
     ok, msg = await ip_ban_svc.sync_to_nginx()
-    await audit(auth["actor"], "ip_ban_add", f"ip={body.ip} reason={body.reason}")
-    return {"ip": body.ip, "nginx_reloaded": ok}
+    await audit(auth["actor"], "ip_ban_add", f"ip={ip} reason={body.reason}")
+    return {"ip": ip, "nginx_reloaded": ok}
 
 
 @router.delete("/ip-ban/{ip}")

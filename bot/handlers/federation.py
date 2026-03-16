@@ -215,13 +215,15 @@ async def cb_bridge_confirm(cq: CallbackQuery, state: FSMContext):
     try:
         result = await federation_api.create_bridge(selected)
         chain = result.get("chain", "?")
+        entry_outbound = result.get("entry_outbound", "")
         outbounds = result.get("outbounds", [])
         ob_lines = "\n".join(f"  • <code>{o['outbound_tag']}</code> on {o['server']}" for o in outbounds)
         text = (
             f"✅ <b>Bridge created!</b>\n\n"
             f"Chain: <code>{chain}</code>\n\n"
+            f"Route traffic via: <code>{entry_outbound or '(unknown)'}</code>\n\n"
             f"Outbounds added:\n{ob_lines or '  (none)'}\n\n"
-            f"You can now use these outbound tags in <b>Routing → Add rule</b>."
+            f"Use <code>{entry_outbound or '(unknown)'}</code> in <b>Routing → Add rule</b>."
         )
     except APIError as e:
         text = f"❌ <b>Bridge creation failed</b>\n\n{e.detail}"

@@ -47,6 +47,10 @@ DC() {
     fi
 }
 
+app_container_id() {
+    DC ps -a -q app 2>/dev/null | head -1
+}
+
 # ── Firewall (apply SSH port from bot/app) ────────────────────────────────────
 cmd_firewall() {
     header "Apply firewall (SSH port)"
@@ -77,10 +81,17 @@ cmd_status() {
     DU=$(du -sh "$INSTALL_DIR" 2>/dev/null | cut -f1)
     echo -e "${BOLD}Disk usage:${RESET} $DU"
 
-    # Show DB size if exists
-    DB="$INSTALL_DIR/data/app.db"
-    if [[ -f "$DB" ]]; then
-        DB_SIZE=$(du -sh "$DB" | cut -f1)
+    # Show DB size if the app container exists
+    APP_CID=$(app_container_id)
+    DB_TMP=
+    if [[ -n "${APP_CID:-}" ]]; then
+        DB_TMP=$(mktemp)
+        if docker cp "${APP_CID}:/app/data/app.db" "$DB_TMP" >/dev/null 2>&1; then
+            DB_SIZE=$(du -sh "$DB_TMP" | cut -f1)
+        fi
+        rm -f "$DB_TMP"
+    fi
+    if [[ -n "${DB_SIZE:-}" ]]; then
         echo -e "${BOLD}Database:${RESET} $DB_SIZE"
     fi
 
@@ -88,9 +99,10 @@ cmd_status() {
     LOGS_DIR="$INSTALL_DIR/nginx/logs"
     if [[ -d "$LOGS_DIR" ]]; then
         echo -e "${BOLD}Nginx logs:${RESET}"
-        for f in "$LOGS_DIR"/*.log 2>/dev/null; do
-            [[ -f "$f" ]] && printf "  %-30s %s\n" "$(basename "$f")" "$(du -sh "$f" | cut -f1)"
-        done
+        for f in "$LOGS_DIR"/*.log; do
+            [[ -f "$f" ]] || continue
+            printf "  %-30s %s\n" "$(basename "$f")" "$(du -sh "$f" | cut -f1)"
+        done 2>/dev/null
     fi
 }
 
@@ -100,14 +112,20 @@ cmd_backup() {
 
     TIMESTAMP=$(date +"%Y-%m-%d_%H-%M-%S")
     BACKUP_FILE="${HOME}/singbox-backup_${TIMESTAMP}.zip"
+    TMP_DIR=$(mktemp -d)
+    trap 'rm -rf "$TMP_DIR"' RETURN
 
     info "Creating backup at: $BACKUP_FILE"
 
     # Files to include
     FILES=()
     [[ -f "$INSTALL_DIR/config/sing-box/config.json" ]] && FILES+=("$INSTALL_DIR/config/sing-box/config.json")
-    [[ -f "$INSTALL_DIR/data/app.db"                ]] && FILES+=("$INSTALL_DIR/data/app.db")
     [[ -f "$INSTALL_DIR/.env"                        ]] && FILES+=("$INSTALL_DIR/.env")
+
+    APP_CID=$(app_container_id)
+    if [[ -n "${APP_CID:-}" ]] && docker cp "${APP_CID}:/app/data/app.db" "$TMP_DIR/app.db" >/dev/null 2>&1; then
+        FILES+=("$TMP_DIR/app.db")
+    fi
 
     if [[ ${#FILES[@]} -eq 0 ]]; then
         warn "No backup files found (config.json, app.db, .env)"

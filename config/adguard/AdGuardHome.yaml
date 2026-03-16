@@ -1,6 +1,6 @@
 # AdGuard Home initial configuration for singbox-ui-bot.
-# This file is read-only seed — AdGuard will copy it to /opt/adguardhome/conf on first start.
-# After that, all changes are persisted in the Docker volume (adguard_data).
+# The app can seed the initial admin password here on first startup.
+# Runtime state still lives in the AdGuard work volume (adguard_data).
 
 http:
   pprof:
@@ -11,7 +11,7 @@ http:
 
 users:
   - name: admin
-    # password is empty — admin must set it via AdGuard Web UI at first login
+    # password is injected automatically on first app startup from ADGUARD_PASSWORD
     # Access: https://{your-domain}/{adguard-path}/
 
 auth_attempts: 5

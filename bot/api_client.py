@@ -66,6 +66,14 @@ async def patch(path: str, json: Any = None) -> Any:
         return r.json()
 
 
+async def put(path: str, json: Any = None) -> Any:
+    async with _client() as c:
+        r = await c.put(path, json=json)
+        if not r.is_success:
+            raise APIError(r.status_code, _extract_detail(r))
+        return r.json()
+
+
 async def delete(path: str, **params) -> Any:
     async with _client() as c:
         r = await c.delete(path, params=params)
@@ -116,7 +124,7 @@ class ClientTemplatesAPI:
     async def list(self):                     return await get("/api/client-templates/")
     async def get(self, tid):                 return await get(f"/api/client-templates/{tid}")
     async def create(self, **kw):             return await post("/api/client-templates/", json=kw)
-    async def update(self, tid, **kw):        return await patch(f"/api/client-templates/{tid}", json=kw)
+    async def update(self, tid, **kw):        return await put(f"/api/client-templates/{tid}", json=kw)
     async def delete(self, tid):              return await delete(f"/api/client-templates/{tid}")
     async def set_default(self, tid):         return await post(f"/api/client-templates/{tid}/set-default")
     async def get_default(self):              return await get("/api/client-templates/default")

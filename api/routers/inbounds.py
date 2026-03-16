@@ -1,15 +1,16 @@
 import json
 import secrets
-import uuid as uuid_lib
+from copy import deepcopy
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from api.database import get_db, Inbound
-from api.services.singbox import singbox, SingBoxError
-from api.deps import require_any_auth, audit
+from api.database import Client, Inbound, get_db
+from api.deps import audit, require_any_auth
+from api.services.singbox import SingBoxError, singbox
 
 router = APIRouter()
 
@@ -106,6 +107,23 @@ class InboundCreate(BaseModel):
     custom_config: Optional[dict] = None  # override template fields
 
 
+def _deep_merge(target: dict, patch: dict) -> dict:
+    for key, value in patch.items():
+        if isinstance(value, dict) and isinstance(target.get(key), dict):
+            _deep_merge(target[key], value)
+        else:
+            target[key] = value
+    return target
+
+
+async def _load_inbound_with_meta(tag: str, db: AsyncSession) -> Optional[dict]:
+    result = await db.execute(select(Inbound).where(Inbound.tag == tag))
+    row = result.scalar_one_or_none()
+    if row and row.config_json:
+        return json.loads(row.config_json)
+    return singbox.get_inbound(tag)
+
+
 def _format(ib: Inbound) -> dict:
     return {
         "id": ib.id,
@@ -134,9 +152,9 @@ async def create_inbound(
     if body.protocol not in PROTOCOL_TEMPLATES:
         raise HTTPException(status_code=400, detail=f"Unknown protocol: {body.protocol}. Choose from {list(PROTOCOL_TEMPLATES)}")
 
-    template = dict(PROTOCOL_TEMPLATES[body.protocol])
+    template = deepcopy(PROTOCOL_TEMPLATES[body.protocol])
     if body.custom_config:
-        template.update(body.custom_config)
+        _deep_merge(template, body.custom_config)
 
     template["tag"] = body.tag
     template["listen_port"] = body.listen_port
@@ -175,8 +193,12 @@ async def create_inbound(
 
 
 @router.get("/{tag}")
-async def get_inbound(tag: str, auth: dict = Depends(require_any_auth)):
-    ib = singbox.get_inbound(tag)
+async def get_inbound(
+    tag: str,
+    db: AsyncSession = Depends(get_db),
+    auth: dict = Depends(require_any_auth),
+):
+    ib = await _load_inbound_with_meta(tag, db)
     if not ib:
         raise HTTPException(status_code=404, detail="Inbound not found")
     return ib
@@ -189,16 +211,35 @@ async def update_inbound(
     db: AsyncSession = Depends(get_db),
     auth: dict = Depends(require_any_auth),
 ):
-    ib = singbox.get_inbound(tag)
+    ib = await _load_inbound_with_meta(tag, db)
     if not ib:
         raise HTTPException(status_code=404, detail="Inbound not found")
-    ib.update(update)
+    _deep_merge(ib, update)
     ib["tag"] = tag  # ensure tag not overwritten
     try:
         singbox.save_inbound(ib)
         await singbox.reload()
     except SingBoxError as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+    result = await db.execute(select(Inbound).where(Inbound.tag == tag))
+    row = result.scalar_one_or_none()
+    if row is None:
+        row = Inbound(
+            tag=tag,
+            protocol=ib.get("type", "unknown"),
+            listen_port=int(ib.get("listen_port", 0)),
+            enable=bool(ib.get("enable", True)),
+            config_json=json.dumps(ib),
+        )
+    else:
+        row.protocol = ib.get("type", row.protocol)
+        row.listen_port = int(ib.get("listen_port", row.listen_port))
+        row.enable = bool(ib.get("enable", row.enable))
+        row.config_json = json.dumps(ib)
+    db.add(row)
+    await db.commit()
+
     await audit(auth["actor"], "update_inbound", f"tag={tag}")
     return ib
 
@@ -213,5 +254,18 @@ async def delete_inbound(
     if not ok:
         raise HTTPException(status_code=404, detail="Inbound not found")
     await singbox.reload()
-    await audit(auth["actor"], "delete_inbound", f"tag={tag}")
-    return {"detail": "Deleted"}
+
+    result = await db.execute(select(Inbound).where(Inbound.tag == tag))
+    row = result.scalar_one_or_none()
+    if row:
+        await db.delete(row)
+
+    result = await db.execute(select(Client).where(Client.inbound_tag == tag))
+    deleted_clients = 0
+    for client in result.scalars().all():
+        await db.delete(client)
+        deleted_clients += 1
+    await db.commit()
+
+    await audit(auth["actor"], "delete_inbound", f"tag={tag} deleted_clients={deleted_clients}")
+    return {"detail": "Deleted", "deleted_clients": deleted_clients}

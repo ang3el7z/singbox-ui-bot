@@ -187,6 +187,7 @@ def save_override_zip(content: bytes) -> int:
     """
     _clear_override()
     count = 0
+    total_unpacked = 0
     with zipfile.ZipFile(io.BytesIO(content)) as zf:
         members = zf.namelist()
         # Detect single-folder wrapper (e.g. site/index.html → strip prefix)
@@ -204,7 +205,14 @@ def save_override_zip(content: bytes) -> int:
             rel = member[len(prefix):] if prefix and member.startswith(prefix) else member
             if not rel:
                 continue
-            dest = OVERRIDE_DIR / rel
+            normalized = Path(rel)
+            if normalized.is_absolute() or ".." in normalized.parts:
+                raise ValueError(f"Unsafe path in ZIP: {rel}")
+            info = zf.getinfo(member)
+            total_unpacked += info.file_size
+            if total_unpacked > 100 * 1024 * 1024:
+                raise ValueError("ZIP expands to more than 100 MB")
+            dest = OVERRIDE_DIR / normalized
             dest.parent.mkdir(parents=True, exist_ok=True)
             dest.write_bytes(zf.read(member))
             count += 1

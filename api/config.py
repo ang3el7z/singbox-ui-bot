@@ -34,6 +34,8 @@ class Settings(BaseSettings):
     adguard_url: str = "http://adguard:3000"
     adguard_user: str = "admin"
     adguard_password: str = "changeme"
+    adguard_container: str = "singbox_adguard"
+    adguard_config_path: str = "/app/config/adguard/AdGuardHome.yaml"
 
     # ── Federation ────────────────────────────────────────────────────────────
     federation_secret: str = "change_federation_secret"
@@ -46,6 +48,7 @@ class Settings(BaseSettings):
     webhook_host: str = ""
     webhook_path: str = "/webhook"
     webhook_port: int = 8080
+    webhook_secret: str = ""
 
     @property
     def use_webhook(self) -> bool:

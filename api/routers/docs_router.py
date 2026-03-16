@@ -1927,7 +1927,7 @@ rule_set: geosite-netflix.srs → exit_us-node
 
 1. В боте или Web UI открой клиента → **🔗 Sub URL** → **Windows ZIP**
 2. Скачай архив (содержит `sing-box.exe`, `winsw3.exe`, все скрипты и `winsw3.xml`)
-3. Распакуй в папку, например `C:\singbox\`
+3. Распакуй в папку, например `C:\\singbox\\`
 4. Запусти `install.cmd` **от Администратора** — сервис установится и запустится
 5. Конфиг загружается с сервера автоматически при каждом старте
 6. `restart.cmd` — перезапуск, `status.cmd` — статус, `uninstall.cmd` — удаление
@@ -2185,7 +2185,7 @@ When downloading a client config (bot: "🔗 Sub URL" or "📄 Config file"), ch
 
 1. In the bot or Web UI open a client → **🔗 Sub URL** → **Windows ZIP**
 2. Download the archive (contains `sing-box.exe`, `winsw3.exe`, all scripts and `winsw3.xml`)
-3. Extract to a folder, e.g. `C:\singbox\`
+3. Extract to a folder, e.g. `C:\\singbox\\`
 4. Run `install.cmd` **as Administrator** — service is installed and started
 5. Config is downloaded from the server automatically on every service start
 6. `restart.cmd` — restart, `status.cmd` — status, `uninstall.cmd` — remove

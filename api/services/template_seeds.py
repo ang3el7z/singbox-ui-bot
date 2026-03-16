@@ -6,7 +6,7 @@ Architecture mirrors vpnbot's sing.json:
   - mixed inbound on 127.0.0.1:2080 for HTTP/SOCKS5 proxy mode
   - AdGuard DoH DNS via __dns_url__ placeholder (per-user URL injected at subscription time)
   - dns_bootstrap (TCP 8.8.8.8) resolves the DoH server hostname (avoids circular dependency)
-  - Route order: sniff → hijack-dns → resolve (mixed inbound) → private IPs direct → user rules → final: proxy
+  - Route order: sniff → hijack-dns → resolve (mixed inbound) → private IPs direct → user rules → final: direct
 
 Placeholders:
   {"tag": "proxy", "type": "__proxy__"}  — replaced with real outbound (VLESS/SS/Trojan/etc.)

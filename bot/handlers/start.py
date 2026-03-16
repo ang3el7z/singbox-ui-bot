@@ -26,6 +26,15 @@ _TIMEZONES = [
 _PER_PAGE = 9
 
 
+def _normalize_domain(raw: str) -> str:
+    domain = raw.strip().lower()
+    if domain.startswith("https://"):
+        domain = domain[len("https://"):]
+    elif domain.startswith("http://"):
+        domain = domain[len("http://"):]
+    return domain.rstrip("/")
+
+
 # ─── Setup FSM ────────────────────────────────────────────────────────────────
 
 class SetupFSM(StatesGroup):
@@ -210,7 +219,7 @@ async def setup_dom_custom(cq: CallbackQuery, state: FSMContext):
 
 @router.message(SetupFSM.domain)
 async def setup_dom_input(msg: Message, state: FSMContext):
-    domain = msg.text.strip().lower().lstrip("https://").lstrip("http://").rstrip("/")
+    domain = _normalize_domain(msg.text)
     data = await state.get_data()
     lang = data.get("lang", "en")
 

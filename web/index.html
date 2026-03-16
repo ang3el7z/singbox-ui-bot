@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>Singbox UI</title>
 
+<!-- App components must register before Alpine runs (alpine:init) -->
+<script type="module" src="/web/js/app.js"></script>
 <!-- Alpine.js (defer) -->
 <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
 <!-- Tailwind CDN -->
@@ -13,7 +15,6 @@
 <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 
 <link rel="stylesheet" href="/web/css/style.css"/>
-<script type="module" src="/web/js/app.js"></script>
 
 <script>
 tailwind.config = {
@@ -785,6 +786,10 @@ tailwind.config = {
               <div class="p-3 bg-green-900/30 border border-green-700 rounded">
                 <p class="text-green-400 font-semibold mb-1">✅ Bridge created!</p>
                 <p class="text-slate-300 text-sm">Chain: <code x-text="bridgeResult?.chain"></code></p>
+                <p class="text-slate-300 text-sm mt-1">
+                  Route traffic via:
+                  <code class="text-indigo-300" x-text="bridgeResult?.entry_outbound"></code>
+                </p>
               </div>
               <div x-show="(bridgeResult?.outbounds||[]).length">
                 <p class="text-slate-400 text-sm mb-1">Outbounds added to sing-box:</p>
@@ -796,7 +801,7 @@ tailwind.config = {
                   </div>
                 </template>
                 <p class="text-slate-400 text-sm mt-2">
-                  Use these tags in <b>Routing → Add rule</b> to route traffic through this bridge.
+                  Use <b x-text="bridgeResult?.entry_outbound"></b> in <b>Routing → Add rule</b>.
                 </p>
               </div>
               <button class="btn btn-ghost w-full" @click="showBridge=false; bridgeResult=null">Close</button>

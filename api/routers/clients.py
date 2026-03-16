@@ -49,7 +49,16 @@ async def _resolve_template(client: Client, db: AsyncSession) -> str:
 
     # Last resort: seed data not yet loaded — return built-in tun JSON
     from api.services.template_seeds import get_builtin_config_json
-    return get_builtin_config_json("tun")
+    return get_builtin_config_json("default")
+
+
+def _require_domain_configured() -> str:
+    from api.routers.settings_router import get_runtime
+
+    domain = (get_runtime("domain") or "").strip()
+    if not domain:
+        raise HTTPException(status_code=400, detail="Domain is not configured yet. Set it in Settings first.")
+    return domain
 
 router = APIRouter()
 
@@ -136,8 +145,6 @@ async def create_client(
     if proto in ("vless", "vmess", "tuic"):
         user_entry["uuid"] = new_uuid
     elif proto in ("trojan", "hysteria2", "shadowsocks"):
-        user_entry["password"] = new_password
-    elif proto == "shadowsocks":
         user_entry["password"] = new_password
 
     # Add to sing-box config
@@ -267,6 +274,8 @@ async def windows_zip(
     Releases and cached in data/windows-service/.
     Subsequent calls serve instantly from cache.
     """
+    _require_domain_configured()
+
     from fastapi.responses import Response as FastAPIResponse
     result = await db.execute(select(Client).where(Client.sub_id == sub_id))
     c = result.scalar_one_or_none()
@@ -313,6 +322,8 @@ async def winsw_xml(
       5. Run as Administrator: singbox-service.exe install
       6. sc start singbox
     """
+    _require_domain_configured()
+
     from fastapi.responses import Response
     result = await db.execute(select(Client).where(Client.sub_id == sub_id))
     c = result.scalar_one_or_none()
@@ -357,6 +368,8 @@ async def public_subscription(
     Uses the template assigned to the client, or the default template if none is set.
     Response includes Profile-* headers for sing-box / clash meta clients.
     """
+    _require_domain_configured()
+
     result = await db.execute(select(Client).where(Client.sub_id == sub_id))
     c = result.scalar_one_or_none()
     if not c or not c.enable:
@@ -386,11 +399,20 @@ async def public_subscription(
 
 
 @router.get("/templates")
-async def list_templates(auth: dict = Depends(require_any_auth)):
-    """Return available client config templates."""
+async def list_templates(
+    db: AsyncSession = Depends(get_db),
+    auth: dict = Depends(require_any_auth),
+):
+    """Legacy alias for listing client templates."""
+    result = await db.execute(select(ClientTemplate).order_by(ClientTemplate.id))
     return [
-        {"id": tid, **meta}
-        for tid, meta in singbox.CLIENT_TEMPLATES.items()
+        {
+            "id": t.id,
+            "name": t.name,
+            "label": t.label,
+            "is_default": t.is_default,
+        }
+        for t in result.scalars().all()
     ]
 
 
@@ -401,6 +423,7 @@ async def get_sub_url(
     auth: dict = Depends(require_any_auth),
 ):
     """Return the public subscription URL(s) for a client."""
+    _require_domain_configured()
     c = await db.get(Client, client_id)
     if not c:
         raise HTTPException(status_code=404, detail="Client not found")
@@ -424,6 +447,7 @@ async def get_subscription(
     auth: dict = Depends(require_any_auth),
 ):
     """Return client-side sing-box config using the client's assigned template (or default)."""
+    _require_domain_configured()
     c = await db.get(Client, client_id)
     if not c:
         raise HTTPException(status_code=404, detail="Client not found")

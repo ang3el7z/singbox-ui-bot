@@ -128,6 +128,7 @@ generate_env() {
     JWT_SECRET=$(openssl rand -hex 32)
     WEB_PASS=$(openssl rand -hex 12)
     AG_PASS=$(openssl rand -hex 12)
+    WEBHOOK_SECRET=$(openssl rand -hex 32)
 
     cat > "$INSTALL_DIR/.env" <<EOF
 # ── Telegram Bot ──────────────────────────────────────────────────────────────
@@ -163,6 +164,7 @@ SECRET_KEY=$SECRET_KEY
 WEBHOOK_HOST=
 WEBHOOK_PATH=/webhook
 WEBHOOK_PORT=8080
+WEBHOOK_SECRET=$WEBHOOK_SECRET
 
 # ── NOTE ──────────────────────────────────────────────────────────────────────
 # Domain, timezone and bot language are stored ONLY in the database.
@@ -340,10 +342,12 @@ post_install() {
     echo ""
     echo "  🌐 Web UI will be available after domain is set."
     echo "     (temporary: http://${SERVER_IP}/web/)"
+    echo "     Use the temporary HTTP URL only to verify reachability before SSL."
     echo ""
     echo "  🔑 Credentials (save these!):"
     echo "     Web UI login:  admin / $WEB_PASS_SHOWN"
     echo "     AdGuard:       admin / $AG_PASS_SHOWN"
+    echo "     (AdGuard password is auto-seeded on first app startup)"
     echo ""
     echo "  Container status:"
     docker compose -f "$INSTALL_DIR/docker-compose.yml" ps

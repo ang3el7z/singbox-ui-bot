@@ -79,7 +79,11 @@ async def upload_override(
         await nginx_service.reload_nginx()
         return {"detail": "HTML saved", "type": "html"}
     elif filename.lower().endswith(".zip"):
-        count = nginx_service.save_override_zip(content)
+        try:
+            count = nginx_service.save_override_zip(content)
+        except ValueError as e:
+            nginx_service.remove_override()
+            raise HTTPException(status_code=400, detail=str(e))
         if not (nginx_service.OVERRIDE_DIR / "index.html").exists():
             nginx_service.remove_override()
             raise HTTPException(status_code=400, detail="index.html not found in ZIP")

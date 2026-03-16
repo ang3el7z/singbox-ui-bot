@@ -15,7 +15,7 @@ from api.main import app as fastapi_app
 
 from bot.middleware.auth import AdminAuthMiddleware
 from bot.middleware.rate_limit import RateLimitMiddleware
-from bot.handlers import start, server, clients, inbounds, routing, adguard, nginx, federation, admin, docs, settings, maintenance, client_templates
+from bot.handlers import start, server, clients, inbounds, routing, adguard, nginx, federation, admin, docs, settings as settings_handlers, maintenance, client_templates
 
 logging.basicConfig(
     level=logging.INFO,
@@ -46,7 +46,7 @@ def create_dispatcher() -> Dispatcher:
     dp.include_router(federation.router)
     dp.include_router(admin.router)
     dp.include_router(docs.router)
-    dp.include_router(settings.router)
+    dp.include_router(settings_handlers.router)
     dp.include_router(maintenance.router)
     dp.include_router(client_templates.router)
 
@@ -56,7 +56,10 @@ def create_dispatcher() -> Dispatcher:
 async def run_bot(bot: Bot, dp: Dispatcher) -> None:
     if settings.use_webhook:
         logger.info("Starting webhook mode: %s", settings.webhook_url)
-        await bot.set_webhook(settings.webhook_url)
+        kwargs = {}
+        if settings.webhook_secret:
+            kwargs["secret_token"] = settings.webhook_secret
+        await bot.set_webhook(settings.webhook_url, **kwargs)
     else:
         logger.info("Starting polling mode")
         await dp.start_polling(bot)
@@ -78,8 +81,9 @@ async def main() -> None:
     dp = create_dispatcher()
 
     # Register bot reference so scheduler can send messages to admins
-    from api.services.bot_holder import set_bot
+    from api.services.bot_holder import set_bot, set_dispatcher
     set_bot(bot)
+    set_dispatcher(dp)
 
     await asyncio.gather(
         run_api(),

@@ -119,7 +119,12 @@ async def create_bridge(body: BridgeCreate, db: AsyncSession = Depends(get_db), 
         raise HTTPException(status_code=500, detail=str(e))
     chain = result.get("chain", "")
     await audit(auth["actor"], "create_bridge", chain)
-    return {"detail": "Bridge created", "chain": chain, "outbounds": result.get("created", [])}
+    return {
+        "detail": "Bridge created",
+        "chain": chain,
+        "entry_outbound": result.get("entry_outbound", ""),
+        "outbounds": result.get("created", []),
+    }
 
 
 @router.get("/topology")

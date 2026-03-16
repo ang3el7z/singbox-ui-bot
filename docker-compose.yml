@@ -19,6 +19,7 @@ services:
     env_file: .env
     volumes:
       - ./config/sing-box:/etc/sing-box       # shared with singbox container
+      - ./config/adguard:/app/config/adguard  # AdGuard bootstrap/password seeding
       - ./data:/app/host_data                 # ssh_port etc. — read by manage.sh on host
       - ./nginx/templates:/app/nginx/templates
       - ./nginx/override:/var/www/override    # user-uploaded site
