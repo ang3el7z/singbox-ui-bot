@@ -79,11 +79,15 @@ if [ -f "$TMP_DIR/nginx/.banned_ips.json" ]; then
 else
     rm -f "$INSTALL_DIR/nginx/.banned_ips.json"
 fi
-if [ -f "$TMP_DIR/nginx/.site_enabled" ]; then
-    cp "$TMP_DIR/nginx/.site_enabled" "$INSTALL_DIR/nginx/.site_enabled"
+if [ -f "$TMP_DIR/nginx/.web_ui_enabled" ]; then
+    cp "$TMP_DIR/nginx/.web_ui_enabled" "$INSTALL_DIR/nginx/.web_ui_enabled"
+elif [ -f "$TMP_DIR/nginx/.site_enabled" ]; then
+    # Backward-compat: old backups stored this marker as ".site_enabled".
+    cp "$TMP_DIR/nginx/.site_enabled" "$INSTALL_DIR/nginx/.web_ui_enabled"
 else
-    rm -f "$INSTALL_DIR/nginx/.site_enabled"
+    rm -f "$INSTALL_DIR/nginx/.web_ui_enabled"
 fi
+rm -f "$INSTALL_DIR/nginx/.site_enabled"
 if [ -f "$TMP_DIR/nginx/conf.d/singbox.conf" ]; then
     cp "$TMP_DIR/nginx/conf.d/singbox.conf" "$INSTALL_DIR/nginx/conf.d/singbox.conf"
 fi

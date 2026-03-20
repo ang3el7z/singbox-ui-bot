@@ -627,14 +627,14 @@ function nginxComponent() {
         },
 
         async toggleSite() {
-            const current = this.status?.site_enabled ?? false;
+            const current = this.status?.web_ui_enabled ?? this.status?.site_enabled ?? false;
             const next = !current;
             const label = next ? "enable" : "disable";
-            if (!confirm(`${label.charAt(0).toUpperCase() + label.slice(1)} stub on '/'? Nginx will be reloaded.`)) return;
+            if (!confirm(`${label.charAt(0).toUpperCase() + label.slice(1)} Web UI on '/web/'? Nginx will be reloaded.`)) return;
             this.loading = true;
             try {
                 await api.nginxSiteToggle(next);
-                this.$dispatch("toast", { msg: `Stub ${next ? "enabled" : "disabled"}`, type: "success" });
+                this.$dispatch("toast", { msg: `Web UI ${next ? "enabled" : "disabled"}`, type: "success" });
                 await this.load();
             } catch (e) {
                 this.$dispatch("toast", { msg: e.message, type: "error" });

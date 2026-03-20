@@ -108,6 +108,7 @@ _SINGLE_FILES = [
     (HOST_DATA_DIR / "adguard_admin_password", "data/adguard_admin_password"),
     (HOST_DATA_DIR / "ssh_port", "data/ssh_port"),
     (NGINX_DIR / ".banned_ips.json", "nginx/.banned_ips.json"),
+    (NGINX_DIR / ".web_ui_enabled", "nginx/.web_ui_enabled"),
     (NGINX_DIR / ".site_enabled", "nginx/.site_enabled"),
     (NGINX_DIR / "conf.d" / "singbox.conf", "nginx/conf.d/singbox.conf"),
     (NGINX_DIR / "htpasswd" / ".htpasswd", "nginx/htpasswd/.htpasswd"),

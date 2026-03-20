@@ -156,7 +156,7 @@ async def _nginx_menu_text_and_kb():
         st = await nginx_api.status()
         override = st.get("override", {})
         has_override = override.get("active", False)
-        site_enabled = st.get("site_enabled", False)
+        web_ui_enabled = st.get("web_ui_enabled", st.get("site_enabled", False))
         domain = (st.get("domain") or "").strip()
         cert = st.get("cert") or {}
 
@@ -170,8 +170,8 @@ async def _nginx_menu_text_and_kb():
             f"📄 Stub files: {'✅ uploaded' if has_override else '❌ not uploaded'}",
         )
         site_line = _txt(
-            f"👁 Заглушка: {'🟢 включена' if site_enabled else '🔴 выключена (на / 401 заглушка)'}",
-            f"👁 Stub: {'🟢 ON' if site_enabled else '🔴 OFF (401 stub on /)'}",
+            f"🖥 Web UI: {'🟢 включен' if web_ui_enabled else '🔴 выключен'}",
+            f"🖥 Web UI: {'🟢 ON' if web_ui_enabled else '🔴 OFF'}",
         )
         text = "\n".join([
             "🌐 <b>Nginx</b>",
@@ -181,7 +181,7 @@ async def _nginx_menu_text_and_kb():
             override_line,
             site_line,
         ])
-        kb = kb_nginx_menu(site_enabled=site_enabled)
+        kb = kb_nginx_menu(site_enabled=web_ui_enabled, has_override=has_override)
     except APIError as e:
         text = f"❌ {escape(e.detail)}"
         kb = kb_nginx_menu()

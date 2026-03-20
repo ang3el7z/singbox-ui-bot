@@ -606,20 +606,20 @@ tailwind.config = {
       <div class="p-6">
         <h2 class="text-xl font-bold text-white mb-6">🌐 Nginx</h2>
 
-        <!-- Stub toggle banner -->
+        <!-- Web UI toggle banner -->
         <div class="card mb-4 flex items-center justify-between gap-4 flex-wrap">
           <div>
-            <p class="text-white font-semibold mb-1">Stub visibility</p>
+            <p class="text-white font-semibold mb-1">Web UI access</p>
             <p class="text-slate-400 text-sm">
-              <span x-show="status?.site_enabled">🟢 <b>ON</b> — root <code>/</code> serves uploaded stub files.</span>
-              <span x-show="!status?.site_enabled">🔴 <b>OFF</b> — root <code>/</code> shows 401 Basic Auth stub. <em>(default)</em></span>
+              <span x-show="(status?.web_ui_enabled ?? status?.site_enabled)">🟢 <b>ON</b> — Web UI is available on <code>/web/</code>.</span>
+              <span x-show="!(status?.web_ui_enabled ?? status?.site_enabled)">🔴 <b>OFF</b> — Web UI is disabled (returns 404 on <code>/web/</code>). <em>(default)</em></span>
             </p>
           </div>
           <button
             class="btn flex-shrink-0"
-            :class="status?.site_enabled ? 'btn-danger' : 'btn-success'"
+            :class="((status?.web_ui_enabled ?? status?.site_enabled) ? 'btn-danger' : 'btn-success')"
             @click="toggleSite()" :disabled="loading">
-            <span x-text="status?.site_enabled ? '🔴 Disable stub' : '🟢 Enable stub'"></span>
+            <span x-text="((status?.web_ui_enabled ?? status?.site_enabled) ? '🔴 Disable Web UI' : '🟢 Enable Web UI')"></span>
           </button>
         </div>
 
@@ -639,11 +639,11 @@ tailwind.config = {
             </p>
             <div x-show="status?.override?.active" class="badge-green stat-badge mb-3">✅ Stub files uploaded</div>
             <div x-show="!status?.override?.active" class="badge-yellow stat-badge mb-3">⚠️ No stub files uploaded</div>
-            <label class="btn btn-secondary w-full cursor-pointer text-center">
+            <label x-show="!status?.override?.active" class="btn btn-secondary w-full cursor-pointer text-center">
               📤 Upload stub HTML / ZIP
               <input type="file" class="hidden" accept=".html,.htm,.zip" @change="uploadSite($event)"/>
             </label>
-            <button class="btn btn-danger w-full mt-2" @click="removeOverride()">
+            <button x-show="status?.override?.active" class="btn btn-danger w-full mt-2" @click="removeOverride()">
               🗑 Delete stub files
             </button>
           </div>

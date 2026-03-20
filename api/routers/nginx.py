@@ -17,14 +17,15 @@ MAX_UPLOAD_BYTES = 20 * 1024 * 1024
 async def nginx_status(auth: dict = Depends(require_any_auth)):
     override = nginx_service.override_status()
     paths = nginx_service.get_hidden_paths()
-    site_enabled = nginx_service.get_site_enabled()
+    web_ui_enabled = nginx_service.get_site_enabled()
     from api.routers.settings_router import get_runtime
     domain = get_runtime("domain")
     cert = nginx_service.get_cert_status(domain)
     return {
         "override": override,
         "paths": paths,
-        "site_enabled": site_enabled,
+        "site_enabled": web_ui_enabled,      # backward-compat for existing UI clients
+        "web_ui_enabled": web_ui_enabled,
         "domain": domain,
         "cert": cert,
     }
@@ -128,9 +129,11 @@ async def override_status(auth: dict = Depends(require_any_auth)):
 @router.post("/site/toggle")
 async def site_toggle(enabled: bool, auth: dict = Depends(require_any_auth)):
     """
-    Enable or disable the public site.
-    enabled=true  → root '/' serves the uploaded override (or falls back to 401 popup).
-    enabled=false → root '/' always shows the 401 Basic Auth camouflage popup.
+    Enable or disable Web UI.
+    enabled=true  → /web/ serves Web UI.
+    enabled=false → /web/ returns 404.
+    Root '/' is unaffected by this toggle and always works in stub mode:
+    uploaded override page if present, otherwise 401 camouflage.
     Regenerates nginx config and reloads nginx automatically.
     """
     from api.routers.settings_router import get_runtime
@@ -143,5 +146,5 @@ async def site_toggle(enabled: bool, auth: dict = Depends(require_any_auth)):
         nginx_service.set_site_enabled(not enabled)
         raise HTTPException(status_code=500, detail=f"Config error: {msg}")
     await nginx_service.reload_nginx()
-    await audit(auth["actor"], "nginx_site_toggle", f"enabled={enabled}")
-    return {"site_enabled": enabled}
+    await audit(auth["actor"], "nginx_web_ui_toggle", f"enabled={enabled}")
+    return {"site_enabled": enabled, "web_ui_enabled": enabled}

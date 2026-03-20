@@ -60,23 +60,13 @@ server {
     root /var/www/override;
 
     location = / {
-        {% if site_enabled %}
-        # Site is ON — serve override/index.html if uploaded, fall back to 401 popup
         try_files /index.html @auth;
-        {% else %}
-        # Site is OFF (default) — always show 401 Basic Auth popup (camouflage)
-        try_files /dev/null @auth;
-        {% endif %}
     }
 
     # Static assets that override page may reference (CSS, images, fonts…)
     location /override/ {
-        {% if site_enabled %}
         alias /var/www/override/;
         try_files $uri =404;
-        {% else %}
-        return 404;
-        {% endif %}
     }
 
     # Named location: shows browser's native HTTP Basic Auth dialog
@@ -89,8 +79,12 @@ server {
 
     # ── Web UI ────────────────────────────────────────────────────────────────
     location /web/ {
+        {% if site_enabled %}
         alias /var/www/web/;
         try_files $uri $uri/ /web/index.html;
+        {% else %}
+        return 404;
+        {% endif %}
     }
 
     # ── API (hidden path) ────────────────────────────────────────────────────

@@ -284,16 +284,27 @@ def kb_adguard_rules() -> InlineKeyboardMarkup:
 
 # ─── Nginx ────────────────────────────────────────────────────────────────────
 
-def kb_nginx_menu(site_enabled: bool = False) -> InlineKeyboardMarkup:
-    site_btn = (
+def kb_nginx_menu(site_enabled: bool = False, has_override: bool = False) -> InlineKeyboardMarkup:
+    webui_btn = (
         InlineKeyboardButton(
-            text=_txt("🟢 Включить заглушку", "🟢 Enable stub"),
+            text=_txt("🟢 Включить Web UI", "🟢 Enable Web UI"),
             callback_data="nginx_site_on",
         )
         if not site_enabled else
         InlineKeyboardButton(
-            text=_txt("🔴 Выключить заглушку", "🔴 Disable stub"),
+            text=_txt("🔴 Выключить Web UI", "🔴 Disable Web UI"),
             callback_data="nginx_site_off",
+        )
+    )
+    stub_action_btn = (
+        InlineKeyboardButton(
+            text=_txt("🗑 Удалить заглушку", "🗑 Delete stub"),
+            callback_data="nginx_delete_override",
+        )
+        if has_override else
+        InlineKeyboardButton(
+            text=_txt("📤 Загрузить заглушку", "📤 Upload stub"),
+            callback_data="nginx_upload_site",
         )
     )
     return _build(
@@ -301,9 +312,8 @@ def kb_nginx_menu(site_enabled: bool = False) -> InlineKeyboardMarkup:
          InlineKeyboardButton(text=_txt("🔐 Выпустить SSL", "🔐 Issue SSL"), callback_data="nginx_ssl")],
         [InlineKeyboardButton(text=_txt("🔒 Скрытые пути", "🔒 Hidden paths"), callback_data="nginx_paths"),
          InlineKeyboardButton(text=_txt("📋 Логи доступа", "📋 Access logs"), callback_data="nginx_logs")],
-        [InlineKeyboardButton(text=_txt("📤 Загрузить заглушку", "📤 Upload stub"), callback_data="nginx_upload_site"),
-         InlineKeyboardButton(text=_txt("🗑 Удалить заглушку", "🗑 Delete stub"), callback_data="nginx_delete_override")],
-        [site_btn],
+        [stub_action_btn],
+        [webui_btn],
         [InlineKeyboardButton(text=_txt("⬅️ Назад", "⬅️ Back"), callback_data="main_menu")],
     )
 

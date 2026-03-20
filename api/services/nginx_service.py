@@ -33,7 +33,8 @@ HTPASSWD_DIR       = NGINX_DIR / "htpasswd"
 HTPASSWD_FILE      = HTPASSWD_DIR / ".htpasswd"
 TEMPLATES_DIR      = NGINX_DIR / "templates"
 LOGS_DIR           = NGINX_DIR / "logs"
-SITE_ENABLED_MARKER = NGINX_DIR / ".site_enabled"   # presence = site ON, absence = site OFF
+SITE_ENABLED_MARKER = NGINX_DIR / ".web_ui_enabled"  # presence = Web UI ON, absence = OFF
+LEGACY_SITE_MARKER  = NGINX_DIR / ".site_enabled"    # legacy marker from old "site toggle" logic
 CERTBOT_WEBROOT    = Path("/var/www/certbot")
 
 # Ensure dirs exist on import
@@ -211,9 +212,12 @@ def write_config(config_text: str, filename: str = "singbox.conf") -> Path:
 
 def get_site_enabled() -> bool:
     """
-    Returns whether the public site is enabled.
-    Enabled  → root '/' tries /override/index.html first, falls back to 401 stub.
-    Disabled → root '/' always shows 401 Basic Auth popup (default/safe state).
+    Returns whether Web UI is enabled.
+    Enabled  → /web/ serves the panel.
+    Disabled → /web/ returns 404.
+    Root '/' is always controlled by override files:
+      - index.html present -> serve stub page
+      - no index.html      -> 401 Basic Auth camouflage
     """
     return SITE_ENABLED_MARKER.exists()
 
@@ -223,6 +227,7 @@ def set_site_enabled(enabled: bool) -> None:
         SITE_ENABLED_MARKER.touch()
     else:
         SITE_ENABLED_MARKER.unlink(missing_ok=True)
+        LEGACY_SITE_MARKER.unlink(missing_ok=True)
 
 
 # ─── Override site management ─────────────────────────────────────────────────

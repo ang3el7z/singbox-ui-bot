@@ -131,6 +131,7 @@ cmd_backup() {
     [[ -f "$INSTALL_DIR/data/adguard_admin_password" ]] && cp "$INSTALL_DIR/data/adguard_admin_password" "$TMP_DIR/data/adguard_admin_password"
     [[ -f "$INSTALL_DIR/data/ssh_port" ]] && cp "$INSTALL_DIR/data/ssh_port" "$TMP_DIR/data/ssh_port"
     [[ -f "$INSTALL_DIR/nginx/.banned_ips.json" ]] && cp "$INSTALL_DIR/nginx/.banned_ips.json" "$TMP_DIR/nginx/.banned_ips.json"
+    [[ -f "$INSTALL_DIR/nginx/.web_ui_enabled" ]] && cp "$INSTALL_DIR/nginx/.web_ui_enabled" "$TMP_DIR/nginx/.web_ui_enabled"
     [[ -f "$INSTALL_DIR/nginx/.site_enabled" ]] && cp "$INSTALL_DIR/nginx/.site_enabled" "$TMP_DIR/nginx/.site_enabled"
     [[ -f "$INSTALL_DIR/nginx/conf.d/singbox.conf" ]] && cp "$INSTALL_DIR/nginx/conf.d/singbox.conf" "$TMP_DIR/nginx/conf.d/singbox.conf"
     [[ -f "$INSTALL_DIR/nginx/htpasswd/.htpasswd" ]] && cp "$INSTALL_DIR/nginx/htpasswd/.htpasswd" "$TMP_DIR/nginx/htpasswd/.htpasswd"
@@ -344,11 +345,15 @@ cmd_restore() {
     [[ -f "$TMP_DIR/nginx/conf.d/singbox.conf" ]] && cp "$TMP_DIR/nginx/conf.d/singbox.conf" "$INSTALL_DIR/nginx/conf.d/singbox.conf"
     [[ -f "$TMP_DIR/nginx/htpasswd/.htpasswd" ]] && cp "$TMP_DIR/nginx/htpasswd/.htpasswd" "$INSTALL_DIR/nginx/htpasswd/.htpasswd"
 
-    if [[ -f "$TMP_DIR/nginx/.site_enabled" ]]; then
-        cp "$TMP_DIR/nginx/.site_enabled" "$INSTALL_DIR/nginx/.site_enabled"
+    if [[ -f "$TMP_DIR/nginx/.web_ui_enabled" ]]; then
+        cp "$TMP_DIR/nginx/.web_ui_enabled" "$INSTALL_DIR/nginx/.web_ui_enabled"
+    elif [[ -f "$TMP_DIR/nginx/.site_enabled" ]]; then
+        # Backward-compat: old backups stored this marker as ".site_enabled".
+        cp "$TMP_DIR/nginx/.site_enabled" "$INSTALL_DIR/nginx/.web_ui_enabled"
     else
-        rm -f "$INSTALL_DIR/nginx/.site_enabled"
+        rm -f "$INSTALL_DIR/nginx/.web_ui_enabled"
     fi
+    rm -f "$INSTALL_DIR/nginx/.site_enabled"
 
     rm -rf "$INSTALL_DIR/nginx/override"
     mkdir -p "$INSTALL_DIR/nginx/override"
