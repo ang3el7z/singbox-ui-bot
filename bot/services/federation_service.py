@@ -16,8 +16,8 @@ import httpx
 from fastapi import APIRouter, HTTPException, Request, Header
 from pydantic import BaseModel
 
-from bot.config import settings
-from bot.database import async_session, FederationNode
+from api.config import settings
+from api.database import async_session, FederationNode
 from bot.services.sui_api import sui, SuiAPIError
 from sqlalchemy import select
 

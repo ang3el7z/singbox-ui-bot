@@ -19,7 +19,7 @@ from pathlib import Path
 
 from jinja2 import Environment, FileSystemLoader
 
-from bot.config import settings
+from api.config import settings
 
 BASE_DIR      = Path(__file__).parent.parent.parent
 NGINX_DIR     = BASE_DIR / "nginx"

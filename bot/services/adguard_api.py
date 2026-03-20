@@ -4,7 +4,7 @@ API docs: https://github.com/AdguardTeam/AdGuardHome/tree/master/openapi
 """
 import httpx
 from typing import Any, Dict, List, Optional
-from bot.config import settings
+from api.config import settings
 
 
 class AdGuardAPIError(Exception):

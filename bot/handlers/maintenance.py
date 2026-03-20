@@ -778,12 +778,6 @@ async def cb_reinstall_menu(cq: CallbackQuery):
     )
 
 
-@router.callback_query(F.data == "maint_reinstall_run")
-async def cb_reinstall_run_legacy(cq: CallbackQuery):
-    # Backward-compatible callback from older keyboards.
-    await cb_reinstall_menu(cq)
-
-
 async def _run_reinstall(cq: CallbackQuery, *, clean: bool) -> None:
     await cq.answer(
         _txt("Запускаю чистую переустановку…" if clean else "Запускаю переустановку…",

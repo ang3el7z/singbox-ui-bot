@@ -4,7 +4,7 @@ Docs: s-ui-main/api/apiV2Handler.go
 """
 import httpx
 from typing import Any, Dict, List, Optional
-from bot.config import settings
+from api.config import settings
 
 
 class SuiAPIError(Exception):

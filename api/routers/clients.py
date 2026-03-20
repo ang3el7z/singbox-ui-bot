@@ -398,24 +398,6 @@ async def public_subscription(
     )
 
 
-@router.get("/templates")
-async def list_templates(
-    db: AsyncSession = Depends(get_db),
-    auth: dict = Depends(require_any_auth),
-):
-    """Legacy alias for listing client templates."""
-    result = await db.execute(select(ClientTemplate).order_by(ClientTemplate.id))
-    return [
-        {
-            "id": t.id,
-            "name": t.name,
-            "label": t.label,
-            "is_default": t.is_default,
-        }
-        for t in result.scalars().all()
-    ]
-
-
 @router.get("/{client_id}/sub-url")
 async def get_sub_url(
     client_id: int,
