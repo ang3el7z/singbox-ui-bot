@@ -26,6 +26,7 @@ from api.config import settings
 from api.routers.settings_router import get_runtime
 
 BASE_DIR           = Path(__file__).parent.parent.parent
+INSTALL_DIR        = Path("/opt/singbox-ui-bot")
 NGINX_DIR          = BASE_DIR / "nginx"
 CONF_D_DIR         = NGINX_DIR / "conf.d"
 OVERRIDE_DIR       = NGINX_DIR / "override"      # mounted as /var/www/override in nginx
@@ -44,6 +45,31 @@ try:
 except Exception:
     # Non-fatal in local/dev environments where /var/www may be unavailable.
     pass
+
+
+def _resolve_tool(name: str) -> str:
+    """Resolve docker/docker-compose path even when PATH is restricted."""
+    found = shutil.which(name)
+    if found:
+        return found
+    if name == "docker":
+        for candidate in ("/usr/bin/docker", "/usr/local/bin/docker", "/bin/docker"):
+            if Path(candidate).exists():
+                return candidate
+    if name == "docker-compose":
+        for candidate in ("/usr/bin/docker-compose", "/usr/local/bin/docker-compose", "/bin/docker-compose"):
+            if Path(candidate).exists():
+                return candidate
+    return name
+
+
+def _normalize_cmd(cmd: tuple[str, ...]) -> tuple[str, ...]:
+    if not cmd:
+        return cmd
+    head = cmd[0]
+    if head in {"docker", "docker-compose"}:
+        return (_resolve_tool(head), *cmd[1:])
+    return cmd
 
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -327,16 +353,31 @@ async def _run(*cmd: str, timeout: int = 30) -> tuple[bool, str]:
 # ─── Nginx process management ─────────────────────────────────────────────────
 
 def _container_nginx_commands(*nginx_args: str) -> list[tuple[str, ...]]:
+    compose_file = INSTALL_DIR / "docker-compose.yml"
+    if not compose_file.exists():
+        compose_file = BASE_DIR / "docker-compose.yml"
+    compose_args: tuple[str, ...] = ("-f", str(compose_file)) if compose_file.exists() else tuple()
+
     return [
         ("docker", "exec", "singbox_nginx", "nginx", *nginx_args),
-        ("docker", "compose", "exec", "-T", "nginx", "nginx", *nginx_args),
-        ("docker-compose", "exec", "-T", "nginx", "nginx", *nginx_args),
+        ("docker", "compose", *compose_args, "exec", "-T", "nginx", "nginx", *nginx_args),
+        ("docker-compose", *compose_args, "exec", "-T", "nginx", "nginx", *nginx_args),
     ]
 
 
-def _is_tooling_missing_error(output: str) -> bool:
+def _is_infra_error(output: str) -> bool:
     text = (output or "").lower()
-    return "no such file or directory" in text and ("docker" in text or "docker-compose" in text)
+    infra_markers = (
+        "no such file or directory",
+        "executable file not found",
+        "cannot connect to the docker daemon",
+        "permission denied while trying to connect",
+        "got permission denied while trying to connect",
+        "error during connect",
+        "no configuration file provided: not found",
+        "is the docker daemon running",
+    )
+    return any(marker in text for marker in infra_markers)
 
 
 async def _run_nginx_container_cmd(*nginx_args: str, timeout: int = 30) -> tuple[bool, str, bool]:
@@ -345,18 +386,19 @@ async def _run_nginx_container_cmd(*nginx_args: str, timeout: int = 30) -> tuple
     Returns: (ok, output, tooling_missing)
     """
     errors: list[str] = []
-    missing_hits = 0
+    infra_hits = 0
     attempts = _container_nginx_commands(*nginx_args)
     for cmd in attempts:
-        ok, out = await _run(*cmd, timeout=timeout)
+        resolved_cmd = _normalize_cmd(cmd)
+        ok, out = await _run(*resolved_cmd, timeout=timeout)
         if ok:
             return True, out, False
         out = (out or "").strip()
-        errors.append(f"$ {' '.join(cmd)}\n{out}")
-        if _is_tooling_missing_error(out):
-            missing_hits += 1
+        errors.append(f"$ {' '.join(resolved_cmd)}\n{out}")
+        if _is_infra_error(out):
+            infra_hits += 1
     merged = "\n\n".join(errors) if errors else "unknown command failure"
-    return False, merged, missing_hits == len(attempts)
+    return False, merged, infra_hits == len(attempts)
 
 
 def _write_local_nginx_test_config() -> Path:
