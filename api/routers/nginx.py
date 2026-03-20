@@ -24,7 +24,6 @@ async def nginx_status(auth: dict = Depends(require_any_auth)):
     return {
         "override": override,
         "paths": paths,
-        "site_enabled": web_ui_enabled,      # backward-compat for existing UI clients
         "web_ui_enabled": web_ui_enabled,
         "domain": domain,
         "cert": cert,
@@ -147,4 +146,4 @@ async def site_toggle(enabled: bool, auth: dict = Depends(require_any_auth)):
         raise HTTPException(status_code=500, detail=f"Config error: {msg}")
     await nginx_service.reload_nginx()
     await audit(auth["actor"], "nginx_web_ui_toggle", f"enabled={enabled}")
-    return {"site_enabled": enabled, "web_ui_enabled": enabled}
+    return {"web_ui_enabled": enabled}

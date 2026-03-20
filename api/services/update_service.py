@@ -375,7 +375,7 @@ def start_reinstall(actor: str = "", clean: bool = False) -> dict[str, Any]:
             "config/sing-box/* config/adguard/* "
             "nginx/override/* nginx/htpasswd/* nginx/certs/* nginx/certbot/* "
             "nginx/conf.d/* nginx/logs/*; "
-            "rm -f -- nginx/.web_ui_enabled nginx/.site_enabled nginx/.banned_ips.json; "
+            "rm -f -- nginx/.web_ui_enabled nginx/.banned_ips.json; "
             "mkdir -p "
             "data subs configs "
             "config/sing-box config/adguard "

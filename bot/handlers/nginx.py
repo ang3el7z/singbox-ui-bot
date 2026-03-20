@@ -156,7 +156,7 @@ async def _nginx_menu_text_and_kb():
         st = await nginx_api.status()
         override = st.get("override", {})
         has_override = override.get("active", False)
-        web_ui_enabled = st.get("web_ui_enabled", st.get("site_enabled", False))
+        web_ui_enabled = st.get("web_ui_enabled", False)
         domain = (st.get("domain") or "").strip()
         cert = st.get("cert") or {}
 

@@ -3233,7 +3233,7 @@ _DOCS["maintenance"] = {
 | `data/app.db` | SQLite snapshot базы данных |
 | `config/adguard/AdGuardHome.yaml` и `data/adguard_admin_password` | Состояние AdGuard |
 | `data/ssh_port` | Сохранённый SSH-порт |
-| `nginx/.site_enabled`, `nginx/.banned_ips.json`, `nginx/conf.d/singbox.conf` | Состояние Nginx |
+| `nginx/.web_ui_enabled`, `nginx/.banned_ips.json`, `nginx/conf.d/singbox.conf` | Состояние Nginx |
 | `nginx/htpasswd/.htpasswd`, `nginx/override/*`, `nginx/certs/*` | Камуфляж, override-сайт и SSL |
 
 #### Ручной бэкап
@@ -3369,7 +3369,7 @@ The **Maintenance** section provides tools for automatic and manual server upkee
 | `data/app.db` | SQLite snapshot of the database |
 | `config/adguard/AdGuardHome.yaml` and `data/adguard_admin_password` | AdGuard state |
 | `data/ssh_port` | Saved SSH port |
-| `nginx/.site_enabled`, `nginx/.banned_ips.json`, `nginx/conf.d/singbox.conf` | Nginx state |
+| `nginx/.web_ui_enabled`, `nginx/.banned_ips.json`, `nginx/conf.d/singbox.conf` | Nginx state |
 | `nginx/htpasswd/.htpasswd`, `nginx/override/*`, `nginx/certs/*` | Camouflage, override site, and SSL |
 
 #### Manual backup
@@ -3571,7 +3571,7 @@ singbox-ui-bot status
 - `config/sing-box/config.json` — текущий конфиг Sing-Box
 - `data/app.db` — база данных (клиенты, настройки, аудит)
 - `config/adguard/AdGuardHome.yaml` и `data/adguard_admin_password` — состояние AdGuard
-- `nginx/override`, `nginx/.site_enabled`, `nginx/.banned_ips.json`, `nginx/htpasswd`, `nginx/certs` — состояние маскировки, IP-ban list и SSL, если они были настроены
+- `nginx/override`, `nginx/.web_ui_enabled`, `nginx/.banned_ips.json`, `nginx/htpasswd`, `nginx/certs` — состояние маскировки, IP-ban list и SSL, если они были настроены
 
 ```bash
 singbox-ui-bot backup
@@ -3787,7 +3787,7 @@ Creates a recovery ZIP at `~/singbox-backup_YYYY-MM-DD_HH-MM-SS.zip` containing:
 - `config/sing-box/config.json` — current Sing-Box config
 - `data/app.db` — database (clients, settings, audit)
 - `config/adguard/AdGuardHome.yaml` and `data/adguard_admin_password` — AdGuard state
-- `nginx/override`, `nginx/.site_enabled`, `nginx/.banned_ips.json`, `nginx/htpasswd`, `nginx/certs` — camouflage, IP-ban list, and SSL state when present
+- `nginx/override`, `nginx/.web_ui_enabled`, `nginx/.banned_ips.json`, `nginx/htpasswd`, `nginx/certs` — camouflage, IP-ban list, and SSL state when present
 
 > Always backup before updates or experiments.
 

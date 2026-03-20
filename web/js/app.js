@@ -627,7 +627,7 @@ function nginxComponent() {
         },
 
         async toggleSite() {
-            const current = this.status?.web_ui_enabled ?? this.status?.site_enabled ?? false;
+            const current = this.status?.web_ui_enabled ?? false;
             const next = !current;
             const label = next ? "enable" : "disable";
             if (!confirm(`${label.charAt(0).toUpperCase() + label.slice(1)} Web UI on '/web/'? Nginx will be reloaded.`)) return;

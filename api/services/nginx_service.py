@@ -34,7 +34,6 @@ HTPASSWD_FILE      = HTPASSWD_DIR / ".htpasswd"
 TEMPLATES_DIR      = NGINX_DIR / "templates"
 LOGS_DIR           = NGINX_DIR / "logs"
 SITE_ENABLED_MARKER = NGINX_DIR / ".web_ui_enabled"  # presence = Web UI ON, absence = OFF
-LEGACY_SITE_MARKER  = NGINX_DIR / ".site_enabled"    # legacy marker from old "site toggle" logic
 CERTBOT_WEBROOT    = Path("/var/www/certbot")
 
 # Ensure dirs exist on import
@@ -227,7 +226,6 @@ def set_site_enabled(enabled: bool) -> None:
         SITE_ENABLED_MARKER.touch()
     else:
         SITE_ENABLED_MARKER.unlink(missing_ok=True)
-        LEGACY_SITE_MARKER.unlink(missing_ok=True)
 
 
 # ─── Override site management ─────────────────────────────────────────────────

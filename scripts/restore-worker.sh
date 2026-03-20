@@ -81,9 +81,6 @@ else
 fi
 if [ -f "$TMP_DIR/nginx/.web_ui_enabled" ]; then
     cp "$TMP_DIR/nginx/.web_ui_enabled" "$INSTALL_DIR/nginx/.web_ui_enabled"
-elif [ -f "$TMP_DIR/nginx/.site_enabled" ]; then
-    # Backward-compat: old backups stored this marker as ".site_enabled".
-    cp "$TMP_DIR/nginx/.site_enabled" "$INSTALL_DIR/nginx/.web_ui_enabled"
 else
     rm -f "$INSTALL_DIR/nginx/.web_ui_enabled"
 fi

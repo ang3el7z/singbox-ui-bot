@@ -611,15 +611,15 @@ tailwind.config = {
           <div>
             <p class="text-white font-semibold mb-1">Web UI access</p>
             <p class="text-slate-400 text-sm">
-              <span x-show="(status?.web_ui_enabled ?? status?.site_enabled)">🟢 <b>ON</b> — Web UI is available on <code>/web/</code>.</span>
-              <span x-show="!(status?.web_ui_enabled ?? status?.site_enabled)">🔴 <b>OFF</b> — Web UI is disabled (returns 404 on <code>/web/</code>). <em>(default)</em></span>
+              <span x-show="status?.web_ui_enabled">🟢 <b>ON</b> — Web UI is available on <code>/web/</code>.</span>
+              <span x-show="!status?.web_ui_enabled">🔴 <b>OFF</b> — Web UI is disabled (returns 404 on <code>/web/</code>). <em>(default)</em></span>
             </p>
           </div>
           <button
             class="btn flex-shrink-0"
-            :class="((status?.web_ui_enabled ?? status?.site_enabled) ? 'btn-danger' : 'btn-success')"
+            :class="(status?.web_ui_enabled ? 'btn-danger' : 'btn-success')"
             @click="toggleSite()" :disabled="loading">
-            <span x-text="((status?.web_ui_enabled ?? status?.site_enabled) ? '🔴 Disable Web UI' : '🟢 Enable Web UI')"></span>
+            <span x-text="(status?.web_ui_enabled ? '🔴 Disable Web UI' : '🟢 Enable Web UI')"></span>
           </button>
         </div>
 
