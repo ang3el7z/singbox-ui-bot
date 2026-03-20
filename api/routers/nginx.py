@@ -18,7 +18,16 @@ async def nginx_status(auth: dict = Depends(require_any_auth)):
     override = nginx_service.override_status()
     paths = nginx_service.get_hidden_paths()
     site_enabled = nginx_service.get_site_enabled()
-    return {"override": override, "paths": paths, "site_enabled": site_enabled}
+    from api.routers.settings_router import get_runtime
+    domain = get_runtime("domain")
+    cert = nginx_service.get_cert_status(domain)
+    return {
+        "override": override,
+        "paths": paths,
+        "site_enabled": site_enabled,
+        "domain": domain,
+        "cert": cert,
+    }
 
 
 @router.post("/configure")
@@ -46,9 +55,18 @@ async def nginx_ssl(body: SslRequest = SslRequest(), auth: dict = Depends(requir
     if not domain:
         raise HTTPException(status_code=400, detail="Domain not configured. Set it in Settings first.")
     ok, output = await nginx_service.issue_ssl_cert(domain, email=body.email or None)
-    await audit(auth["actor"], "nginx_ssl", f"domain={domain} email={body.email or 'auto'}")
+    await audit(auth["actor"], "nginx_ssl", f"domain={domain} email={body.email or 'no-email'}")
     if not ok:
         raise HTTPException(status_code=500, detail=output)
+    # Rebuild nginx config so certificate paths switch from fallback to Let's Encrypt.
+    config_text = nginx_service.generate_config(domain=domain)
+    nginx_service.write_config(config_text)
+    ok_cfg, msg_cfg = await nginx_service.test_nginx_config()
+    if not ok_cfg:
+        raise HTTPException(status_code=500, detail=f"Certificate issued, but nginx config test failed: {msg_cfg}")
+    ok_reload, msg_reload = await nginx_service.reload_nginx()
+    if not ok_reload:
+        raise HTTPException(status_code=500, detail=f"Certificate issued, but nginx reload failed: {msg_reload}")
     return {"success": True}
 
 

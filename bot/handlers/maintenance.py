@@ -1,6 +1,8 @@
 """
 Maintenance section: backup, restore, IP ban, log management.
 """
+from html import escape
+
 from aiogram import F, Router
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
@@ -13,6 +15,7 @@ from aiogram.types import (
 )
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
+from api.routers.settings_router import get_runtime
 from bot.api_client import APIError, maintenance_api
 from bot.keyboards.main import kb_back
 
@@ -45,6 +48,14 @@ class RestoreFSM(StatesGroup):
     confirm = State()
 
 
+def _is_ru() -> bool:
+    return get_runtime("bot_lang", "ru") == "ru"
+
+
+def _txt(ru: str, en: str) -> str:
+    return ru if _is_ru() else en
+
+
 def _kb_main(status: dict) -> InlineKeyboardMarkup:
     b_hours = status.get("backup", {}).get("auto_hours", 0)
     c_hours = status.get("logs", {}).get("auto_clean_hours", 0)
@@ -63,6 +74,7 @@ def _kb_main(status: dict) -> InlineKeyboardMarkup:
     builder.row(InlineKeyboardButton(text=c_label, callback_data="maint_clean_interval"))
     builder.row(InlineKeyboardButton(text=f"🚫 IP Ban ({ban_cnt})", callback_data="maint_ipban_menu"))
     builder.row(InlineKeyboardButton(text="🪟 Windows Service", callback_data="maint_windows"))
+    builder.row(InlineKeyboardButton(text=_txt("⬆️ Обновления", "⬆️ Updates"), callback_data="maint_update_menu"))
     builder.row(InlineKeyboardButton(text="⬅️ Back", callback_data="main_menu"))
     return builder.as_markup()
 
@@ -122,6 +134,149 @@ def _kb_windows(status: dict) -> InlineKeyboardMarkup:
         builder.row(InlineKeyboardButton(text="⬇️ Download binaries", callback_data="maint_win_prefetch"))
     builder.row(InlineKeyboardButton(text="⬅️ Back", callback_data="menu_maintenance"))
     return builder.as_markup()
+
+
+def _kb_update_menu(info: dict) -> InlineKeyboardMarkup:
+    git = info.get("git", {})
+    job = info.get("job", {})
+    running = bool(job.get("running"))
+    action = str(job.get("action") or "update").lower()
+    updates = bool(git.get("update_available_branch")) or bool(git.get("update_available_tag"))
+
+    builder = InlineKeyboardBuilder()
+    if running:
+        running_label = (
+            _txt("⏳ Переустановка выполняется", "⏳ Reinstall is running")
+            if action == "reinstall"
+            else _txt("⏳ Обновление выполняется", "⏳ Update is running")
+        )
+        builder.row(InlineKeyboardButton(text=running_label, callback_data="maint_update_menu"))
+    else:
+        if updates:
+            builder.row(InlineKeyboardButton(text=_txt("⬆️ Обновить", "⬆️ Update"), callback_data="maint_update_run"))
+        builder.row(
+            InlineKeyboardButton(
+                text=_txt("♻️ Переустановить", "♻️ Reinstall"),
+                callback_data="maint_reinstall_menu",
+            )
+        )
+
+    if updates:
+        builder.row(
+            InlineKeyboardButton(text=_txt("🌿 Сменить ветку", "🌿 Switch branch"), callback_data="maint_update_branch_menu"),
+            InlineKeyboardButton(text=_txt("📜 Логи", "📜 Logs"), callback_data="maint_update_logs"),
+        )
+    elif running or job.get("container_name"):
+        builder.row(InlineKeyboardButton(text=_txt("📜 Логи", "📜 Logs"), callback_data="maint_update_logs"))
+    if not running and job.get("container_name"):
+        builder.row(
+            InlineKeyboardButton(
+                text=_txt("🧹 Очистить джоб", "🧹 Cleanup job"),
+                callback_data="maint_update_cleanup",
+            )
+        )
+    builder.row(
+        InlineKeyboardButton(text="⬅️ Back", callback_data="menu_maintenance"),
+    )
+    return builder.as_markup()
+
+
+def _kb_reinstall_menu() -> InlineKeyboardMarkup:
+    builder = InlineKeyboardBuilder()
+    builder.row(
+        InlineKeyboardButton(
+            text=_txt("♻️ С сохранением данных", "♻️ Keep data"),
+            callback_data="maint_reinstall_keep",
+        )
+    )
+    builder.row(
+        InlineKeyboardButton(
+            text=_txt("🧹 Чистая переустановка", "🧹 Clean reinstall"),
+            callback_data="maint_reinstall_clean",
+        )
+    )
+    builder.row(InlineKeyboardButton(text="⬅️ Back", callback_data="maint_update_menu"))
+    return builder.as_markup()
+
+
+def _enc_branch(branch: str) -> str:
+    return branch.replace("/", "|")
+
+
+def _dec_branch(value: str) -> str:
+    return value.replace("|", "/")
+
+
+def _kb_update_branches(branches: list[str], current: str) -> InlineKeyboardMarkup:
+    builder = InlineKeyboardBuilder()
+    added = 0
+    for branch in branches[:20]:
+        encoded = _enc_branch(branch)
+        callback = f"maint_upd_branch_{encoded}"
+        if len(callback) > 64:
+            continue
+        mark = "✅ " if branch == current else ""
+        builder.row(InlineKeyboardButton(text=f"{mark}{branch}", callback_data=callback))
+        added += 1
+
+    if added == 0:
+        builder.row(InlineKeyboardButton(text=_txt("Нет веток в лимите callback", "No branch fits callback limit"), callback_data="maint_update_menu"))
+
+    builder.row(InlineKeyboardButton(text="⬅️ Back", callback_data="maint_update_menu"))
+    return builder.as_markup()
+
+
+def _render_update_text(info: dict) -> str:
+    git = info.get("git", {})
+    job = info.get("job", {})
+
+    branch = git.get("current_branch", "-")
+    commit = git.get("current_commit", "-")
+    current_tag = git.get("current_tag") or "—"
+    latest_tag = git.get("latest_tag") or "—"
+    remote_commit = git.get("remote_branch_commit") or "—"
+
+    upd_branch = "✅ yes" if git.get("update_available_branch") else "❌ no"
+    upd_tag = "✅ yes" if git.get("update_available_tag") else "❌ no"
+    action = str(job.get("action") or "update").lower()
+    mode = str(job.get("mode") or "preserve").lower()
+    action_label = "update" if action == "update" else "reinstall"
+    if _is_ru():
+        upd_branch = "✅ да" if git.get("update_available_branch") else "❌ нет"
+        upd_tag = "✅ да" if git.get("update_available_tag") else "❌ нет"
+        action_label = "обновление" if action == "update" else "переустановка"
+    if action == "reinstall":
+        if _is_ru():
+            action_label = "чистая переустановка" if mode == "clean" else "переустановка (с сохранением)"
+        else:
+            action_label = "clean reinstall" if mode == "clean" else "reinstall (keep data)"
+
+    status = job.get("status") or ("running" if job.get("running") else "idle")
+    exit_code = job.get("exit_code")
+    exit_line = f"exit code: {exit_code}" if exit_code is not None else "exit code: —"
+    if _is_ru():
+        exit_line = f"код завершения: {exit_code}" if exit_code is not None else "код завершения: —"
+
+    text = (
+        f"⬆️ <b>{_txt('Обновления', 'Updates')}</b>\n\n"
+        f"• {_txt('Текущая ветка', 'Current branch')}: <code>{escape(str(branch))}</code>\n"
+        f"• {_txt('Текущий коммит', 'Current commit')}: <code>{escape(str(commit))}</code>\n"
+        f"• {_txt('Текущий тег', 'Current tag')}: <code>{escape(str(current_tag))}</code>\n"
+        f"• {_txt('Последний тег', 'Latest tag')}: <code>{escape(str(latest_tag))}</code>\n"
+        f"• {_txt('origin/ветка', 'origin/branch')}: <code>{escape(str(remote_commit))}</code>\n\n"
+        f"• {_txt('Обновление по ветке', 'Branch update available')}: <b>{upd_branch}</b>\n"
+        f"• {_txt('Новый тег доступен', 'New tag available')}: <b>{upd_tag}</b>\n\n"
+        f"• {_txt('Тип задачи', 'Job action')}: <code>{escape(action_label)}</code>\n"
+        f"• {_txt('Статус джоба', 'Job status')}: <code>{escape(str(status))}</code>\n"
+        f"• {exit_line}\n"
+    )
+    git_error = (git.get("git_error") or "").strip()
+    if git_error:
+        text += f"\n⚠️ <b>git:</b>\n<pre>{escape(git_error[-700:])}</pre>"
+    error = (job.get("error") or "").strip()
+    if error:
+        text += f"\n⚠️ <b>{_txt('Ошибка джоба', 'Job error')}:</b>\n<pre>{escape(error[-700:])}</pre>"
+    return text
 
 
 @router.callback_query(F.data == "menu_maintenance")
@@ -540,3 +695,246 @@ async def cb_win_prefetch(cq: CallbackQuery):
             ),
             parse_mode="HTML",
         )
+
+
+# в”Ђв”Ђв”Ђ Updates в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+
+@router.callback_query(F.data == "maint_update_menu")
+async def cb_update_menu(cq: CallbackQuery):
+    await cq.answer()
+    try:
+        info = await maintenance_api.update_info()
+        await cq.message.edit_text(
+            _render_update_text(info),
+            reply_markup=_kb_update_menu(info),
+            parse_mode="HTML",
+        )
+    except APIError as exc:
+        await cq.message.edit_text(
+            f"❌ {escape(exc.detail)}",
+            reply_markup=kb_back("menu_maintenance"),
+            parse_mode="HTML",
+        )
+
+
+@router.callback_query(F.data == "maint_update_run")
+async def cb_update_run(cq: CallbackQuery):
+    await cq.answer(_txt("Запускаю обновление…", "Starting update…"))
+    try:
+        info = await maintenance_api.update_info()
+        if info.get("job", {}).get("running"):
+            await cq.message.answer(
+                _txt("⏳ Уже выполняется другая задача обслуживания.", "⏳ A maintenance job is already running."),
+                reply_markup=kb_back("maint_update_menu"),
+            )
+            return
+        git = info.get("git", {})
+        has_updates = bool(git.get("update_available_branch")) or bool(git.get("update_available_tag"))
+        if not has_updates:
+            await cq.message.answer(
+                _txt("ℹ️ Новых обновлений не обнаружено.", "ℹ️ No updates detected."),
+                reply_markup=kb_back("maint_update_menu"),
+            )
+            return
+        branch = info.get("git", {}).get("current_branch")
+        result = await maintenance_api.update_run(branch=branch)
+        await cq.message.answer(
+            _txt(
+                f"✅ Обновление запущено.\nВетка: <code>{escape(result.get('branch', branch or '-'))}</code>\n"
+                "Проверьте логи через 10-20 секунд.",
+                f"✅ Update started.\nBranch: <code>{escape(result.get('branch', branch or '-'))}</code>\n"
+                "Check logs in 10-20 seconds.",
+            ),
+            parse_mode="HTML",
+            reply_markup=kb_back("maint_update_menu"),
+        )
+        # Refresh current page as well
+        fresh = await maintenance_api.update_info()
+        await cq.message.edit_text(
+            _render_update_text(fresh),
+            reply_markup=_kb_update_menu(fresh),
+            parse_mode="HTML",
+        )
+    except APIError as exc:
+        await cq.message.answer(f"❌ {escape(exc.detail)}", reply_markup=kb_back("maint_update_menu"), parse_mode="HTML")
+
+
+@router.callback_query(F.data == "maint_reinstall_menu")
+async def cb_reinstall_menu(cq: CallbackQuery):
+    await cq.answer()
+    await cq.message.edit_text(
+        _txt(
+            "♻️ <b>Переустановка</b>\n\n"
+            "Выберите режим:\n"
+            "• С сохранением данных: сохраняет настройки и базу.\n"
+            "• Чистая: удаляет данные и поднимает систему заново.",
+            "♻️ <b>Reinstall</b>\n\n"
+            "Choose mode:\n"
+            "• Keep data: keeps settings and DB.\n"
+            "• Clean: wipes runtime data and recreates stack.",
+        ),
+        reply_markup=_kb_reinstall_menu(),
+        parse_mode="HTML",
+    )
+
+
+@router.callback_query(F.data == "maint_reinstall_run")
+async def cb_reinstall_run_legacy(cq: CallbackQuery):
+    # Backward-compatible callback from older keyboards.
+    await cb_reinstall_menu(cq)
+
+
+async def _run_reinstall(cq: CallbackQuery, *, clean: bool) -> None:
+    await cq.answer(
+        _txt("Запускаю чистую переустановку…" if clean else "Запускаю переустановку…",
+             "Starting clean reinstall…" if clean else "Starting reinstall…")
+    )
+    try:
+        info = await maintenance_api.update_info()
+        if info.get("job", {}).get("running"):
+            await cq.message.answer(
+                _txt("⏳ Уже выполняется другая задача обслуживания.", "⏳ A maintenance job is already running."),
+                reply_markup=kb_back("maint_update_menu"),
+            )
+            return
+
+        await maintenance_api.reinstall_run(clean=clean)
+        await cq.message.answer(
+            _txt(
+                "✅ Чистая переустановка запущена.\n"
+                "Данные и настройки будут сброшены.\n"
+                "Бот/веб могут быть недоступны 30-60 секунд."
+                if clean else
+                "✅ Переустановка запущена.\n"
+                "Настройки и данные сохраняются.\n"
+                "Бот/веб могут быть недоступны 30-60 секунд.",
+                "✅ Clean reinstall started.\n"
+                "Data and settings will be reset.\n"
+                "Bot/Web may be unavailable for 30-60 seconds."
+                if clean else
+                "✅ Reinstall started.\n"
+                "Settings and data are preserved.\n"
+                "Bot/Web may be unavailable for 30-60 seconds.",
+            ),
+            reply_markup=kb_back("maint_update_menu"),
+        )
+        fresh = await maintenance_api.update_info()
+        await cq.message.edit_text(
+            _render_update_text(fresh),
+            reply_markup=_kb_update_menu(fresh),
+            parse_mode="HTML",
+        )
+    except APIError as exc:
+        await cq.message.answer(f"❌ {escape(exc.detail)}", reply_markup=kb_back("maint_update_menu"), parse_mode="HTML")
+
+
+@router.callback_query(F.data == "maint_reinstall_keep")
+async def cb_reinstall_keep(cq: CallbackQuery):
+    await _run_reinstall(cq, clean=False)
+
+
+@router.callback_query(F.data == "maint_reinstall_clean")
+async def cb_reinstall_clean(cq: CallbackQuery):
+    await _run_reinstall(cq, clean=True)
+
+
+@router.callback_query(F.data == "maint_update_branch_menu")
+async def cb_update_branch_menu(cq: CallbackQuery):
+    await cq.answer()
+    try:
+        info = await maintenance_api.update_info()
+        branches = info.get("git", {}).get("remote_branches", [])
+        current = info.get("git", {}).get("current_branch", "")
+        await cq.message.edit_text(
+            _txt(
+                "🌿 <b>Выберите ветку для обновления</b>\n"
+                "После выбора запустится update-job.",
+                "🌿 <b>Select branch to update</b>\n"
+                "After selecting, update job will start.",
+            ),
+            reply_markup=_kb_update_branches(branches, current),
+            parse_mode="HTML",
+        )
+    except APIError as exc:
+        await cq.message.answer(f"❌ {escape(exc.detail)}", reply_markup=kb_back("maint_update_menu"), parse_mode="HTML")
+
+
+@router.callback_query(F.data.startswith("maint_upd_branch_"))
+async def cb_update_run_branch(cq: CallbackQuery):
+    encoded = cq.data[len("maint_upd_branch_"):]
+    branch = _dec_branch(encoded).strip()
+    if not branch:
+        await cq.answer(_txt("Пустая ветка", "Empty branch"), show_alert=True)
+        return
+
+    await cq.answer(_txt("Запускаю update…", "Starting update…"))
+    try:
+        result = await maintenance_api.update_run(branch=branch)
+        await cq.message.edit_text(
+            _txt(
+                f"✅ Запущено обновление ветки <code>{escape(result.get('branch', branch))}</code>.",
+                f"✅ Started update for branch <code>{escape(result.get('branch', branch))}</code>.",
+            ),
+            parse_mode="HTML",
+            reply_markup=InlineKeyboardMarkup(
+                inline_keyboard=[
+                    [InlineKeyboardButton(text=_txt("📜 Логи обновления", "📜 Update logs"), callback_data="maint_update_logs")],
+                    [InlineKeyboardButton(text="⬅️ Back", callback_data="maint_update_menu")],
+                ]
+            ),
+        )
+    except APIError as exc:
+        await cq.message.answer(f"❌ {escape(exc.detail)}", reply_markup=kb_back("maint_update_menu"), parse_mode="HTML")
+
+
+@router.callback_query(F.data == "maint_update_logs")
+async def cb_update_logs(cq: CallbackQuery):
+    await cq.answer()
+    try:
+        data = await maintenance_api.update_logs(lines=220)
+        logs = (data.get("logs") or "").strip()
+        if not logs:
+            logs = _txt("Логи пока пустые.", "No logs yet.")
+        status = data.get("status", "unknown")
+        running = data.get("running", False)
+        action = str(data.get("action") or "update").lower()
+        if action == "reinstall":
+            title = _txt("📜 Логи переустановки", "📜 Reinstall logs")
+        else:
+            title = _txt("📜 Логи обновления", "📜 Update logs")
+        state_line = (
+            _txt("⏳ Выполняется", "⏳ Running")
+            if running
+            else _txt(f"✅ Завершено ({status})", f"✅ Finished ({status})")
+        )
+        text = f"{title}\n{state_line}\n\n<pre>{escape(logs[-3500:])}</pre>"
+        await cq.message.edit_text(
+            text,
+            parse_mode="HTML",
+            reply_markup=InlineKeyboardMarkup(
+                inline_keyboard=[
+                    [InlineKeyboardButton(text=_txt("🔄 Обновить логи", "🔄 Refresh logs"), callback_data="maint_update_logs")],
+                    [InlineKeyboardButton(text="⬅️ Back", callback_data="maint_update_menu")],
+                ]
+            ),
+        )
+    except APIError as exc:
+        await cq.message.answer(f"❌ {escape(exc.detail)}", reply_markup=kb_back("maint_update_menu"), parse_mode="HTML")
+
+
+@router.callback_query(F.data == "maint_update_cleanup")
+async def cb_update_cleanup(cq: CallbackQuery):
+    await cq.answer(_txt("Очищаю…", "Cleaning…"))
+    try:
+        await maintenance_api.update_cleanup()
+        info = await maintenance_api.update_info()
+        await cq.message.edit_text(
+            _render_update_text(info),
+            reply_markup=_kb_update_menu(info),
+            parse_mode="HTML",
+        )
+    except APIError as exc:
+        await cq.message.answer(f"❌ {escape(exc.detail)}", reply_markup=kb_back("maint_update_menu"), parse_mode="HTML")
+
+
+

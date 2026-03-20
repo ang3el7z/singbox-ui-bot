@@ -57,7 +57,8 @@ mkdir -p \
     "$INSTALL_DIR/nginx/conf.d" \
     "$INSTALL_DIR/nginx/override" \
     "$INSTALL_DIR/nginx/htpasswd" \
-    "$INSTALL_DIR/nginx/certs"
+    "$INSTALL_DIR/nginx/certs" \
+    "$INSTALL_DIR/nginx/certbot"
 
 echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] Restoring mounted host files"
 cp "$TMP_DIR/.env" "$INSTALL_DIR/.env"

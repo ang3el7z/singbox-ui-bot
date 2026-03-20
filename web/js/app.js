@@ -4,7 +4,7 @@
  */
 import api, { getToken, setToken, clearToken } from "./api.js";
 
-// ─── Root app ─────────────────────────────────────────────────────────────────
+// в”Ђв”Ђв”Ђ Root app в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
 
 function appRoot() {
     return {
@@ -38,7 +38,7 @@ function appRoot() {
     };
 }
 
-// ─── Login ────────────────────────────────────────────────────────────────────
+// в”Ђв”Ђв”Ђ Login в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
 
 function loginComponent() {
     return {
@@ -64,7 +64,7 @@ function loginComponent() {
     };
 }
 
-// ─── Dashboard ────────────────────────────────────────────────────────────────
+// в”Ђв”Ђв”Ђ Dashboard в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
 
 function dashboardComponent() {
     return {
@@ -94,7 +94,7 @@ function dashboardComponent() {
     };
 }
 
-// ─── Server ───────────────────────────────────────────────────────────────────
+// в”Ђв”Ђв”Ђ Server в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
 
 function serverComponent() {
     return {
@@ -145,7 +145,7 @@ function serverComponent() {
     };
 }
 
-// ─── Clients ──────────────────────────────────────────────────────────────────
+// в”Ђв”Ђв”Ђ Clients в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
 
 function clientsComponent() {
     return {
@@ -225,7 +225,7 @@ function clientsComponent() {
         },
 
         templateLabel(c) {
-            if (!c.template_id) return "⭐ Default";
+            if (!c.template_id) return "в­ђ Default";
             const t = this.allTemplates.find(x => x.id === c.template_id);
             return t ? t.label : `Template #${c.template_id}`;
         },
@@ -294,7 +294,7 @@ function clientsComponent() {
     };
 }
 
-// ─── Inbounds ─────────────────────────────────────────────────────────────────
+// в”Ђв”Ђв”Ђ Inbounds в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
 
 function inboundsComponent() {
     return {
@@ -340,7 +340,7 @@ function inboundsComponent() {
     };
 }
 
-// ─── Routing ──────────────────────────────────────────────────────────────────
+// в”Ђв”Ђв”Ђ Routing в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
 
 function routingComponent() {
     return {
@@ -436,7 +436,7 @@ function routingComponent() {
     };
 }
 
-// ─── AdGuard ──────────────────────────────────────────────────────────────────
+// в”Ђв”Ђв”Ђ AdGuard в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
 
 function adguardComponent() {
     return {
@@ -546,7 +546,7 @@ function adguardComponent() {
     };
 }
 
-// ─── Nginx ────────────────────────────────────────────────────────────────────
+// в”Ђв”Ђв”Ђ Nginx в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
 
 function nginxComponent() {
     return {
@@ -643,7 +643,7 @@ function nginxComponent() {
     };
 }
 
-// ─── Federation ───────────────────────────────────────────────────────────────
+// в”Ђв”Ђв”Ђ Federation в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
 
 function federationComponent() {
     return {
@@ -759,7 +759,7 @@ function federationComponent() {
                 const n = this.nodes.find(n => n.id === id);
                 return n ? n.name : id;
             });
-            return ['(this server)', ...names, 'Internet'].join(' → ');
+            return ['(this server)', ...names, 'Internet'].join(' в†’ ');
         },
 
         async createBridge() {
@@ -776,7 +776,7 @@ function federationComponent() {
     };
 }
 
-// ─── Admin ────────────────────────────────────────────────────────────────────
+// в”Ђв”Ђв”Ђ Admin в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
 
 function adminComponent() {
     return {
@@ -837,7 +837,7 @@ function adminComponent() {
     };
 }
 
-// ─── Settings ─────────────────────────────────────────────────────────────────
+// в”Ђв”Ђв”Ђ Settings в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
 
 function settingsComponent() {
     return {
@@ -905,7 +905,7 @@ function settingsComponent() {
             if (key === "ssh_port") {
                 const p = parseInt(String(value).trim(), 10);
                 if (isNaN(p) || p < 1 || p > 65535) {
-                    this.$dispatch("toast", { msg: "SSH port must be 1–65535", type: "error" });
+                    this.$dispatch("toast", { msg: "SSH port must be 1-65535", type: "error" });
                     return;
                 }
                 value = String(p);
@@ -914,7 +914,7 @@ function settingsComponent() {
             try {
                 const r = await api.settingsSet(key, value);
                 this.s[key] = r.value;
-                this.$dispatch("toast", { msg: `${key} → ${r.value}`, type: "success" });
+                this.$dispatch("toast", { msg: `${key} в†’ ${r.value}`, type: "success" });
             } catch (e) {
                 this.$dispatch("toast", { msg: e.message, type: "error" });
             } finally { this.saving = null; }
@@ -930,7 +930,7 @@ function settingsComponent() {
                 this.s.domain = r.value;
                 this.domainInput = r.value;
                 this.domainNote = r.note || "Nginx reloaded.";
-                this.$dispatch("toast", { msg: `Domain → ${r.value}`, type: "success" });
+                this.$dispatch("toast", { msg: `Domain в†’ ${r.value}`, type: "success" });
             } catch (e) {
                 this.$dispatch("toast", { msg: e.message, type: "error" });
             } finally { this.saving = null; }
@@ -938,7 +938,7 @@ function settingsComponent() {
     };
 }
 
-// ─── Docs ─────────────────────────────────────────────────────────────────────
+// в”Ђв”Ђв”Ђ Docs в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
 
 function docsComponent() {
     return {
@@ -949,6 +949,7 @@ function docsComponent() {
         loading: false,
         loadingDoc: false,
         lang: "ru",
+        markdownRenderer: null,
 
         async init() {
             // Language is set during /start wizard and stored in app_settings (DB)
@@ -979,18 +980,61 @@ function docsComponent() {
             }
         },
 
-        // Render markdown to safe HTML using marked (loaded from CDN)
+        escapeHtml(text) {
+            return String(text || "")
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;");
+        },
+
+        getRenderer() {
+            if (this.markdownRenderer || typeof marked === "undefined") {
+                return this.markdownRenderer;
+            }
+            const renderer = new marked.Renderer();
+
+            const baseLink = renderer.link.bind(renderer);
+            renderer.link = function (...args) {
+                let html = baseLink(...args);
+                if (!/\btarget=/.test(html)) {
+                    html = html.replace(
+                        "<a ",
+                        '<a target="_blank" rel="noopener noreferrer" '
+                    );
+                }
+                return html;
+            };
+
+            // Keep raw HTML from docs as plain text.
+            renderer.html = (rawHtml) => {
+                if (rawHtml && typeof rawHtml === "object" && "text" in rawHtml) {
+                    return this.escapeHtml(rawHtml.text);
+                }
+                return this.escapeHtml(rawHtml);
+            };
+            this.markdownRenderer = renderer;
+            return renderer;
+        },
+
+        // Render markdown to HTML using marked (loaded from CDN)
         rendered() {
             if (!this.content) return "";
-            if (typeof marked !== "undefined") {
-                return marked.parse(this.content);
+            const renderer = this.getRenderer();
+            if (renderer && typeof marked !== "undefined") {
+                return marked.parse(this.content, {
+                    renderer,
+                    gfm: true,
+                    breaks: true,
+                    mangle: false,
+                    headerIds: false,
+                });
             }
-            return `<pre style="white-space:pre-wrap;word-break:break-word">${this.content.replace(/</g, "&lt;").replace(/>/g, "&gt;")}</pre>`;
+            return `<pre style="white-space:pre-wrap;word-break:break-word">${this.escapeHtml(this.content)}</pre>`;
         },
     };
 }
 
-// ─── Maintenance component ────────────────────────────────────────────────────
+// в”Ђв”Ђв”Ђ Maintenance component в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
 
 function maintenanceComponent() {
     return {
@@ -1002,12 +1046,41 @@ function maintenanceComponent() {
         newReason: "manual",
         restoreFile: null,
         restoreCreateBackup: true,
-        tab: "backup",   // backup | logs | ipban | windows
+        tab: "backup",   // backup | logs | ipban | windows | updates
         loading: false,
         msg: "",
         winStatus: null,
         winLoading: false,
+        updateInfo: null,
+        updateJob: null,
+        updateLogs: "",
+        updateBranch: "",
+        updateLoading: false,
+
         get winReady() { return this.winStatus?.ready === true; },
+        get updateRunning() { return this.updateJob?.running === true; },
+        get updateActionLabel() {
+            const action = String(this.updateJob?.action || "update").toLowerCase();
+            const mode = String(this.updateJob?.mode || "preserve").toLowerCase();
+            if (action !== "reinstall") return "Update";
+            return mode === "clean" ? "Clean reinstall" : "Reinstall (keep data)";
+        },
+        get updateStatusLabel() {
+            if (!this.updateJob) return "idle";
+            const status = this.updateJob.status || (this.updateJob.running ? "running" : "idle");
+            const exit = this.updateJob.exit_code;
+            if (exit === null || exit === undefined) return status;
+            return `${status} (exit: ${exit})`;
+        },
+        get updateHasUpdates() {
+            return Boolean(this.updateInfo?.update_available_branch) || Boolean(this.updateInfo?.update_available_tag);
+        },
+        get updateTargetVersion() {
+            return this.updateInfo?.latest_tag || this.updateInfo?.remote_branch_commit || "latest";
+        },
+        get suggestedBranch() {
+            return this.updateInfo?.current_branch || "main";
+        },
 
         async init() {
             await this.loadStatus();
@@ -1031,9 +1104,119 @@ function maintenanceComponent() {
         async loadStatus() {
             try {
                 this.status = await api.maintStatus();
-                this.logs   = this.status?.logs?.files || [];
+                this.logs = this.status?.logs?.files || [];
             } catch (e) {
                 this.msg = "Error: " + e.message;
+            }
+        },
+
+        async loadUpdateInfo(loadLogs = true) {
+            this.updateLoading = true;
+            try {
+                const data = await api.maintUpdateInfo();
+                this.updateInfo = data?.git || null;
+                this.updateJob = data?.job || null;
+                if (!this.updateBranch) {
+                    this.updateBranch = this.updateInfo?.current_branch || "";
+                }
+                if (loadLogs) {
+                    await this.loadUpdateLogs(false);
+                }
+            } catch (e) {
+                this.msg = e.message;
+                this.$dispatch("toast", { msg: e.message, type: "error" });
+            } finally {
+                this.updateLoading = false;
+            }
+        },
+
+        async loadUpdateLogs(showErrors = true) {
+            try {
+                const data = await api.maintUpdateLogs(220);
+                this.updateJob = data || this.updateJob;
+                this.updateLogs = (data?.logs || "").trim();
+            } catch (e) {
+                if (showErrors) {
+                    this.msg = e.message;
+                    this.$dispatch("toast", { msg: e.message, type: "error" });
+                }
+            }
+        },
+
+        async runUpdate(branchOverride = null) {
+            if (this.updateRunning) {
+                this.$dispatch("toast", { msg: "Another maintenance job is already running", type: "error" });
+                return;
+            }
+            if (!this.updateHasUpdates) {
+                this.$dispatch("toast", { msg: "No updates detected", type: "error" });
+                return;
+            }
+
+            const branch = (branchOverride ?? this.updateBranch ?? this.suggestedBranch ?? "").trim();
+            const targetBranch = branch || this.suggestedBranch;
+            if (!confirm(`Run update for branch '${targetBranch}'?`)) return;
+
+            this.updateLoading = true;
+            try {
+                const result = await api.maintUpdateRun(targetBranch || null);
+                this.msg = `✅ Update started for branch: ${result.branch || targetBranch}`;
+                this.$dispatch("toast", { msg: "Update started", type: "success" });
+                await this.loadUpdateInfo(true);
+            } catch (e) {
+                this.msg = e.message;
+                this.$dispatch("toast", { msg: e.message, type: "error" });
+            } finally {
+                this.updateLoading = false;
+            }
+        },
+
+        async runReinstall(mode = "preserve") {
+            if (this.updateRunning) {
+                this.$dispatch("toast", { msg: "Another maintenance job is already running", type: "error" });
+                return;
+            }
+
+            const clean = mode === "clean";
+            const question = clean
+                ? "Run clean reinstall now? This will reset settings and data."
+                : "Reinstall containers now? Settings and data will be preserved.";
+            if (!confirm(question)) return;
+
+            this.updateLoading = true;
+            try {
+                await api.maintReinstallRun(clean);
+                this.msg = clean
+                    ? "✅ Clean reinstall started. Settings and data will be reset."
+                    : "✅ Reinstall started. Settings and data are preserved.";
+                this.$dispatch("toast", {
+                    msg: clean
+                        ? "Clean reinstall started. Bot/Web can be unavailable for up to a minute."
+                        : "Reinstall started. Bot/Web can be unavailable for up to a minute.",
+                    type: "success",
+                });
+                await this.loadUpdateInfo(true);
+            } catch (e) {
+                this.msg = e.message;
+                this.$dispatch("toast", { msg: e.message, type: "error" });
+            } finally {
+                this.updateLoading = false;
+            }
+        },
+
+        async cleanupUpdateJob() {
+            if (this.updateRunning) {
+                this.$dispatch("toast", { msg: "Job is still running", type: "error" });
+                return;
+            }
+            try {
+                await api.maintUpdateCleanup();
+                await this.loadUpdateInfo(false);
+                this.updateLogs = "";
+                this.msg = "✅ Maintenance job state cleaned";
+            } catch (e) {
+                this.msg = e.message;
+                this.$dispatch("toast", { msg: e.message, type: "error" });
             }
         },
 
@@ -1157,7 +1340,6 @@ function maintenanceComponent() {
         },
     };
 }
-
 // Register components globally
 document.addEventListener("alpine:init", () => {
     Alpine.data("appRoot",        appRoot);
@@ -1276,3 +1458,5 @@ function templatesComponent() {
         },
     };
 }
+
+

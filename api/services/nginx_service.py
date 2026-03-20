@@ -10,10 +10,12 @@ When user uploads a site:
   /override/* → static assets the page may reference
 """
 import asyncio
+import datetime as dt
 import hashlib
 import os
 import secrets
 import shutil
+import ssl
 import zipfile
 import io
 from pathlib import Path
@@ -32,10 +34,16 @@ HTPASSWD_FILE      = HTPASSWD_DIR / ".htpasswd"
 TEMPLATES_DIR      = NGINX_DIR / "templates"
 LOGS_DIR           = NGINX_DIR / "logs"
 SITE_ENABLED_MARKER = NGINX_DIR / ".site_enabled"   # presence = site ON, absence = site OFF
+CERTBOT_WEBROOT    = Path("/var/www/certbot")
 
 # Ensure dirs exist on import
 for _d in (CONF_D_DIR, OVERRIDE_DIR, HTPASSWD_DIR, LOGS_DIR):
     _d.mkdir(parents=True, exist_ok=True)
+try:
+    CERTBOT_WEBROOT.mkdir(parents=True, exist_ok=True)
+except Exception:
+    # Non-fatal in local/dev environments where /var/www may be unavailable.
+    pass
 
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -69,6 +77,62 @@ def get_doh_url(sub_id: str, domain: str = None) -> str:
     """Return the per-client AdGuard DoH URL for a given subscription ID."""
     paths = get_hidden_paths(domain)
     return paths["doh"].rstrip("/") + f"/{sub_id}"
+
+
+def get_cert_status(domain: str | None = None) -> dict:
+    """
+    Return SSL certificate metadata for the current domain.
+    Prefers Let's Encrypt certs and falls back to static self-signed certs.
+    """
+    domain = (domain or get_runtime("domain") or "").strip().lower()
+    if not domain:
+        return {"exists": False, "reason": "domain_not_set"}
+
+    le_dir = Path(f"/etc/letsencrypt/live/{domain}")
+    le_cert = le_dir / "fullchain.pem"
+    le_key = le_dir / "privkey.pem"
+
+    if le_cert.exists() and le_key.exists():
+        cert_path = le_cert
+        source = "letsencrypt"
+    else:
+        fallback_cert = BASE_DIR / "data/certs/fullchain.pem"
+        fallback_key = BASE_DIR / "data/certs/privkey.pem"
+        if fallback_cert.exists() and fallback_key.exists():
+            cert_path = fallback_cert
+            source = "fallback"
+        else:
+            return {"exists": False, "reason": "cert_not_found"}
+
+    status: dict[str, object] = {
+        "exists": True,
+        "source": source,
+        "path": str(cert_path),
+    }
+    try:
+        decoded = ssl._ssl._test_decode_cert(str(cert_path))  # pylint: disable=protected-access
+        not_after = decoded.get("notAfter")
+        if not_after:
+            expires = dt.datetime.strptime(not_after, "%b %d %H:%M:%S %Y %Z").replace(tzinfo=dt.timezone.utc)
+            days_left = int((expires - dt.datetime.now(dt.timezone.utc)).total_seconds() // 86400)
+            status["expires_at"] = expires.isoformat()
+            status["days_left"] = days_left
+
+        sans = [name for kind, name in decoded.get("subjectAltName", []) if kind == "DNS"]
+        if sans:
+            status["domains"] = sans
+
+        issuer_parts = []
+        for entry in decoded.get("issuer", []):
+            for key, value in entry:
+                if key in {"commonName", "organizationName"}:
+                    issuer_parts.append(value)
+        if issuer_parts:
+            status["issuer"] = ", ".join(issuer_parts)
+    except Exception as e:
+        status["parse_error"] = str(e)
+
+    return status
 
 
 # ─── .htpasswd generation ─────────────────────────────────────────────────────
@@ -289,15 +353,25 @@ async def get_access_logs(lines: int = 50) -> str:
 
 async def issue_ssl_cert(domain: str, email: str | None = None) -> tuple[bool, str]:
     """
-    Issue Let's Encrypt certificate via certbot.
-    If email is not provided, auto-generated as admin@{domain}.
-    Let's Encrypt uses it only for expiry notifications.
+    Issue Let's Encrypt certificate via certbot + webroot challenge.
+    Works with dockerized nginx because challenge files are served from /var/www/certbot.
     """
-    email = email or f"admin@{domain}"
-    return await _run(
-        "certbot", "certonly", "--nginx",
+    domain = domain.strip().lower()
+    cmd = [
+        "certbot", "certonly",
+        "--webroot", "-w", str(CERTBOT_WEBROOT),
         "-d", domain,
-        "--email", email,
-        "--agree-tos", "--non-interactive", "--quiet",
-        timeout=180,
-    )
+        "--agree-tos", "--non-interactive",
+        "--preferred-challenges", "http",
+        "--keep-until-expiring",
+        "--config-dir", "/etc/letsencrypt",
+        "--work-dir", "/tmp/certbot-work",
+        "--logs-dir", "/tmp/certbot-logs",
+    ]
+    email = (email or "").strip()
+    if email:
+        cmd.extend(["--email", email])
+    else:
+        cmd.append("--register-unsafely-without-email")
+
+    return await _run(*cmd, timeout=240)

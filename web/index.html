@@ -31,12 +31,12 @@ tailwind.config = {
       @login-success.window="page = 'dashboard'; username = $event.detail.username"
       @toast.window="showToast($event.detail.msg, $event.detail.type)">
 
-<!-- ── TOAST ─────────────────────────────────────────────────────────────── -->
+<!-- в”Ђв”Ђ TOAST в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ -->
 <div x-show="toast" x-transition class="toast"
      :class="toast?.type === 'error' ? 'toast-error' : 'toast-success'"
      x-text="toast?.msg"></div>
 
-<!-- ── LOGIN SCREEN ──────────────────────────────────────────────────────── -->
+<!-- в”Ђв”Ђ LOGIN SCREEN в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ -->
 <div x-show="page === 'login'" x-cloak
      class="min-h-screen flex items-center justify-center p-4">
   <div class="card w-full max-w-sm" x-data="loginComponent()">
@@ -66,7 +66,7 @@ tailwind.config = {
   </div>
 </div>
 
-<!-- ── MAIN APP ───────────────────────────────────────────────────────────── -->
+<!-- в”Ђв”Ђ MAIN APP в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ -->
 <div x-show="page !== 'login'" x-cloak class="flex h-full min-h-screen">
 
   <!-- Sidebar -->
@@ -105,7 +105,7 @@ tailwind.config = {
         👑 Admin
       </div>
       <div class="sidebar-item" :class="page==='settings' && 'active'" @click="navigate('settings')">
-        ⚙️ Settings
+        вљ™пёЏ Settings
       </div>
       <div class="sidebar-item" :class="page==='templates' && 'active'" @click="navigate('templates')">
         📋 Templates
@@ -195,8 +195,8 @@ tailwind.config = {
           <h2 class="text-xl font-bold text-white">Server</h2>
           <div class="flex gap-2">
             <button class="btn btn-secondary" @click="loadStatus()">🔄 Refresh</button>
-            <button class="btn btn-primary"  @click="reload()" :disabled="loading">↺ Reload config</button>
-            <button class="btn btn-danger"   @click="restart()" :disabled="loading">♻ Restart</button>
+            <button class="btn btn-primary"  @click="reload()" :disabled="loading">в†є Reload config</button>
+            <button class="btn btn-danger"   @click="restart()" :disabled="loading">в™» Restart</button>
           </div>
         </div>
 
@@ -241,9 +241,9 @@ tailwind.config = {
                   <td><code x-text="c.protocol"></code></td>
                   <td><code x-text="c.inbound_tag"></code></td>
                   <td class="text-slate-400 text-xs">
-                    ↑<span x-text="formatBytes(c.upload)"></span> / ↓<span x-text="formatBytes(c.download)"></span>
+                    в†‘<span x-text="formatBytes(c.upload)"></span> / в†“<span x-text="formatBytes(c.download)"></span>
                   </td>
-                  <td class="text-slate-400 text-xs" x-text="c.expiry_time ? new Date(c.expiry_time).toLocaleDateString() : '∞'"></td>
+                  <td class="text-slate-400 text-xs" x-text="c.expiry_time ? new Date(c.expiry_time).toLocaleDateString() : 'в€ћ'"></td>
                   <td>
                     <span :class="c.enable ? 'badge-green' : 'badge-red'" class="stat-badge"
                           x-text="c.enable ? 'Active' : 'Disabled'"></span>
@@ -275,7 +275,7 @@ tailwind.config = {
                 <tr x-show="selected?.uuid"><td class="text-slate-400">UUID</td><td><code x-text="selected?.uuid" class="text-xs"></code></td></tr>
                 <tr x-show="selected?.password"><td class="text-slate-400">Password</td><td><code x-text="selected?.password" class="text-xs"></code></td></tr>
                 <tr><td class="text-slate-400">Sub ID</td><td><code x-text="selected?.sub_id"></code></td></tr>
-                <tr><td class="text-slate-400">Traffic</td><td>↑<span x-text="formatBytes(selected?.upload)"></span> / ↓<span x-text="formatBytes(selected?.download)"></span></td></tr>
+                <tr><td class="text-slate-400">Traffic</td><td>в†‘<span x-text="formatBytes(selected?.upload)"></span> / в†“<span x-text="formatBytes(selected?.download)"></span></td></tr>
               </tbody>
             </table>
             <!-- Template assignment for this client -->
@@ -284,7 +284,7 @@ tailwind.config = {
               <select class="form-input text-sm"
                 @change="assignTemplate(selected, parseInt($event.target.value))"
                 :value="selected?.template_id || 0">
-                <option value="0">⭐ Default template</option>
+                <option value="0">в­ђ Default template</option>
                 <template x-for="t in allTemplates" :key="t.id">
                   <option :value="t.id" x-text="t.label"></option>
                 </template>
@@ -316,7 +316,7 @@ tailwind.config = {
             <div class="mb-4">
               <div class="text-slate-400 text-xs mb-1 uppercase tracking-wide">🪟 Windows Service — ready ZIP</div>
               <p class="text-slate-500 text-xs mb-2">
-                Download ZIP → extract → run <code>install.cmd</code> as Administrator.<br>
+                Download ZIP в†’ extract в†’ run <code>install.cmd</code> as Administrator.<br>
                 Contains: <code>sing-box.exe</code>, <code>winsw3.exe</code>, all scripts.<br>
                 Config auto-downloads from the server on every service start.
               </p>
@@ -350,11 +350,11 @@ tailwind.config = {
               </div>
               <div class="grid grid-cols-2 gap-3">
                 <div>
-                  <label class="text-slate-400 text-sm block mb-1">Traffic limit (GB, 0=∞)</label>
+                  <label class="text-slate-400 text-sm block mb-1">Traffic limit (GB, 0=в€ћ)</label>
                   <input type="number" x-model.number="form.total_gb" class="form-input" min="0" step="0.1"/>
                 </div>
                 <div>
-                  <label class="text-slate-400 text-sm block mb-1">Expire (days, 0=∞)</label>
+                  <label class="text-slate-400 text-sm block mb-1">Expire (days, 0=в€ћ)</label>
                   <input type="number" x-model.number="form.expire_days" class="form-input" min="0"/>
                 </div>
               </div>
@@ -497,7 +497,7 @@ tailwind.config = {
                   :placeholder="({'domain':'youtube.com, youtu.be, ytimg.com','domain_suffix':'youtube.com, googlevideo.com','domain_keyword':'youtube, twitch','ip_cidr':'8.8.8.8/32, 1.1.1.0/24','rule_set':'https://github.com/.../geosite-youtube.srs'})[form.rule_key] || 'value'"/>
                 <!-- per-type hint -->
                 <p class="text-slate-500 text-xs mt-1" x-show="form.rule_key === 'domain_suffix'">
-                  Matches the domain and all subdomains: <code>youtube.com</code> → matches <code>www.youtube.com</code>, <code>m.youtube.com</code> etc.
+                  Matches the domain and all subdomains: <code>youtube.com</code> в†’ matches <code>www.youtube.com</code>, <code>m.youtube.com</code> etc.
                 </p>
                 <p class="text-slate-500 text-xs mt-1" x-show="form.rule_key === 'rule_set'">
                   URL must point to an <code>.srs</code> binary file or a <code>.json</code> source file.
@@ -589,7 +589,7 @@ tailwind.config = {
           <div class="card">
             <h3 class="font-semibold text-white mb-3">Actions</h3>
             <div class="flex flex-col gap-2">
-              <button class="btn btn-secondary w-full" @click="syncClients()">🔄 Sync clients → AdGuard</button>
+              <button class="btn btn-secondary w-full" @click="syncClients()">🔄 Sync clients в†’ AdGuard</button>
               <button class="btn btn-secondary w-full" @click="showPassword=!showPassword">🔑 Change AdGuard Password</button>
             </div>
             <div x-show="showPassword" class="mt-3 flex gap-2">
@@ -627,7 +627,7 @@ tailwind.config = {
           <div class="card">
             <h3 class="font-semibold text-white mb-3">Actions</h3>
             <div class="flex flex-col gap-2">
-              <button class="btn btn-primary w-full" @click="configure()" :disabled="loading">⚙️ Configure & Reload</button>
+              <button class="btn btn-primary w-full" @click="configure()" :disabled="loading">вљ™пёЏ Configure & Reload</button>
               <button class="btn btn-success w-full" @click="openSslModal()" :disabled="loading">🔐 Issue SSL Certificate</button>
               <button class="btn btn-secondary w-full" @click="loadLogs()">📋 Load Access Logs</button>
             </div>
@@ -829,7 +829,7 @@ tailwind.config = {
                   </div>
                 </template>
                 <p class="text-slate-400 text-sm mt-2">
-                  Use <b x-text="bridgeResult?.entry_outbound"></b> in <b>Routing → Add rule</b>.
+                  Use <b x-text="bridgeResult?.entry_outbound"></b> in <b>Routing в†’ Add rule</b>.
                 </p>
               </div>
               <button class="btn btn-ghost w-full" @click="showBridge=false; bridgeResult=null">Close</button>
@@ -934,7 +934,7 @@ tailwind.config = {
     <!-- SETTINGS -->
     <section x-show="page==='settings'" x-data="settingsSection()" x-init="init()">
       <div class="p-6 max-w-2xl">
-        <h2 class="text-xl font-bold text-white mb-6">⚙️ Settings</h2>
+        <h2 class="text-xl font-bold text-white mb-6">вљ™пёЏ Settings</h2>
         <div x-show="loading" class="flex gap-2 items-center text-slate-400 mb-4"><span class="spinner"></span> Loading…</div>
 
         <!-- Domain -->
@@ -1027,7 +1027,7 @@ tailwind.config = {
 
         <!-- System info -->
         <div class="card">
-          <h3 class="font-semibold text-white mb-3">ℹ️ Auto-restart &amp; SSL renewal</h3>
+          <h3 class="font-semibold text-white mb-3">в„№пёЏ Auto-restart &amp; SSL renewal</h3>
           <div class="flex flex-col gap-2 text-sm text-slate-300">
             <div class="flex items-start gap-2">
               <span class="text-green-400 flex-shrink-0">✅</span>
@@ -1039,7 +1039,7 @@ tailwind.config = {
             </div>
             <div class="flex items-start gap-2 mt-1">
               <span class="text-yellow-400 flex-shrink-0">💡</span>
-              <span>After manual cert renewal, go to <b>Nginx → Configure &amp; Reload</b> to apply new certs.</span>
+              <span>After manual cert renewal, go to <b>Nginx в†’ Configure &amp; Reload</b> to apply new certs.</span>
             </div>
           </div>
         </div>
@@ -1090,15 +1090,15 @@ tailwind.config = {
     </section>
 
     <!-- MAINTENANCE -->
-    <!-- ═══════════════════════════════════════════════════════════════════
+    <!-- в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
          Templates section
-    ════════════════════════════════════════════════════════════════════ -->
+    в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ -->
     <section x-show="page==='templates'" x-cloak x-data="templatesSection()" x-init="init()">
       <div class="p-6">
         <div class="flex items-center justify-between mb-4">
           <div>
             <h2 class="text-xl font-bold text-white">📋 Client Templates</h2>
-            <p class="text-slate-400 text-sm mt-1">Subscription config templates. Each client uses its assigned template (or the ⭐ default).</p>
+            <p class="text-slate-400 text-sm mt-1">Subscription config templates. Each client uses its assigned template (or the в­ђ default).</p>
           </div>
           <div class="flex gap-2">
             <button class="btn btn-secondary" @click="showPresets=true" x-show="presets.length">📦 Presets</button>
@@ -1135,7 +1135,7 @@ tailwind.config = {
             <div class="card flex items-center gap-3">
               <div class="flex-1 min-w-0">
                 <div class="flex items-center gap-2">
-                  <span x-show="t.is_default" class="text-yellow-400 text-sm">⭐</span>
+                  <span x-show="t.is_default" class="text-yellow-400 text-sm">в­ђ</span>
                   <span class="font-semibold text-white" x-text="t.label"></span>
                 </div>
                 <div class="text-slate-400 text-xs mt-0.5" x-text="`name: ${t.name}  •  id: ${t.id}`"></div>
@@ -1143,7 +1143,7 @@ tailwind.config = {
               <div class="flex gap-2 shrink-0">
                 <button class="btn btn-ghost text-xs" @click="downloadJson(t)">📥</button>
                 <button class="btn btn-secondary text-xs" @click="select(t)">✏️ Edit</button>
-                <button x-show="!t.is_default" class="btn btn-ghost text-xs" @click="setDefault(t)">⭐ Default</button>
+                <button x-show="!t.is_default" class="btn btn-ghost text-xs" @click="setDefault(t)">в­ђ Default</button>
                 <button x-show="!t.is_default" class="btn btn-danger text-xs" @click="remove(t)">🗑</button>
               </div>
             </div>
@@ -1234,11 +1234,12 @@ tailwind.config = {
           <button class="btn text-sm" :class="tab==='logs'   ? 'btn-primary' : ''" @click="tab='logs'">📋 Logs</button>
           <button class="btn text-sm" :class="tab==='ipban'  ? 'btn-primary' : ''"
                   @click="tab='ipban'; loadBanned()">🚫 IP Ban</button>
+          <button class="btn text-sm" :class="tab==='updates' ? 'btn-primary' : ''"
+                  @click="tab='updates'; loadUpdateInfo(true)">⬆️ Updates</button>
           <button class="btn text-sm" :class="tab==='windows' ? 'btn-primary' : ''"
                   @click="tab='windows'; checkWinBinaries()">🪟 Windows</button>
         </div>
 
-        <!-- ── BACKUP TAB ──────────────────────────────────────────────── -->
         <div x-show="tab==='backup'">
           <div class="card mb-4">
             <h3 class="font-semibold text-white mb-3">Manual backup</h3>
@@ -1298,7 +1299,7 @@ tailwind.config = {
           </div>
         </div>
 
-        <!-- ── LOGS TAB ────────────────────────────────────────────────── -->
+        <!-- в”Ђв”Ђ LOGS TAB в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ -->
         <div x-show="tab==='logs'">
           <div class="card mb-4">
             <div class="flex items-center justify-between mb-3">
@@ -1332,7 +1333,7 @@ tailwind.config = {
           </div>
         </div>
 
-        <!-- ── IP BAN TAB ──────────────────────────────────────────────── -->
+        <!-- в”Ђв”Ђ IP BAN TAB в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ -->
         <div x-show="tab==='ipban'">
           <!-- Add IP manually -->
           <div class="card mb-4">
@@ -1395,7 +1396,79 @@ tailwind.config = {
           </div>
         </div>
 
-        <!-- ── WINDOWS TAB ──────────────────────────────────────────────── -->
+        <!-- UPDATES TAB -->
+        <div x-show="tab==='updates'">
+          <div class="card mb-4">
+            <div class="flex items-center justify-between mb-3">
+              <h3 class="font-semibold text-white">⬆️ Project updates</h3>
+              <button class="btn btn-primary text-sm"
+                      x-show="updateHasUpdates && !updateRunning"
+                      @click="runUpdate()"
+                      :disabled="updateLoading || updateRunning">
+                ⬆️ Update
+              </button>
+            </div>
+            <div x-show="!updateInfo" class="text-slate-400 text-sm">Open this tab again to refresh git status.</div>
+            <div x-show="updateInfo" class="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+              <div class="bg-slate-800 rounded p-3">
+                <div class="text-slate-400">Branch</div>
+                <div class="text-white font-mono" x-text="updateInfo?.current_branch || '-' "></div>
+              </div>
+              <div class="bg-slate-800 rounded p-3">
+                <div class="text-slate-400">Commit</div>
+                <div class="text-white font-mono" x-text="updateInfo?.current_commit || '-' "></div>
+              </div>
+              <div class="bg-slate-800 rounded p-3">
+                <div class="text-slate-400">Current tag</div>
+                <div class="text-white font-mono" x-text="updateInfo?.current_tag || '—'"></div>
+              </div>
+              <div class="bg-slate-800 rounded p-3">
+                <div class="text-slate-400">Latest tag</div>
+                <div class="text-white font-mono" x-text="updateInfo?.latest_tag || '—'"></div>
+              </div>
+            </div>
+            <p x-show="updateInfo?.git_error" class="text-yellow-400 text-xs mt-3" x-text="updateInfo?.git_error"></p>
+            <p class="text-xs mt-3" :class="updateHasUpdates ? 'text-green-400' : 'text-slate-400'"
+               x-text="updateHasUpdates ? ('Update available: ' + updateTargetVersion) : 'No new updates detected.'"></p>
+          </div>
+
+          <div class="card mb-4">
+            <h3 class="font-semibold text-white mb-3">Actions</h3>
+            <p class="text-slate-400 text-sm mb-3">
+              Update pulls latest code for selected branch. Reinstall recreates containers from current files.
+              Clean reinstall resets runtime data and settings.
+            </p>
+            <div class="flex flex-col gap-3">
+              <div class="flex gap-2 flex-wrap items-center" x-show="updateHasUpdates">
+                <label class="text-slate-400 text-sm">Branch:</label>
+                <input class="form-input w-72" x-model="updateBranch" :placeholder="suggestedBranch" list="update-branches-list"/>
+                <datalist id="update-branches-list">
+                  <template x-for="b in (updateInfo?.remote_branches || [])" :key="b">
+                    <option :value="b"></option>
+                  </template>
+                </datalist>
+              </div>
+              <div class="flex gap-2 flex-wrap">
+                <button class="btn btn-primary" x-show="updateHasUpdates" @click="runUpdate()" :disabled="updateLoading || updateRunning">⬆️ Update</button>
+                <button class="btn btn-danger" @click="runReinstall('preserve')" :disabled="updateLoading || updateRunning">♻️ Reinstall (keep data)</button>
+                <button class="btn btn-danger" @click="runReinstall('clean')" :disabled="updateLoading || updateRunning">🧹 Clean reinstall</button>
+                <button class="btn" x-show="updateRunning || updateJob?.container_name" @click="loadUpdateLogs()" :disabled="updateLoading">📜 Logs</button>
+                <button class="btn btn-ghost" x-show="updateJob?.container_name" @click="cleanupUpdateJob()" :disabled="updateLoading || updateRunning || !updateJob?.container_name">🧹 Cleanup</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="flex items-center justify-between mb-3">
+              <h3 class="font-semibold text-white">Maintenance job status</h3>
+              <div class="text-xs text-slate-400" x-text="updateActionLabel + ' / ' + updateStatusLabel"></div>
+            </div>
+            <p class="text-slate-500 text-xs mb-2" x-show="updateJob?.started_at" x-text="'Started: ' + updateJob.started_at"></p>
+            <p class="text-slate-500 text-xs mb-3" x-show="updateJob?.finished_at" x-text="'Finished: ' + updateJob.finished_at"></p>
+            <div class="log-box" x-text="updateLogs || 'No logs yet.'"></div>
+          </div>
+        </div>
+        <!-- WINDOWS TAB -->
         <div x-show="tab==='windows'">
           <div class="card mb-4">
             <h3 class="font-semibold text-white mb-1">🪟 Windows Service Binaries</h3>
@@ -1437,3 +1510,11 @@ tailwind.config = {
 
 </body>
 </html>
+
+
+
+
+
+
+
+

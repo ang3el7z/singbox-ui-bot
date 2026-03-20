@@ -1,4 +1,8 @@
+import asyncio
 import httpx
+import time
+from datetime import datetime
+from html import escape
 
 from aiogram import Router, F
 from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
@@ -6,9 +10,11 @@ from aiogram.filters import CommandStart, Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 
+from bot.api_client import APIError, maintenance_api, nginx_api, settings_api
 from bot.keyboards.main import kb_main_menu
 
 router = Router()
+_MENU_GIT_CACHE: dict[str, object] = {"ts": 0.0, "git": {}}
 
 # ─── Timezone list ────────────────────────────────────────────────────────────
 
@@ -85,6 +91,112 @@ def _kb_domain(ip: str, lang: str) -> InlineKeyboardMarkup:
     ])
 
 
+def _format_cert_line_for_main(cert: dict, lang: str) -> str:
+    if not cert or not cert.get("exists"):
+        return "Сертификат: не выпущен" if lang == "ru" else "Certificate: not issued"
+
+    expires = cert.get("expires_at")
+    days_left = cert.get("days_left")
+    if isinstance(expires, str):
+        try:
+            dt = datetime.fromisoformat(expires.replace("Z", "+00:00"))
+            if lang == "ru":
+                if isinstance(days_left, int):
+                    return f"Сертификат: до <code>{dt.strftime('%d.%m.%Y')}</code> ({days_left} дн.)"
+                return f"Сертификат: до <code>{dt.strftime('%d.%m.%Y')}</code>"
+            if isinstance(days_left, int):
+                return f"Certificate: until <code>{dt.strftime('%Y-%m-%d')}</code> ({days_left} days)"
+            return f"Certificate: until <code>{dt.strftime('%Y-%m-%d')}</code>"
+        except Exception:
+            pass
+
+    return "Сертификат: выпущен" if lang == "ru" else "Certificate: issued"
+
+
+def _build_version_lines(git: dict, lang: str) -> tuple[str, str]:
+    current_tag = (git.get("current_tag") or "").strip()
+    current_commit = (git.get("current_commit") or "").strip()
+    latest_tag = (git.get("latest_tag") or "").strip()
+    remote_commit = (git.get("remote_branch_commit") or "").strip()
+    has_updates = bool(git.get("update_available_branch")) or bool(git.get("update_available_tag"))
+
+    current_version = current_tag or current_commit or "-"
+    version_line = (
+        f"Версия: <code>{escape(current_version)}</code>"
+        if lang == "ru"
+        else f"Version: <code>{escape(current_version)}</code>"
+    )
+
+    if not has_updates:
+        return version_line, ("Обновлений нет" if lang == "ru" else "No updates detected")
+
+    new_version = latest_tag or remote_commit or "latest"
+    update_line = (
+        f"Доступно обновление: <code>{escape(new_version)}</code>"
+        if lang == "ru"
+        else f"Update available: <code>{escape(new_version)}</code>"
+    )
+    return version_line, update_line
+
+
+async def _main_menu_text(lang: str) -> str:
+    domain = ""
+    cert: dict = {}
+    git: dict = {}
+
+    try:
+        domain_data = await settings_api.get("domain")
+        domain = (domain_data.get("value") or "").strip() if isinstance(domain_data, dict) else ""
+    except Exception:
+        domain = ""
+
+    try:
+        nginx_status = await nginx_api.status()
+        cert = nginx_status.get("cert") or {}
+    except APIError:
+        cert = {}
+
+    git = await _get_menu_git_info()
+
+    domain_value = domain or ("не задан" if lang == "ru" else "not set")
+    domain_line = (
+        f"Домен: <code>{escape(domain_value)}</code>"
+        if lang == "ru"
+        else f"Domain: <code>{escape(domain_value)}</code>"
+    )
+    cert_line = _format_cert_line_for_main(cert, lang)
+    version_line, update_line = _build_version_lines(git, lang)
+    return (
+        "<b>Singbox UI Bot</b>\n\n"
+        f"{domain_line}\n"
+        f"{cert_line}\n"
+        f"{version_line}\n"
+        f"{update_line}"
+    )
+
+
+async def _get_menu_git_info() -> dict:
+    now = time.time()
+    cached_ts = float(_MENU_GIT_CACHE.get("ts") or 0.0)
+    cached_git = _MENU_GIT_CACHE.get("git")
+    if isinstance(cached_git, dict) and cached_git and (now - cached_ts) < 300:
+        return cached_git
+
+    try:
+        fresh = await asyncio.wait_for(maintenance_api.update_info(refresh_remote=True), timeout=4.0)
+        git = fresh.get("git") or {}
+        if isinstance(git, dict):
+            _MENU_GIT_CACHE["ts"] = now
+            _MENU_GIT_CACHE["git"] = git
+            return git
+    except Exception:
+        pass
+
+    if isinstance(cached_git, dict):
+        return cached_git
+    return {}
+
+
 # ─── /start and /menu ─────────────────────────────────────────────────────────
 
 @router.message(CommandStart())
@@ -104,23 +216,13 @@ async def cmd_start(msg: Message, state: FSMContext, setup_mode: bool = False):
         return
 
     lang = _get_lang()
-    await msg.answer(
-        "👋 <b>Singbox UI Bot</b>\n\n"
-        + ("Выберите раздел:" if lang == "ru" else "Choose a section:"),
-        reply_markup=kb_main_menu(),
-        parse_mode="HTML",
-    )
+    await msg.answer(await _main_menu_text(lang), reply_markup=kb_main_menu(), parse_mode="HTML")
 
 
 @router.callback_query(F.data == "main_menu")
 async def cb_main_menu(cq: CallbackQuery):
     lang = _get_lang()
-    await cq.message.edit_text(
-        "👋 <b>Singbox UI Bot</b>\n\n"
-        + ("Выберите раздел:" if lang == "ru" else "Choose a section:"),
-        reply_markup=kb_main_menu(),
-        parse_mode="HTML",
-    )
+    await cq.message.edit_text(await _main_menu_text(lang), reply_markup=kb_main_menu(), parse_mode="HTML")
     await cq.answer()
 
 
@@ -363,7 +465,7 @@ async def setup_please_use_buttons(msg: Message, state: FSMContext):
 
 def _get_lang() -> str:
     from api.routers.settings_router import get_runtime
-    return get_runtime("bot_lang", "en")
+    return get_runtime("bot_lang", "ru")
 
 
 async def _get_public_ip() -> str:

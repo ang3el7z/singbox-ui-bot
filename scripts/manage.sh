@@ -122,7 +122,8 @@ cmd_backup() {
         "$TMP_DIR/config/adguard" \
         "$TMP_DIR/data" \
         "$TMP_DIR/nginx/conf.d" \
-        "$TMP_DIR/nginx/htpasswd"
+        "$TMP_DIR/nginx/htpasswd" \
+        "$TMP_DIR/nginx/certbot"
 
     [[ -f "$INSTALL_DIR/.env" ]] && cp "$INSTALL_DIR/.env" "$TMP_DIR/.env"
     [[ -f "$INSTALL_DIR/config/sing-box/config.json" ]] && cp "$INSTALL_DIR/config/sing-box/config.json" "$TMP_DIR/config/sing-box/config.json"
@@ -325,7 +326,8 @@ cmd_restore() {
         "$INSTALL_DIR/nginx/conf.d" \
         "$INSTALL_DIR/nginx/override" \
         "$INSTALL_DIR/nginx/htpasswd" \
-        "$INSTALL_DIR/nginx/certs"
+        "$INSTALL_DIR/nginx/certs" \
+        "$INSTALL_DIR/nginx/certbot"
 
     cp "$TMP_DIR/.env" "$INSTALL_DIR/.env"
     chmod 600 "$INSTALL_DIR/.env"
@@ -429,26 +431,53 @@ cmd_restart() {
 
 # ── Update ────────────────────────────────────────────────────────────────────
 cmd_update() {
+    local requested_branch="${1:-}"
+    local current_branch target_branch
+    current_branch="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo main)"
+    target_branch="${requested_branch:-$current_branch}"
+
     header "Update"
-    warn "This will pull the latest code from GitHub and rebuild the app container."
+    warn "This will pull latest code from Git and rebuild containers (app, nginx, singbox)."
     warn "Your data (config.json, app.db, .env) will NOT be affected."
+    echo "Current branch: $current_branch"
+    echo "Target branch:  $target_branch"
+    if [[ -n "$requested_branch" ]]; then
+        warn "Branch was provided explicitly: $requested_branch"
+    fi
     echo
     read -rp "Continue? [y/N]: " CONFIRM
     [[ "$CONFIRM" != [yY] ]] && { info "Update cancelled."; return; }
 
+    if ! git diff --quiet || ! git diff --cached --quiet; then
+        warn "Local git changes detected. Commit/stash them first to avoid conflicts."
+        return 1
+    fi
+
     info "Creating backup before update…"
     cmd_backup
 
-    info "Pulling latest changes…"
-    git pull origin main || { error "git pull failed. Check your internet connection."; return 1; }
+    info "Fetching latest refs…"
+    git fetch origin || { error "git fetch failed. Check your internet connection."; return 1; }
 
-    info "Rebuilding app container…"
-    DC build app
+    if [[ "$current_branch" != "$target_branch" ]]; then
+        info "Switching branch to $target_branch…"
+        if git show-ref --verify --quiet "refs/heads/$target_branch"; then
+            git checkout "$target_branch" || { error "git checkout $target_branch failed."; return 1; }
+        elif git show-ref --verify --quiet "refs/remotes/origin/$target_branch"; then
+            git checkout -b "$target_branch" "origin/$target_branch" || { error "Failed to create local branch $target_branch."; return 1; }
+        else
+            error "Branch '$target_branch' not found in local or origin."
+            return 1
+        fi
+    fi
 
-    info "Restarting app container…"
-    DC up -d app
+    info "Pulling latest changes for $target_branch…"
+    git pull --ff-only origin "$target_branch" || { error "git pull failed. Resolve conflicts or check branch."; return 1; }
 
-    success "Update complete!"
+    info "Rebuilding and restarting containers…"
+    DC up -d --build app nginx singbox || { error "docker compose update failed."; return 1; }
+
+    success "Update complete on branch '$target_branch'!"
 }
 
 # ── Clear logs ────────────────────────────────────────────────────────────────
@@ -558,12 +587,12 @@ main() {
             restore)   shift; cmd_restore "${1:-}" ;;
             logs)      cmd_logs ;;
             restart)   cmd_restart ;;
-            update)    cmd_update ;;
+            update)    shift; cmd_update "${1:-}" ;;
             firewall)  cmd_firewall ;;
             uninstall) cmd_uninstall ;;
             *)
                 error "Unknown command: $1"
-                echo "Usage: singbox-ui-bot [status|backup|restore <backup.zip>|logs|restart|update|firewall|uninstall]"
+                echo "Usage: singbox-ui-bot [status|backup|restore <backup.zip>|logs|restart|update [branch]|firewall|uninstall]"
                 exit 1
                 ;;
         esac

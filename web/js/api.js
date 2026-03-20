@@ -174,6 +174,11 @@ const api = {
     maintIpBanAnalyze:    ()        => apiFetch("POST", "/api/maintenance/ip-ban/analyze"),
     maintIpBanAll:        ()        => apiFetch("POST", "/api/maintenance/ip-ban/ban-analyzed"),
     maintIpBanClearAuto:  ()        => apiFetch("POST", "/api/maintenance/ip-ban/clear-auto"),
+    maintUpdateInfo:      (refresh=true) => apiFetch("GET",  `/api/maintenance/update/info?refresh=${refresh}`),
+    maintUpdateLogs:      (lines=220) => apiFetch("GET", `/api/maintenance/update/logs?lines=${lines}`),
+    maintUpdateRun:       (branch=null) => apiFetch("POST", "/api/maintenance/update/run", branch ? { branch } : {}),
+    maintReinstallRun:    (clean=false) => apiFetch("POST", "/api/maintenance/reinstall/run", { clean }),
+    maintUpdateCleanup:   ()        => apiFetch("POST", "/api/maintenance/update/cleanup"),
 
     async maintBackupDownload() {
         const token = getToken();

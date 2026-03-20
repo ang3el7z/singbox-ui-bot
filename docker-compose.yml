@@ -24,7 +24,9 @@ services:
       - ./data:/app/host_data                 # ssh_port etc. — read by manage.sh on host
       - ./nginx/templates:/app/nginx/templates
       - ./nginx/override:/var/www/override    # user-uploaded site
+      - ./nginx/certbot:/var/www/certbot      # ACME HTTP-01 challenge files
       - ./nginx/htpasswd:/etc/nginx/htpasswd  # basic auth for 401 fallback
+      - ./nginx/certs:/etc/letsencrypt        # issued certificates (shared with nginx)
       - ./nginx:/app/nginx
       - ./subs:/app/subs
       - ./nginx/logs:/app/nginx/logs:ro       # Read nginx access logs
@@ -85,6 +87,7 @@ services:
     volumes:
       - ./nginx/conf.d:/etc/nginx/conf.d
       - ./nginx/override:/var/www/override:ro
+      - ./nginx/certbot:/var/www/certbot:ro
       - ./nginx/htpasswd:/etc/nginx/htpasswd:ro
       - ./nginx/certs:/etc/letsencrypt:ro
       - ./web:/var/www/web:ro                 # Serve web UI

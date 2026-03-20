@@ -10,6 +10,7 @@ from aiogram.fsm.state import State, StatesGroup
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
+from api.routers.settings_router import get_runtime
 from bot.api_client import settings_api, APIError
 from bot.keyboards.main import kb_back
 
@@ -18,6 +19,14 @@ router = Router()
 
 class DomainFSM(StatesGroup):
     waiting = State()
+
+
+def _is_ru() -> bool:
+    return get_runtime("bot_lang", "ru") == "ru"
+
+
+def _txt(ru: str, en: str) -> str:
+    return ru if _is_ru() else en
 
 # ─── Timezone catalog ─────────────────────────────────────────────────────────
 # Grouped: (display_label, iana_value)
@@ -69,21 +78,21 @@ _TZ_GROUPS = {
 def _kb_settings_menu(tz: str, lang: str, domain: str) -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
     builder.row(InlineKeyboardButton(
-        text=f"🌍 Domain: {domain or '—'}",
+        text=f"🌍 {_txt('Домен', 'Domain')}: {domain or '—'}",
         callback_data="settings_domain",
     ))
     builder.row(InlineKeyboardButton(
-        text=f"🕐 Timezone: {tz}",
+        text=f"🕐 {_txt('Часовой пояс', 'Timezone')}: {tz}",
         callback_data="settings_tz_groups",
     ))
     lang_icon = "🇷🇺" if lang == "ru" else "🇬🇧"
     builder.row(InlineKeyboardButton(
-        text=f"{lang_icon} Language: {lang}",
+        text=f"{lang_icon} {_txt('Язык', 'Language')}: {lang}",
         callback_data="settings_lang_choose",
     ))
-    builder.row(InlineKeyboardButton(text="👑 Manage admins", callback_data="menu_admin"))
-    builder.row(InlineKeyboardButton(text="ℹ️ System info",   callback_data="settings_system"))
-    builder.row(InlineKeyboardButton(text="⬅️ Back",           callback_data="main_menu"))
+    builder.row(InlineKeyboardButton(text=_txt("👑 Управление админами", "👑 Manage admins"), callback_data="menu_admin"))
+    builder.row(InlineKeyboardButton(text=_txt("ℹ️ Системная информация", "ℹ️ System info"), callback_data="settings_system"))
+    builder.row(InlineKeyboardButton(text=_txt("⬅️ Назад", "⬅️ Back"), callback_data="main_menu"))
     return builder.as_markup()
 
 
@@ -91,7 +100,7 @@ def _kb_tz_groups() -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
     for group in _TZ_GROUPS:
         builder.row(InlineKeyboardButton(text=group, callback_data=f"settings_tzg_{group}"))
-    builder.row(InlineKeyboardButton(text="⬅️ Back", callback_data="menu_settings"))
+    builder.row(InlineKeyboardButton(text=_txt("⬅️ Назад", "⬅️ Back"), callback_data="menu_settings"))
     return builder.as_markup()
 
 
@@ -99,15 +108,15 @@ def _kb_tz_list(group: str) -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
     for label, iana in _TZ_GROUPS.get(group, []):
         builder.row(InlineKeyboardButton(text=label, callback_data=f"settings_tz_{iana}"))
-    builder.row(InlineKeyboardButton(text="⬅️ Back", callback_data="settings_tz_groups"))
+    builder.row(InlineKeyboardButton(text=_txt("⬅️ Назад", "⬅️ Back"), callback_data="settings_tz_groups"))
     return builder.as_markup()
 
 
 def _kb_lang() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="🇷🇺 Russian",  callback_data="settings_lang_ru"),
+        [InlineKeyboardButton(text="🇷🇺 Русский",  callback_data="settings_lang_ru"),
          InlineKeyboardButton(text="🇬🇧 English",  callback_data="settings_lang_en")],
-        [InlineKeyboardButton(text="⬅️ Back", callback_data="menu_settings")],
+        [InlineKeyboardButton(text=_txt("⬅️ Назад", "⬅️ Back"), callback_data="menu_settings")],
     ])
 
 
@@ -119,7 +128,7 @@ async def _settings_menu(cq: CallbackQuery):
     lang   = s.get("bot_lang", "ru")
     domain = s.get("domain",   "—")
     await cq.message.edit_text(
-        "⚙️ <b>Settings</b>",
+        _txt("⚙️ <b>Настройки</b>", "⚙️ <b>Settings</b>"),
         reply_markup=_kb_settings_menu(tz, lang, domain),
         parse_mode="HTML",
     )
@@ -136,7 +145,7 @@ async def cb_settings_menu(cq: CallbackQuery, state: FSMContext):
 @router.callback_query(F.data == "settings_tz_groups")
 async def cb_tz_groups(cq: CallbackQuery):
     await cq.message.edit_text(
-        "🕐 <b>Select timezone region:</b>",
+        _txt("🕐 <b>Выберите регион часового пояса:</b>", "🕐 <b>Select timezone region:</b>"),
         reply_markup=_kb_tz_groups(),
         parse_mode="HTML",
     )
@@ -146,10 +155,10 @@ async def cb_tz_groups(cq: CallbackQuery):
 async def cb_tz_group(cq: CallbackQuery):
     group = cq.data[len("settings_tzg_"):]
     if group not in _TZ_GROUPS:
-        await cq.answer("Unknown group", show_alert=True)
+        await cq.answer(_txt("Неизвестная группа", "Unknown group"), show_alert=True)
         return
     await cq.message.edit_text(
-        f"🕐 <b>{group}</b>\nSelect timezone:",
+        _txt(f"🕐 <b>{group}</b>\nВыберите часовой пояс:", f"🕐 <b>{group}</b>\nSelect timezone:"),
         reply_markup=_kb_tz_list(group),
         parse_mode="HTML",
     )
@@ -172,7 +181,7 @@ async def cb_tz_set(cq: CallbackQuery):
 @router.callback_query(F.data == "settings_lang_choose")
 async def cb_lang_choose(cq: CallbackQuery):
     await cq.message.edit_text(
-        "🌐 <b>Select bot language:</b>",
+        _txt("🌐 <b>Выберите язык бота:</b>", "🌐 <b>Select bot language:</b>"),
         reply_markup=_kb_lang(),
         parse_mode="HTML",
     )
@@ -183,7 +192,7 @@ async def cb_lang_set(cq: CallbackQuery):
     lang = "ru" if cq.data == "settings_lang_ru" else "en"
     try:
         r = await settings_api.set("bot_lang", lang)
-        await cq.answer(f"✅ Language: {r['value']}")
+        await cq.answer(_txt(f"✅ Язык: {r['value']}", f"✅ Language: {r['value']}"))
         await _settings_menu(cq)
     except APIError as e:
         await cq.answer(f"❌ {e.detail}", show_alert=True)
@@ -199,11 +208,18 @@ async def cb_domain_prompt(cq: CallbackQuery, state: FSMContext):
     except APIError:
         cur = ""
     await cq.message.answer(
-        f"🌍 <b>Change domain</b>\n\n"
-        f"Current: <code>{cur}</code>\n\n"
-        "Enter new domain (e.g. <code>example.com</code>):\n"
-        "<i>Nginx config will be regenerated automatically.\n"
-        "Re-issue SSL separately if the domain actually changed.</i>",
+        _txt(
+            f"🌍 <b>Смена домена</b>\n\n"
+            f"Текущий: <code>{cur}</code>\n\n"
+            "Введите новый домен (например <code>example.com</code>):\n"
+            "<i>Конфиг Nginx будет пересоздан автоматически.\n"
+            "Если домен изменился, перевыпустите SSL отдельно.</i>",
+            f"🌍 <b>Change domain</b>\n\n"
+            f"Current: <code>{cur}</code>\n\n"
+            "Enter new domain (e.g. <code>example.com</code>):\n"
+            "<i>Nginx config will be regenerated automatically.\n"
+            "Re-issue SSL separately if the domain actually changed.</i>",
+        ),
         parse_mode="HTML",
         reply_markup=kb_back("menu_settings"),
     )
@@ -218,8 +234,12 @@ async def fsm_domain_set(msg: Message, state: FSMContext):
         r = await settings_api.set("domain", domain)
         note = r.get("note", "")
         await msg.answer(
-            f"✅ Domain updated: <code>{r['value']}</code>\n"
-            f"<i>{note}</i>",
+            _txt(
+                f"✅ Домен обновлён: <code>{r['value']}</code>\n"
+                f"<i>{note}</i>",
+                f"✅ Domain updated: <code>{r['value']}</code>\n"
+                f"<i>{note}</i>",
+            ),
             parse_mode="HTML",
             reply_markup=kb_back("menu_settings"),
         )
@@ -249,14 +269,28 @@ async def cb_system_info(cq: CallbackQuery):
     hook_ok = os.path.exists("/etc/letsencrypt/renewal-hooks/deploy/copy-to-singbox.sh")
 
     text = (
-        "ℹ️ <b>System Info</b>\n\n"
-        "<b>Auto-restart on server reboot:</b>\n"
-        "✅ All containers: <code>restart: unless-stopped</code>\n"
-        "   → Containers start automatically after server reboot.\n\n"
-        "<b>Auto SSL renewal:</b>\n"
-        f"{'✅' if cron_ok else '⚠️'} Certbot cron: {'active' if cron_ok else 'not found'}\n"
-        f"{'✅' if hook_ok else '⚠️'} Renewal hook: {'active' if hook_ok else 'not found'}\n\n"
-        "<b>After manual cert renewal:</b>\n"
-        "  🌐 Nginx → ⚙️ Configure & Reload"
+        (
+            "ℹ️ <b>Системная информация</b>\n\n"
+            "<b>Автозапуск после перезагрузки сервера:</b>\n"
+            "✅ Все контейнеры: <code>restart: unless-stopped</code>\n"
+            "   → Контейнеры поднимаются автоматически.\n\n"
+            "<b>Автообновление SSL:</b>\n"
+            f"{'✅' if cron_ok else '⚠️'} Certbot cron: {'активен' if cron_ok else 'не найден'}\n"
+            f"{'✅' if hook_ok else '⚠️'} Renewal hook: {'активен' if hook_ok else 'не найден'}\n\n"
+            "<b>После ручного обновления сертификата:</b>\n"
+            "  🌐 Nginx → ⚙️ Настроить"
+        )
+        if _is_ru()
+        else (
+            "ℹ️ <b>System Info</b>\n\n"
+            "<b>Auto-restart on server reboot:</b>\n"
+            "✅ All containers: <code>restart: unless-stopped</code>\n"
+            "   → Containers start automatically after server reboot.\n\n"
+            "<b>Auto SSL renewal:</b>\n"
+            f"{'✅' if cron_ok else '⚠️'} Certbot cron: {'active' if cron_ok else 'not found'}\n"
+            f"{'✅' if hook_ok else '⚠️'} Renewal hook: {'active' if hook_ok else 'not found'}\n\n"
+            "<b>After manual cert renewal:</b>\n"
+            "  🌐 Nginx → ⚙️ Configure"
+        )
     )
     await cq.message.answer(text, parse_mode="HTML", reply_markup=kb_back("menu_settings"))

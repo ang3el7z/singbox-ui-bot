@@ -5,6 +5,7 @@ WORKDIR /app
 # System deps: curl for healthchecks, certbot for SSL, docker CLI for exec
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
+    git \
     nginx \
     certbot \
     python3-certbot-nginx \

@@ -106,6 +106,7 @@ setup_dirs() {
     mkdir -p "$INSTALL_DIR/nginx/conf.d"
     mkdir -p "$INSTALL_DIR/nginx/logs"
     mkdir -p "$INSTALL_DIR/nginx/override"
+    mkdir -p "$INSTALL_DIR/nginx/certbot"
     mkdir -p "$INSTALL_DIR/nginx/htpasswd"
     mkdir -p "$INSTALL_DIR/nginx/certs"
     mkdir -p "$INSTALL_DIR/config/sing-box/templates"

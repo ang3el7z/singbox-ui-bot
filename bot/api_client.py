@@ -50,8 +50,8 @@ async def api_get(path: str, raw_text: bool = False, **params) -> Any:
     return await get(path, **params)
 
 
-async def post(path: str, json: Any = None, **params) -> Any:
-    async with _client() as c:
+async def post(path: str, json: Any = None, timeout: float | None = None, **params) -> Any:
+    async with httpx.AsyncClient(base_url=_BASE, headers=_HEADERS, timeout=(timeout or 30.0)) as c:
         r = await c.post(path, json=json, params=params)
         if not r.is_success:
             raise APIError(r.status_code, _extract_detail(r))
@@ -175,7 +175,7 @@ class NginxAPI:
     async def configure(self):                return await post("/api/nginx/configure")
     async def ssl(self, email: str = ""):
         body = {"email": email} if email else {}
-        return await post("/api/nginx/ssl", json=body)
+        return await post("/api/nginx/ssl", json=body, timeout=300.0)
     async def paths(self):                    return await get("/api/nginx/paths")
     async def logs(self, n=50):               return await get("/api/nginx/logs", lines=n)
     async def upload(self, filename, data):   return await upload("/api/nginx/override/upload", filename, data)
@@ -272,6 +272,19 @@ class MaintenanceAPI:
         return await get("/api/maintenance/windows/binaries-status")
     async def prefetch_windows_binaries(self):
         return await post("/api/maintenance/windows/prefetch-binaries")
+
+    # Updates
+    async def update_info(self, refresh_remote: bool = True):
+        return await get("/api/maintenance/update/info", refresh=str(refresh_remote).lower())
+    async def update_logs(self, lines: int = 200):
+        return await get("/api/maintenance/update/logs", lines=lines)
+    async def update_run(self, branch: str | None = None):
+        payload = {"branch": branch} if branch else {}
+        return await post("/api/maintenance/update/run", json=payload, timeout=20.0)
+    async def reinstall_run(self, clean: bool = False):
+        return await post("/api/maintenance/reinstall/run", json={"clean": bool(clean)}, timeout=20.0)
+    async def update_cleanup(self):
+        return await post("/api/maintenance/update/cleanup")
 
 
 # Singletons used by handlers

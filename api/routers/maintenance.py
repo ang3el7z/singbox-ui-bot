@@ -1,6 +1,7 @@
 """
 Maintenance router — backup, log management, IP ban.
 """
+import asyncio
 import io
 import ipaddress
 import time
@@ -15,6 +16,7 @@ from pydantic import BaseModel
 from api.deps import require_any_auth, audit
 from api.services import ip_ban as ip_ban_svc
 from api.services import nginx_service
+from api.services import update_service
 from api.services.backup_service import (
     RestoreError,
     build_backup_zip,
@@ -37,6 +39,14 @@ class IpBanAddBody(BaseModel):
 
 class IntervalBody(BaseModel):
     hours: int   # 0 = disabled
+
+
+class UpdateRunBody(BaseModel):
+    branch: Optional[str] = None
+
+
+class ReinstallRunBody(BaseModel):
+    clean: bool = False
 
 
 # ─── Status / settings ────────────────────────────────────────────────────────
@@ -290,3 +300,52 @@ async def prefetch_windows_binaries(auth=Depends(require_any_auth)):
         raise HTTPException(status_code=500, detail=f"Download failed: {e}")
     await audit(auth["actor"], "prefetch_windows_binaries", f"version={SINGBOX_VERSION}")
     return {"detail": "Binaries downloaded and cached successfully"}
+
+
+# ─── Update (git + branch/tag + run update job) ──────────────────────────────
+
+@router.get("/update/info")
+async def update_info(refresh: bool = True, auth=Depends(require_any_auth)):
+    try:
+        git = await asyncio.to_thread(update_service.get_update_info, refresh)
+        job = await asyncio.to_thread(update_service.get_update_status, 120)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+    return {"git": git, "job": job}
+
+
+@router.get("/update/logs")
+async def update_logs(lines: int = 200, auth=Depends(require_any_auth)):
+    lines = max(20, min(lines, 1000))
+    job = await asyncio.to_thread(update_service.get_update_status, lines)
+    return job
+
+
+@router.post("/update/run")
+async def update_run(body: UpdateRunBody = UpdateRunBody(), auth=Depends(require_any_auth)):
+    try:
+        result = await asyncio.to_thread(update_service.start_update, body.branch, auth["actor"])
+    except RuntimeError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    await audit(auth["actor"], "maintenance_update_run", f"branch={result.get('branch')}")
+    return result
+
+
+@router.post("/reinstall/run")
+async def reinstall_run(body: ReinstallRunBody = ReinstallRunBody(), auth=Depends(require_any_auth)):
+    try:
+        result = await asyncio.to_thread(update_service.start_reinstall, auth["actor"], body.clean)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    await audit(auth["actor"], "maintenance_reinstall_run", f"clean={body.clean}")
+    return result
+
+
+@router.post("/update/cleanup")
+async def update_cleanup(auth=Depends(require_any_auth)):
+    try:
+        result = await asyncio.to_thread(update_service.cleanup_update_job)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    await audit(auth["actor"], "maintenance_update_cleanup")
+    return result
