@@ -323,17 +323,92 @@ async def _run(*cmd: str, timeout: int = 30) -> tuple[bool, str]:
 
 # ─── Nginx process management ─────────────────────────────────────────────────
 
+def _container_nginx_commands(*nginx_args: str) -> list[tuple[str, ...]]:
+    return [
+        ("docker", "exec", "singbox_nginx", "nginx", *nginx_args),
+        ("docker", "compose", "exec", "-T", "nginx", "nginx", *nginx_args),
+        ("docker-compose", "exec", "-T", "nginx", "nginx", *nginx_args),
+    ]
+
+
+def _is_tooling_missing_error(output: str) -> bool:
+    text = (output or "").lower()
+    return "no such file or directory" in text and ("docker" in text or "docker-compose" in text)
+
+
+async def _run_nginx_container_cmd(*nginx_args: str, timeout: int = 30) -> tuple[bool, str, bool]:
+    """
+    Try multiple ways to execute nginx command inside container.
+    Returns: (ok, output, tooling_missing)
+    """
+    errors: list[str] = []
+    missing_hits = 0
+    attempts = _container_nginx_commands(*nginx_args)
+    for cmd in attempts:
+        ok, out = await _run(*cmd, timeout=timeout)
+        if ok:
+            return True, out, False
+        out = (out or "").strip()
+        errors.append(f"$ {' '.join(cmd)}\n{out}")
+        if _is_tooling_missing_error(out):
+            missing_hits += 1
+    merged = "\n\n".join(errors) if errors else "unknown command failure"
+    return False, merged, missing_hits == len(attempts)
+
+
+def _write_local_nginx_test_config() -> Path:
+    """
+    Build a minimal nginx config that includes project conf.d.
+    Used only when docker tooling is unavailable.
+    """
+    cfg = Path("/tmp/sbui-nginx-test.conf")
+    cfg.write_text(
+        "\n".join(
+            [
+                "worker_processes 1;",
+                "error_log /tmp/sbui-nginx-test-error.log warn;",
+                "pid /tmp/sbui-nginx-test.pid;",
+                "events { worker_connections 128; }",
+                "http {",
+                "  include /etc/nginx/mime.types;",
+                "  default_type application/octet-stream;",
+                "  include /app/nginx/conf.d/*.conf;",
+                "}",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    return cfg
+
+
 async def reload_nginx() -> tuple[bool, str]:
-    ok, out = await _run("docker", "exec", "singbox_nginx", "nginx", "-s", "reload")
+    ok, out, tooling_missing = await _run_nginx_container_cmd("-s", "reload", timeout=20)
     if ok:
         return True, "OK"
+    if tooling_missing:
+        return (
+            False,
+            "Docker tooling is unavailable in app container. "
+            "Run 'docker compose up -d --build' and retry.",
+        )
     # Fallback: direct nginx call (if running without docker, e.g. in CI)
     ok2, out2 = await _run("nginx", "-s", "reload", timeout=10)
     return ok2, out2 or out
 
 
 async def test_nginx_config() -> tuple[bool, str]:
-    return await _run("docker", "exec", "singbox_nginx", "nginx", "-t")
+    ok, out, tooling_missing = await _run_nginx_container_cmd("-t", timeout=20)
+    if ok:
+        return True, out
+    if tooling_missing:
+        # Last-resort validation path when docker CLI is missing in app container.
+        cfg = _write_local_nginx_test_config()
+        ok_local, out_local = await _run("nginx", "-t", "-c", str(cfg), timeout=15)
+        if ok_local:
+            return True, "Validated using local nginx fallback."
+        return False, f"{out}\n\nLocal fallback failed:\n{out_local}"
+    return False, out
 
 
 async def get_access_logs(lines: int = 50) -> str:
