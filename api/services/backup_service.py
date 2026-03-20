@@ -20,6 +20,7 @@ from pathlib import Path
 from typing import Iterable, List
 
 from api.config import settings
+from api.services import docker_engine
 
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 APP_DATA_DIR = BASE_DIR / "data"
@@ -289,26 +290,18 @@ def ensure_install_root() -> Path:
     return INSTALL_DIR
 
 
-async def _run(*cmd: str, timeout: int = 60) -> tuple[bool, str]:
-    try:
-        proc = await asyncio.create_subprocess_exec(
-            *cmd,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.STDOUT,
-        )
-        stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=timeout)
-        return proc.returncode == 0, stdout.decode(errors="replace")
-    except asyncio.TimeoutError:
-        return False, "timeout"
-    except Exception as exc:
-        return False, str(exc)
-
-
 async def _current_app_image() -> str:
     for candidate in APP_CONTAINER_CANDIDATES:
-        ok, out = await _run("docker", "inspect", "--format", "{{.Config.Image}}", candidate)
-        image = out.strip()
-        if ok and image:
+        try:
+            info = await asyncio.to_thread(
+                docker_engine.inspect_container,
+                candidate,
+                timeout=10,
+            )
+        except Exception:
+            continue
+        image = ((info.get("Config") or {}).get("Image") or "").strip()
+        if image:
             return image
     raise RestoreError("Cannot determine the running app image for the restore helper.")
 
@@ -316,27 +309,28 @@ async def _current_app_image() -> str:
 async def _start_restore_helper(backup_path: Path, log_path: Path) -> tuple[str, str]:
     image = await _current_app_image()
     job_name = f"{RESTORE_HELPER_PREFIX}{datetime.now().strftime('%Y%m%d%H%M%S')}"
-    helper_cmd = [
-        "docker",
-        "run",
-        "-d",
-        "--rm",
-        "--name",
-        job_name,
-        "-v",
-        "/var/run/docker.sock:/var/run/docker.sock",
-        "-v",
-        f"{INSTALL_DIR}:{INSTALL_DIR}",
-        image,
-        "sh",
-        str(INSTALL_DIR / "scripts" / "restore-worker.sh"),
-        str(backup_path),
-        str(log_path),
-    ]
-    ok, out = await _run(*helper_cmd, timeout=30)
-    if not ok:
-        raise RestoreError(f"Failed to start restore helper: {out.strip() or 'unknown error'}")
-    return job_name, out.strip()
+    try:
+        container_id = await asyncio.to_thread(
+            docker_engine.run_container_detached,
+            name=job_name,
+            image=image,
+            cmd=[
+                "sh",
+                str(INSTALL_DIR / "scripts" / "restore-worker.sh"),
+                str(backup_path),
+                str(log_path),
+            ],
+            binds=[
+                "/var/run/docker.sock:/var/run/docker.sock",
+                f"{INSTALL_DIR}:{INSTALL_DIR}",
+            ],
+            working_dir=str(INSTALL_DIR),
+            auto_remove=True,
+            timeout=30,
+        )
+    except Exception as e:
+        raise RestoreError(f"Failed to start restore helper: {e}") from e
+    return job_name, container_id
 
 
 async def schedule_restore_job(

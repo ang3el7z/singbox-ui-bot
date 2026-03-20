@@ -9,6 +9,7 @@ from pathlib import Path
 import httpx
 from typing import Any, Dict, List, Optional
 from api.config import settings
+from api.services import docker_engine
 
 
 class AdGuardAPIError(Exception):
@@ -35,16 +36,14 @@ class AdGuardAPI:
         PASSWORD_FILE.write_text(password, encoding="utf-8")
 
     async def _restart_container(self) -> None:
-        proc = await asyncio.create_subprocess_exec(
-            "docker",
-            "restart",
-            settings.adguard_container,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.STDOUT,
-        )
-        await proc.communicate()
-        if proc.returncode != 0:
-            raise AdGuardAPIError(f"Failed to restart {settings.adguard_container}")
+        try:
+            await asyncio.to_thread(
+                docker_engine.restart_container,
+                settings.adguard_container,
+                timeout=20,
+            )
+        except Exception as e:
+            raise AdGuardAPIError(f"Failed to restart {settings.adguard_container}: {e}") from e
 
     async def bootstrap_admin_password(self) -> bool:
         """

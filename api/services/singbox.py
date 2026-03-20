@@ -8,12 +8,12 @@ or:         systemctl reload sing-box  (systemd mode)
 """
 import asyncio
 import json
-import subprocess
 import uuid as uuid_lib
 from pathlib import Path
 from typing import Optional
 
 from api.config import settings
+from api.services import docker_engine
 
 
 class SingBoxError(Exception):
@@ -45,24 +45,52 @@ class SingBoxService:
         ok, _ = await self._exec(["sing-box", "reload", "-c", str(self.config_path)])
         if ok:
             return True
-        # Fallback: restart container
-        ok, _ = await self._exec(["docker", "exec", settings.singbox_container, "kill", "-HUP", "1"])
-        return ok
+        try:
+            ok2, _ = await asyncio.to_thread(
+                docker_engine.exec_in_container,
+                settings.singbox_container,
+                ["kill", "-HUP", "1"],
+                timeout=20,
+            )
+            return ok2
+        except Exception:
+            return False
 
     async def restart(self) -> bool:
-        ok, _ = await self._exec(["docker", "restart", settings.singbox_container])
-        return ok
+        try:
+            await asyncio.to_thread(
+                docker_engine.restart_container,
+                settings.singbox_container,
+                timeout=30,
+            )
+            return True
+        except Exception:
+            return False
 
     async def get_status(self) -> dict:
-        ok, out = await self._exec(["docker", "inspect", "--format", "{{.State.Status}}", settings.singbox_container])
-        running = ok and out.strip() == "running"
+        running = False
+        try:
+            info = await asyncio.to_thread(
+                docker_engine.inspect_container,
+                settings.singbox_container,
+                timeout=10,
+            )
+            running = (info.get("State") or {}).get("Status") == "running"
+        except Exception:
+            running = False
         return {"running": running, "container": settings.singbox_container}
 
     async def get_logs(self, lines: int = 100) -> list[str]:
-        ok, out = await self._exec(
-            ["docker", "logs", "--tail", str(lines), settings.singbox_container],
-        )
-        return out.splitlines() if ok else []
+        try:
+            out = await asyncio.to_thread(
+                docker_engine.get_container_logs,
+                settings.singbox_container,
+                tail=lines,
+                timeout=15,
+            )
+            return out.splitlines()
+        except Exception:
+            return []
 
     async def validate_config(self, cfg: dict) -> tuple[bool, str]:
         """Write to a temp file and validate with sing-box check."""
