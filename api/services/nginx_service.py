@@ -12,9 +12,12 @@ When user uploads a site:
 import asyncio
 import datetime as dt
 import hashlib
+import http.client
+import json
 import os
 import secrets
 import shutil
+import socket
 import ssl
 import zipfile
 import io
@@ -26,7 +29,6 @@ from api.config import settings
 from api.routers.settings_router import get_runtime
 
 BASE_DIR           = Path(__file__).parent.parent.parent
-INSTALL_DIR        = Path("/opt/singbox-ui-bot")
 NGINX_DIR          = BASE_DIR / "nginx"
 CONF_D_DIR         = NGINX_DIR / "conf.d"
 OVERRIDE_DIR       = NGINX_DIR / "override"      # mounted as /var/www/override in nginx
@@ -36,6 +38,7 @@ TEMPLATES_DIR      = NGINX_DIR / "templates"
 LOGS_DIR           = NGINX_DIR / "logs"
 SITE_ENABLED_MARKER = NGINX_DIR / ".web_ui_enabled"  # presence = Web UI ON, absence = OFF
 CERTBOT_WEBROOT    = Path("/var/www/certbot")
+DOCKER_SOCK        = Path("/var/run/docker.sock")
 
 # Ensure dirs exist on import
 for _d in (CONF_D_DIR, OVERRIDE_DIR, HTPASSWD_DIR, LOGS_DIR):
@@ -45,31 +48,6 @@ try:
 except Exception:
     # Non-fatal in local/dev environments where /var/www may be unavailable.
     pass
-
-
-def _resolve_tool(name: str) -> str:
-    """Resolve docker/docker-compose path even when PATH is restricted."""
-    found = shutil.which(name)
-    if found:
-        return found
-    if name == "docker":
-        for candidate in ("/usr/bin/docker", "/usr/local/bin/docker", "/bin/docker"):
-            if Path(candidate).exists():
-                return candidate
-    if name == "docker-compose":
-        for candidate in ("/usr/bin/docker-compose", "/usr/local/bin/docker-compose", "/bin/docker-compose"):
-            if Path(candidate).exists():
-                return candidate
-    return name
-
-
-def _normalize_cmd(cmd: tuple[str, ...]) -> tuple[str, ...]:
-    if not cmd:
-        return cmd
-    head = cmd[0]
-    if head in {"docker", "docker-compose"}:
-        return (_resolve_tool(head), *cmd[1:])
-    return cmd
 
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -350,110 +328,130 @@ async def _run(*cmd: str, timeout: int = 30) -> tuple[bool, str]:
         return False, str(e)
 
 
-# ─── Nginx process management ─────────────────────────────────────────────────
+# ─── Nginx process management (via Docker Engine API socket) ─────────────────
 
-def _container_nginx_commands(*nginx_args: str) -> list[tuple[str, ...]]:
-    compose_file = INSTALL_DIR / "docker-compose.yml"
-    if not compose_file.exists():
-        compose_file = BASE_DIR / "docker-compose.yml"
-    compose_args: tuple[str, ...] = ("-f", str(compose_file)) if compose_file.exists() else tuple()
+class _UnixSocketHTTPConnection(http.client.HTTPConnection):
+    """HTTPConnection over Docker unix socket."""
 
-    return [
-        ("docker", "exec", "singbox_nginx", "nginx", *nginx_args),
-        ("docker", "compose", *compose_args, "exec", "-T", "nginx", "nginx", *nginx_args),
-        ("docker-compose", *compose_args, "exec", "-T", "nginx", "nginx", *nginx_args),
-    ]
+    def __init__(self, socket_path: str, timeout: int = 30):
+        super().__init__("localhost", timeout=timeout)
+        self.socket_path = socket_path
+
+    def connect(self) -> None:
+        self.sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        self.sock.settimeout(self.timeout)
+        self.sock.connect(self.socket_path)
 
 
-def _is_infra_error(output: str) -> bool:
-    text = (output or "").lower()
-    infra_markers = (
-        "no such file or directory",
-        "executable file not found",
-        "cannot connect to the docker daemon",
-        "permission denied while trying to connect",
-        "got permission denied while trying to connect",
-        "error during connect",
-        "no configuration file provided: not found",
-        "is the docker daemon running",
+def _docker_name(name: str) -> str:
+    from urllib.parse import quote
+    return quote(name, safe="")
+
+
+def _docker_error_text(status: int, body: str) -> str:
+    text = (body or "").strip()
+    if text.startswith("{"):
+        try:
+            parsed = json.loads(text)
+            msg = (parsed.get("message") or "").strip()
+            if msg:
+                text = msg
+        except Exception:
+            pass
+    return f"Docker API error {status}: {text or 'unknown error'}"
+
+
+def _docker_request(
+    method: str,
+    path: str,
+    *,
+    body: dict | None = None,
+    timeout: int = 30,
+) -> tuple[int, str]:
+    if not DOCKER_SOCK.exists():
+        return 500, "Docker socket is not mounted inside app container."
+
+    payload: bytes | None = None
+    headers: dict[str, str] = {}
+    if body is not None:
+        payload = json.dumps(body).encode("utf-8")
+        headers["Content-Type"] = "application/json"
+
+    conn = _UnixSocketHTTPConnection(str(DOCKER_SOCK), timeout=timeout)
+    try:
+        conn.request(method, path, body=payload, headers=headers)
+        resp = conn.getresponse()
+        raw = resp.read()
+        return resp.status, raw.decode("utf-8", errors="replace")
+    except Exception as e:
+        return 500, f"Docker API request failed: {e}"
+    finally:
+        try:
+            conn.close()
+        except Exception:
+            pass
+
+
+def _run_nginx_container_cmd_sync(*nginx_args: str, timeout: int = 30) -> tuple[bool, str]:
+    create_body = {
+        "AttachStdout": True,
+        "AttachStderr": True,
+        "Tty": True,
+        "Cmd": ["nginx", *nginx_args],
+    }
+    create_code, create_out = _docker_request(
+        "POST",
+        f"/containers/{_docker_name('singbox_nginx')}/exec",
+        body=create_body,
+        timeout=timeout,
     )
-    return any(marker in text for marker in infra_markers)
+    if create_code >= 400:
+        return False, _docker_error_text(create_code, create_out)
 
+    try:
+        exec_id = (json.loads(create_out).get("Id") or "").strip()
+    except Exception:
+        exec_id = ""
+    if not exec_id:
+        return False, "Docker API exec id is missing"
 
-async def _run_nginx_container_cmd(*nginx_args: str, timeout: int = 30) -> tuple[bool, str, bool]:
-    """
-    Try multiple ways to execute nginx command inside container.
-    Returns: (ok, output, tooling_missing)
-    """
-    errors: list[str] = []
-    infra_hits = 0
-    attempts = _container_nginx_commands(*nginx_args)
-    for cmd in attempts:
-        resolved_cmd = _normalize_cmd(cmd)
-        ok, out = await _run(*resolved_cmd, timeout=timeout)
-        if ok:
-            return True, out, False
-        out = (out or "").strip()
-        errors.append(f"$ {' '.join(resolved_cmd)}\n{out}")
-        if _is_infra_error(out):
-            infra_hits += 1
-    merged = "\n\n".join(errors) if errors else "unknown command failure"
-    return False, merged, infra_hits == len(attempts)
-
-
-def _write_local_nginx_test_config() -> Path:
-    """
-    Build a minimal nginx config that includes project conf.d.
-    Used only when docker tooling is unavailable.
-    """
-    cfg = Path("/tmp/sbui-nginx-test.conf")
-    cfg.write_text(
-        "\n".join(
-            [
-                "worker_processes 1;",
-                "error_log /tmp/sbui-nginx-test-error.log warn;",
-                "pid /tmp/sbui-nginx-test.pid;",
-                "events { worker_connections 128; }",
-                "http {",
-                "  include /etc/nginx/mime.types;",
-                "  default_type application/octet-stream;",
-                "  include /app/nginx/conf.d/*.conf;",
-                "}",
-                "",
-            ]
-        ),
-        encoding="utf-8",
+    start_code, start_out = _docker_request(
+        "POST",
+        f"/exec/{_docker_name(exec_id)}/start",
+        body={"Detach": False, "Tty": True},
+        timeout=timeout,
     )
-    return cfg
+    if start_code >= 400:
+        return False, _docker_error_text(start_code, start_out)
+
+    inspect_code, inspect_out = _docker_request(
+        "GET",
+        f"/exec/{_docker_name(exec_id)}/json",
+        timeout=10,
+    )
+    if inspect_code >= 400:
+        return False, _docker_error_text(inspect_code, inspect_out)
+
+    try:
+        exit_code = json.loads(inspect_out).get("ExitCode")
+    except Exception:
+        exit_code = None
+    return exit_code == 0, (start_out or "").strip()
+
+
+async def _run_nginx_container_cmd(*nginx_args: str, timeout: int = 30) -> tuple[bool, str]:
+    return await asyncio.to_thread(lambda: _run_nginx_container_cmd_sync(*nginx_args, timeout=timeout))
 
 
 async def reload_nginx() -> tuple[bool, str]:
-    ok, out, tooling_missing = await _run_nginx_container_cmd("-s", "reload", timeout=20)
+    ok, out = await _run_nginx_container_cmd("-s", "reload", timeout=20)
     if ok:
         return True, "OK"
-    if tooling_missing:
-        return (
-            False,
-            "Docker tooling is unavailable in app container. "
-            "Run 'docker compose up -d --build' and retry.",
-        )
-    # Fallback: direct nginx call (if running without docker, e.g. in CI)
-    ok2, out2 = await _run("nginx", "-s", "reload", timeout=10)
-    return ok2, out2 or out
+    return False, out
 
 
 async def test_nginx_config() -> tuple[bool, str]:
-    ok, out, tooling_missing = await _run_nginx_container_cmd("-t", timeout=20)
-    if ok:
-        return True, out
-    if tooling_missing:
-        # Last-resort validation path when docker CLI is missing in app container.
-        cfg = _write_local_nginx_test_config()
-        ok_local, out_local = await _run("nginx", "-t", "-c", str(cfg), timeout=15)
-        if ok_local:
-            return True, "Validated using local nginx fallback."
-        return False, f"{out}\n\nLocal fallback failed:\n{out_local}"
-    return False, out
+    return await _run_nginx_container_cmd("-t", timeout=20)
 
 
 async def get_access_logs(lines: int = 50) -> str:
