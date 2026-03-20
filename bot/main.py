@@ -56,11 +56,9 @@ def create_dispatcher() -> Dispatcher:
 
 async def setup_bot_commands(bot: Bot) -> None:
     default_commands = [
-        BotCommand(command="start", description="Open main menu"),
         BotCommand(command="menu", description="Quick menu"),
     ]
     ru_commands = [
-        BotCommand(command="start", description="Главное меню"),
         BotCommand(command="menu", description="Быстрое меню"),
     ]
     try:
