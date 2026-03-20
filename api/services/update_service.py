@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import re
 import shlex
+import shutil
 import subprocess
 import time
 from pathlib import Path
@@ -32,7 +33,48 @@ REINSTALL_MODE_PRESERVE = "preserve"
 REINSTALL_MODE_CLEAN = "clean"
 
 
+def _resolve_tool(name: str) -> str:
+    """Resolve docker/docker-compose paths even when PATH is limited."""
+    found = shutil.which(name)
+    if found:
+        return found
+    if name == "docker":
+        for candidate in ("/usr/bin/docker", "/usr/local/bin/docker", "/bin/docker"):
+            if Path(candidate).exists():
+                return candidate
+    if name == "docker-compose":
+        for candidate in (
+            "/usr/bin/docker-compose",
+            "/usr/local/bin/docker-compose",
+            "/bin/docker-compose",
+        ):
+            if Path(candidate).exists():
+                return candidate
+    return name
+
+
+def _normalize_cmd(cmd: list[str]) -> list[str]:
+    if not cmd:
+        return cmd
+    head = cmd[0]
+    if head in {"docker", "docker-compose"}:
+        return [_resolve_tool(head), *cmd[1:]]
+    return cmd
+
+
+def _missing_tool_hint(cmd: list[str]) -> str:
+    tool = (cmd[0] if cmd else "").strip()
+    if tool in {"docker", "/usr/bin/docker", "/usr/local/bin/docker", "/bin/docker", "docker-compose"}:
+        return (
+            "Docker CLI недоступен внутри app-контейнера.\n"
+            "Один раз пересоберите app на хосте и повторите:\n"
+            "cd /opt/singbox-ui-bot && docker compose up -d --build app"
+        )
+    return ""
+
+
 def _run(cmd: list[str], cwd: Path | None = None, timeout: int = 30) -> tuple[int, str]:
+    cmd = _normalize_cmd(cmd)
     try:
         result = subprocess.run(
             cmd,
@@ -41,7 +83,13 @@ def _run(cmd: list[str], cwd: Path | None = None, timeout: int = 30) -> tuple[in
             text=True,
             timeout=timeout,
         )
+    except FileNotFoundError as e:
+        hint = _missing_tool_hint(cmd)
+        return 1, f"{e}\n{hint}".strip()
     except Exception as e:
+        hint = _missing_tool_hint(cmd)
+        if hint:
+            return 1, f"{e}\n{hint}".strip()
         return 1, str(e)
     output = (result.stdout or "") + (result.stderr or "")
     return result.returncode, output.strip()
