@@ -175,6 +175,7 @@ async def _nginx_menu_text_and_kb():
         )
         text = "\n".join([
             "🌐 <b>Nginx</b>",
+            "",
             domain_line,
             cert_line,
             override_line,
