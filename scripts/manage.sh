@@ -491,14 +491,14 @@ cmd_clear_logs() {
     fi
 
     echo "Log files:"
-    for f in "$LOGS_DIR"/*.log 2>/dev/null; do
+    for f in "$LOGS_DIR"/*.log; do
         [[ -f "$f" ]] && printf "  %-30s %s\n" "$(basename "$f")" "$(du -sh "$f" | cut -f1)"
     done
     echo
     read -rp "Clear all logs? [y/N]: " CONFIRM
     [[ "$CONFIRM" != [yY] ]] && { info "Cancelled."; return; }
 
-    for f in "$LOGS_DIR"/*.log 2>/dev/null; do
+    for f in "$LOGS_DIR"/*.log; do
         [[ -f "$f" ]] && > "$f" && echo "  Cleared: $(basename "$f")"
     done
     success "All logs cleared"
