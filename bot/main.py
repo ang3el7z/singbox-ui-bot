@@ -9,6 +9,7 @@ import uvicorn
 from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
+from aiogram.types import BotCommand
 
 from api.config import settings
 from api.main import app as fastapi_app
@@ -53,7 +54,24 @@ def create_dispatcher() -> Dispatcher:
     return dp
 
 
+async def setup_bot_commands(bot: Bot) -> None:
+    default_commands = [
+        BotCommand(command="start", description="Open main menu"),
+        BotCommand(command="menu", description="Quick menu"),
+    ]
+    ru_commands = [
+        BotCommand(command="start", description="Главное меню"),
+        BotCommand(command="menu", description="Быстрое меню"),
+    ]
+    try:
+        await bot.set_my_commands(default_commands)
+        await bot.set_my_commands(ru_commands, language_code="ru")
+    except Exception as exc:
+        logger.warning("Failed to set bot commands: %s", exc)
+
+
 async def run_bot(bot: Bot, dp: Dispatcher) -> None:
+    await setup_bot_commands(bot)
     if settings.use_webhook:
         logger.info("Starting webhook mode: %s", settings.webhook_url)
         kwargs = {}
