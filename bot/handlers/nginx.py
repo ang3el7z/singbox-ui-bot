@@ -166,12 +166,12 @@ async def _nginx_menu_text_and_kb():
         )
         cert_line = _format_cert_line(cert)
         override_line = _txt(
-            f"📄 Публичная страница: {'✅ загружена' if has_override else '❌ не загружена'}",
-            f"📄 Public page files: {'✅ uploaded' if has_override else '❌ not uploaded'}",
+            f"📄 Заглушка: {'✅ загружена' if has_override else '❌ не загружена'}",
+            f"📄 Stub files: {'✅ uploaded' if has_override else '❌ not uploaded'}",
         )
         site_line = _txt(
-            f"👁 Публичная страница: {'🟢 включена' if site_enabled else '🔴 выключена (на / 401 заглушка)'}",
-            f"👁 Public page: {'🟢 ON' if site_enabled else '🔴 OFF (401 stub on /)'}",
+            f"👁 Заглушка: {'🟢 включена' if site_enabled else '🔴 выключена (на / 401 заглушка)'}",
+            f"👁 Stub: {'🟢 ON' if site_enabled else '🔴 OFF (401 stub on /)'}",
         )
         text = "\n".join([
             "🌐 <b>Nginx</b>",
@@ -308,10 +308,10 @@ async def cb_nginx_upload_site(cq: CallbackQuery):
     await cq.message.answer(
         _txt(
             "📎 Отправьте <b>HTML файл</b> или <b>ZIP архив</b> (внутри должен быть index.html).\n"
-            "Это контент публичной страницы на <code>/</code>.\n"
+            "Это контент заглушки на <code>/</code>.\n"
             "Web UI <code>/web/</code> не затрагивается.",
             "📎 Send an <b>HTML file</b> or <b>ZIP archive</b> (with index.html inside).\n"
-            "This is content for the public page on <code>/</code>.\n"
+            "This is content for the stub page on <code>/</code>.\n"
             "Web UI <code>/web/</code> is not affected.",
         ),
         parse_mode="HTML",
@@ -361,11 +361,11 @@ async def cb_nginx_site_toggle(cq: CallbackQuery):
 async def cb_nginx_delete_override(cq: CallbackQuery):
     try:
         await nginx_api.delete_override()
-        await cq.answer(_txt("✅ Страница удалена", "✅ Page files removed"))
+        await cq.answer(_txt("✅ Заглушка удалена", "✅ Stub files removed"))
         await cq.message.edit_text(
             _txt(
-                "✅ Файлы публичной страницы удалены.\nВозвращена стандартная 401-заглушка на <code>/</code>.",
-                "✅ Public page files removed.\nDefault 401 auth popup restored on <code>/</code>.",
+                "✅ Файлы заглушки удалены.\nВозвращена стандартная 401-заглушка на <code>/</code>.",
+                "✅ Stub files removed.\nDefault 401 auth popup restored on <code>/</code>.",
             ),
             parse_mode="HTML",
             reply_markup=kb_back("menu_nginx"),

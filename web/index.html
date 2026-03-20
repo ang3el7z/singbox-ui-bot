@@ -606,20 +606,20 @@ tailwind.config = {
       <div class="p-6">
         <h2 class="text-xl font-bold text-white mb-6">🌐 Nginx</h2>
 
-        <!-- Site toggle banner -->
+        <!-- Stub toggle banner -->
         <div class="card mb-4 flex items-center justify-between gap-4 flex-wrap">
           <div>
-            <p class="text-white font-semibold mb-1">Public page visibility</p>
+            <p class="text-white font-semibold mb-1">Stub visibility</p>
             <p class="text-slate-400 text-sm">
-              <span x-show="status?.site_enabled">🟢 <b>ON</b> — root <code>/</code> serves uploaded public page files.</span>
-              <span x-show="!status?.site_enabled">🔴 <b>OFF</b> — root <code>/</code> shows 401 Basic Auth camouflage. <em>(default)</em></span>
+              <span x-show="status?.site_enabled">🟢 <b>ON</b> — root <code>/</code> serves uploaded stub files.</span>
+              <span x-show="!status?.site_enabled">🔴 <b>OFF</b> — root <code>/</code> shows 401 Basic Auth stub. <em>(default)</em></span>
             </p>
           </div>
           <button
             class="btn flex-shrink-0"
             :class="status?.site_enabled ? 'btn-danger' : 'btn-success'"
             @click="toggleSite()" :disabled="loading">
-            <span x-text="status?.site_enabled ? '🔴 Disable page' : '🟢 Enable page'"></span>
+            <span x-text="status?.site_enabled ? '🔴 Disable stub' : '🟢 Enable stub'"></span>
           </button>
         </div>
 
@@ -633,18 +633,18 @@ tailwind.config = {
             </div>
           </div>
           <div class="card">
-            <h3 class="font-semibold text-white mb-3">Public Page Content</h3>
+            <h3 class="font-semibold text-white mb-3">Stub Content</h3>
             <p class="text-slate-400 text-sm mb-3">
-              Upload HTML or ZIP for public page <code>/</code> (separate from Web UI <code>/web/</code>).
+              Upload HTML or ZIP for stub on <code>/</code> (separate from Web UI <code>/web/</code>).
             </p>
-            <div x-show="status?.override?.active" class="badge-green stat-badge mb-3">✅ Public page files uploaded</div>
-            <div x-show="!status?.override?.active" class="badge-yellow stat-badge mb-3">⚠️ No page files uploaded</div>
+            <div x-show="status?.override?.active" class="badge-green stat-badge mb-3">✅ Stub files uploaded</div>
+            <div x-show="!status?.override?.active" class="badge-yellow stat-badge mb-3">⚠️ No stub files uploaded</div>
             <label class="btn btn-secondary w-full cursor-pointer text-center">
-              📤 Upload page HTML / ZIP
+              📤 Upload stub HTML / ZIP
               <input type="file" class="hidden" accept=".html,.htm,.zip" @change="uploadSite($event)"/>
             </label>
             <button class="btn btn-danger w-full mt-2" @click="removeOverride()">
-              🗑 Delete page files
+              🗑 Delete stub files
             </button>
           </div>
         </div>
