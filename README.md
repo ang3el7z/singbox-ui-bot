@@ -24,3 +24,4 @@ curl -fsSL https://raw.githubusercontent.com/ang3el7z/singbox-ui-bot/main/script
 - Web UI: `/web/`
 - API docs: `/api/swagger`
 - Healthcheck: `/health`
+- Migrations policy: `docs/MIGRATIONS.md`

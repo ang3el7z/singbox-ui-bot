@@ -16,6 +16,7 @@ from api.deps import hash_password
 from api.routers import auth, server, clients, inbounds, routing, adguard, nginx, federation, admin
 from api.routers import docs_router, settings_router, client_templates
 from api.routers import maintenance as maintenance_router
+from api.services.migrations import run_migrations
 from sqlalchemy import select
 
 logger = logging.getLogger(__name__)
@@ -25,6 +26,8 @@ logger = logging.getLogger(__name__)
 async def lifespan(app: FastAPI):
     import asyncio
     await init_db()
+    schema_version = await run_migrations()
+    logger.info("Migrations ready at schema_version=%s", schema_version)
     await _ensure_default_web_user()
     await _seed_and_apply_settings()
     await _seed_default_templates()
