@@ -17,11 +17,3 @@ Installation is non-interactive. Pass the Telegram bot token from `@BotFather`:
 ```bash
 curl -fsSL https://raw.githubusercontent.com/ang3el7z/singbox-ui-bot/main/scripts/install.sh | bash -s -- YOUR_BOT_TOKEN
 ```
-
-# Links
-
-- Install: `scripts/install.sh`
-- Web UI: `/web/`
-- API docs: `/api/swagger`
-- Healthcheck: `/health`
-- Migrations policy: `docs/MIGRATIONS.md`
