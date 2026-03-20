@@ -616,10 +616,10 @@ function nginxComponent() {
         },
 
         async removeOverride() {
-            if (!confirm("Remove custom site?")) return;
+            if (!confirm("Delete public page files for '/'?")) return;
             try {
                 await api.nginxDeleteOverride();
-                this.$dispatch("toast", { msg: "Override removed", type: "success" });
+                this.$dispatch("toast", { msg: "Public page files removed", type: "success" });
                 await this.load();
             } catch (e) {
                 this.$dispatch("toast", { msg: e.message, type: "error" });
@@ -630,11 +630,11 @@ function nginxComponent() {
             const current = this.status?.site_enabled ?? false;
             const next = !current;
             const label = next ? "enable" : "disable";
-            if (!confirm(`${label.charAt(0).toUpperCase() + label.slice(1)} the public site? Nginx will be reloaded.`)) return;
+            if (!confirm(`${label.charAt(0).toUpperCase() + label.slice(1)} public page on '/'? Nginx will be reloaded.`)) return;
             this.loading = true;
             try {
                 await api.nginxSiteToggle(next);
-                this.$dispatch("toast", { msg: `Site ${next ? "enabled" : "disabled"}`, type: "success" });
+                this.$dispatch("toast", { msg: `Page ${next ? "enabled" : "disabled"}`, type: "success" });
                 await this.load();
             } catch (e) {
                 this.$dispatch("toast", { msg: e.message, type: "error" });

@@ -287,12 +287,12 @@ def kb_adguard_rules() -> InlineKeyboardMarkup:
 def kb_nginx_menu(site_enabled: bool = False) -> InlineKeyboardMarkup:
     site_btn = (
         InlineKeyboardButton(
-            text=_txt("🔴 Сайт: ВЫКЛ → ВКЛ", "🔴 Site: OFF → Turn ON"),
+            text=_txt("🟢 Включить страницу", "🟢 Enable page"),
             callback_data="nginx_site_on",
         )
         if not site_enabled else
         InlineKeyboardButton(
-            text=_txt("🟢 Сайт: ВКЛ → ВЫКЛ", "🟢 Site: ON  → Turn OFF"),
+            text=_txt("🔴 Выключить страницу", "🔴 Disable page"),
             callback_data="nginx_site_off",
         )
     )
@@ -301,8 +301,8 @@ def kb_nginx_menu(site_enabled: bool = False) -> InlineKeyboardMarkup:
          InlineKeyboardButton(text=_txt("🔐 Выпустить SSL", "🔐 Issue SSL"), callback_data="nginx_ssl")],
         [InlineKeyboardButton(text=_txt("🔒 Скрытые пути", "🔒 Hidden paths"), callback_data="nginx_paths"),
          InlineKeyboardButton(text=_txt("📋 Логи доступа", "📋 Access logs"), callback_data="nginx_logs")],
-        [InlineKeyboardButton(text=_txt("📤 Загрузить сайт", "📤 Upload site"), callback_data="nginx_upload_site"),
-         InlineKeyboardButton(text=_txt("🗑 Удалить оверрайд", "🗑 Remove override"), callback_data="nginx_delete_override")],
+        [InlineKeyboardButton(text=_txt("📤 Загрузить страницу", "📤 Upload page"), callback_data="nginx_upload_site"),
+         InlineKeyboardButton(text=_txt("🗑 Удалить страницу", "🗑 Delete page"), callback_data="nginx_delete_override")],
         [site_btn],
         [InlineKeyboardButton(text=_txt("⬅️ Назад", "⬅️ Back"), callback_data="main_menu")],
     )

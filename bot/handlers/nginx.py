@@ -166,12 +166,12 @@ async def _nginx_menu_text_and_kb():
         )
         cert_line = _format_cert_line(cert)
         override_line = _txt(
-            f"🎨 Сайт: {'✅ загружен' if has_override else '❌ не загружен'}",
-            f"🎨 Site override: {'✅ uploaded' if has_override else '❌ not uploaded'}",
+            f"📄 Публичная страница: {'✅ загружена' if has_override else '❌ не загружена'}",
+            f"📄 Public page files: {'✅ uploaded' if has_override else '❌ not uploaded'}",
         )
         site_line = _txt(
-            f"👁 Видимость сайта: {'🟢 включена' if site_enabled else '🔴 выключена (401 заглушка)'}",
-            f"👁 Site visibility: {'🟢 ON' if site_enabled else '🔴 OFF (401 stub)'}",
+            f"👁 Публичная страница: {'🟢 включена' if site_enabled else '🔴 выключена (на / 401 заглушка)'}",
+            f"👁 Public page: {'🟢 ON' if site_enabled else '🔴 OFF (401 stub on /)'}",
         )
         text = "\n".join([
             "🌐 <b>Nginx</b>",
@@ -307,9 +307,11 @@ async def cb_nginx_upload_site(cq: CallbackQuery):
     await cq.message.answer(
         _txt(
             "📎 Отправьте <b>HTML файл</b> или <b>ZIP архив</b> (внутри должен быть index.html).\n"
-            "Это заменит стандартное окно 401.",
+            "Это контент публичной страницы на <code>/</code>.\n"
+            "Web UI <code>/web/</code> не затрагивается.",
             "📎 Send an <b>HTML file</b> or <b>ZIP archive</b> (with index.html inside).\n"
-            "This will replace the default 401 auth popup.",
+            "This is content for the public page on <code>/</code>.\n"
+            "Web UI <code>/web/</code> is not affected.",
         ),
         parse_mode="HTML",
         reply_markup=kb_back("menu_nginx"),
@@ -358,12 +360,13 @@ async def cb_nginx_site_toggle(cq: CallbackQuery):
 async def cb_nginx_delete_override(cq: CallbackQuery):
     try:
         await nginx_api.delete_override()
-        await cq.answer(_txt("✅ Сайт удалён", "✅ Override removed"))
+        await cq.answer(_txt("✅ Страница удалена", "✅ Page files removed"))
         await cq.message.edit_text(
             _txt(
-                "✅ Кастомный сайт удалён.\nВозвращена стандартная 401-заглушка.",
-                "✅ Custom site removed.\nDefault 401 auth popup restored.",
+                "✅ Файлы публичной страницы удалены.\nВозвращена стандартная 401-заглушка на <code>/</code>.",
+                "✅ Public page files removed.\nDefault 401 auth popup restored on <code>/</code>.",
             ),
+            parse_mode="HTML",
             reply_markup=kb_back("menu_nginx"),
         )
     except APIError as e:
