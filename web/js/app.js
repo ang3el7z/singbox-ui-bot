@@ -1080,6 +1080,9 @@ function maintenanceComponent() {
         get currentVersionLabel() {
             return this.updateInfo?.current_version || this.updateInfo?.current_tag || "-";
         },
+        get latestTagNotes() {
+            return (this.updateInfo?.latest_tag_notes || "").trim();
+        },
 
         async init() {
             await this.loadStatus();

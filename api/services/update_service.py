@@ -145,6 +145,29 @@ def _git_value(*args: str, default: str = "") -> str:
     return out.strip() or default
 
 
+def _git_tag_notes(tag: str) -> str:
+    """
+    Read release notes for an annotated tag.
+    For lightweight tags this may be empty.
+    """
+    value = (tag or "").strip()
+    if not value:
+        return ""
+
+    code, out = _run(
+        ["git", "for-each-ref", f"refs/tags/{value}", "--format=%(contents)"],
+        cwd=PROJECT_DIR,
+    )
+    if code != 0:
+        return ""
+
+    text = (out or "").replace("\r\n", "\n").replace("\r", "\n").strip()
+    if not text:
+        return ""
+    # Keep payload small for UI/API.
+    return text[:3500]
+
+
 def _list_remote_branches(limit: int = 30) -> list[str]:
     code, out = _run(
         ["git", "for-each-ref", "--format=%(refname:short)", "refs/remotes/origin"],
@@ -188,6 +211,7 @@ def get_update_info(refresh_remote: bool = True) -> dict[str, Any]:
 
     tags_raw = _git_value("tag", "--sort=-v:refname", default="")
     latest_tag = tags_raw.splitlines()[0].strip() if tags_raw.strip() else ""
+    latest_tag_notes = _git_tag_notes(latest_tag)
 
     remote_commit = _git_value("rev-parse", f"origin/{current_branch}", default="")
     remote_commit_short = remote_commit[:7] if remote_commit else ""
@@ -203,6 +227,7 @@ def get_update_info(refresh_remote: bool = True) -> dict[str, Any]:
         "current_tag": current_tag,
         "current_version": current_version,
         "latest_tag": latest_tag,
+        "latest_tag_notes": latest_tag_notes,
         "remote_branch_commit": remote_commit_short,
         "update_available_branch": update_available_branch,
         "update_available_tag": update_available_tag,

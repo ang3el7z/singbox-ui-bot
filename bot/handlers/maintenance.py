@@ -818,17 +818,39 @@ async def cb_update_run_legacy(cq: CallbackQuery):
 @router.callback_query(F.data == "maint_update_run_menu")
 async def cb_update_run_menu(cq: CallbackQuery):
     await cq.answer()
+    latest_tag = "-"
+    notes = ""
+    try:
+        info = await maintenance_api.update_info()
+        git = info.get("git", {})
+        latest_tag = (git.get("latest_tag") or "-").strip() or "-"
+        notes = (git.get("latest_tag_notes") or "").strip()
+    except APIError:
+        pass
+
+    if notes:
+        notes_block = _txt(
+            f"\n\n<b>Что нового в {escape(latest_tag)}:</b>\n<pre>{escape(notes[-1800:])}</pre>",
+            f"\n\n<b>What's new in {escape(latest_tag)}:</b>\n<pre>{escape(notes[-1800:])}</pre>",
+        )
+    else:
+        notes_block = _txt(
+            f"\n\n<b>Что нового в {escape(latest_tag)}:</b>\n<i>Описание релиза не указано.</i>",
+            f"\n\n<b>What's new in {escape(latest_tag)}:</b>\n<i>No release notes provided.</i>",
+        )
+
+    text = _txt(
+        "⬆️ <b>Обновление</b>\n\n"
+        "Доступны два режима:\n"
+        "• С backup: отправляем архив, затем update и restore.\n"
+        "• Без backup: update без restore (требует подтверждение).",
+        "⬆️ <b>Update</b>\n\n"
+        "Two modes are available:\n"
+        "• With backup: send archive, then update and restore.\n"
+        "• Without backup: update without restore (requires confirmation).",
+    )
     await cq.message.edit_text(
-        _txt(
-            "⬆️ <b>Обновление</b>\n\n"
-            "Доступны два режима:\n"
-            "• С backup: отправляем архив, затем update и restore.\n"
-            "• Без backup: update без restore (требует подтверждение).",
-            "⬆️ <b>Update</b>\n\n"
-            "Two modes are available:\n"
-            "• With backup: send archive, then update and restore.\n"
-            "• Without backup: update without restore (requires confirmation).",
-        ),
+        text + notes_block,
         reply_markup=_kb_update_run_menu(),
         parse_mode="HTML",
     )

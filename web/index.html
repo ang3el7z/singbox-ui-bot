@@ -1437,6 +1437,10 @@ tailwind.config = {
             <p class="text-slate-400 text-sm mb-3">
               Update installs latest tag (only when new tag is available). Reinstall always reinstalls current version.
             </p>
+            <div class="bg-slate-800 rounded p-3 mb-3" x-show="updateHasUpdates">
+              <div class="text-slate-400 text-xs mb-2" x-text="'What is new in ' + (updateInfo?.latest_tag || '-') + ':'"></div>
+              <pre class="text-xs text-slate-200 whitespace-pre-wrap" x-text="latestTagNotes || 'No release notes provided.'"></pre>
+            </div>
             <div class="flex flex-col gap-3">
               <div class="flex gap-2 flex-wrap">
                 <button class="btn btn-primary" x-show="updateHasUpdates" @click="runUpdate(true)" :disabled="updateLoading || updateRunning">⬆️ Update (with backup)</button>
