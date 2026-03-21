@@ -174,7 +174,7 @@ const api = {
     maintIpBanAnalyze:    ()        => apiFetch("POST", "/api/maintenance/ip-ban/analyze"),
     maintIpBanAll:        ()        => apiFetch("POST", "/api/maintenance/ip-ban/ban-analyzed"),
     maintIpBanClearAuto:  ()        => apiFetch("POST", "/api/maintenance/ip-ban/clear-auto"),
-    maintUpdateInfo:      (refresh=true) => apiFetch("GET",  `/api/maintenance/update/info?refresh=${refresh}`),
+    maintUpdateInfo:      (refresh=false) => apiFetch("GET",  `/api/maintenance/update/info?refresh=${refresh}`),
     maintUpdateLogs:      (lines=220) => apiFetch("GET", `/api/maintenance/update/logs?lines=${lines}`),
     maintUpdateRun: (
         target = "latest_tag",

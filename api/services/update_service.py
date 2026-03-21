@@ -12,6 +12,7 @@ import re
 import shlex
 import socket
 import subprocess
+import threading
 import time
 import urllib.parse
 from pathlib import Path
@@ -26,6 +27,8 @@ if not PROJECT_DIR.exists():
 
 STATE_FILE = Path("/app/data/update_state.json")
 STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
+UPDATE_INFO_CACHE_FILE = Path("/app/data/update_info_cache.json")
+UPDATE_INFO_CACHE_FILE.parent.mkdir(parents=True, exist_ok=True)
 
 RUNNER_IMAGE = "singbox-ui-bot-app:latest"
 REF_RE = re.compile(r"^[A-Za-z0-9._/-]{1,120}$")
@@ -49,6 +52,11 @@ TARGET_CURRENT = "current"
 TARGET_LATEST_TAG = "latest_tag"
 TARGET_CUSTOM = "custom"
 TARGETS = {TARGET_CURRENT, TARGET_LATEST_TAG, TARGET_CUSTOM}
+
+_UPDATE_CACHE_LOCK = threading.Lock()
+_UPDATE_CACHE_DATA: dict[str, Any] = {}
+_UPDATE_CACHE_TS = 0.0
+_UPDATE_CACHE_MAX_AGE_SECONDS = 300
 
 
 def _run(cmd: list[str], cwd: Path | None = None, timeout: int = 30) -> tuple[int, str]:
@@ -141,6 +149,43 @@ def _load_state() -> dict[str, Any]:
 
 def _save_state(data: dict[str, Any]) -> None:
     STATE_FILE.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def _load_update_info_cache_from_disk() -> tuple[dict[str, Any], float]:
+    if not UPDATE_INFO_CACHE_FILE.exists():
+        return {}, 0.0
+    try:
+        raw = json.loads(UPDATE_INFO_CACHE_FILE.read_text(encoding="utf-8"))
+    except Exception:
+        return {}, 0.0
+    if not isinstance(raw, dict):
+        return {}, 0.0
+    data = raw.get("data") if isinstance(raw.get("data"), dict) else {}
+    ts = raw.get("cached_at")
+    try:
+        cached_at = float(ts)
+    except (TypeError, ValueError):
+        cached_at = 0.0
+    return data, cached_at
+
+
+def _save_update_info_cache_to_disk(data: dict[str, Any], cached_at: float) -> None:
+    payload = {"cached_at": cached_at, "data": data}
+    UPDATE_INFO_CACHE_FILE.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+
+
+def _set_update_info_cache(data: dict[str, Any], cached_at: float | None = None) -> None:
+    global _UPDATE_CACHE_DATA, _UPDATE_CACHE_TS
+    ts = time.time() if cached_at is None else float(cached_at)
+    _UPDATE_CACHE_DATA = dict(data)
+    _UPDATE_CACHE_TS = ts
+    try:
+        _save_update_info_cache_to_disk(_UPDATE_CACHE_DATA, ts)
+    except Exception:
+        pass
 
 
 def _git_value(*args: str, default: str = "") -> str:
@@ -374,6 +419,46 @@ def get_update_info(refresh_remote: bool = True) -> dict[str, Any]:
         "remote_branches": _list_remote_branches(),
         "git_error": git_error,
     }
+
+
+def refresh_update_info_cache(refresh_remote: bool = True) -> dict[str, Any]:
+    """
+    Force refresh update info and store it in the shared cache.
+    Used by background scheduler.
+    """
+    fresh = get_update_info(refresh_remote=refresh_remote)
+    with _UPDATE_CACHE_LOCK:
+        _set_update_info_cache(fresh)
+    return fresh
+
+
+def get_update_info_cached(
+    refresh_remote: bool = False,
+    max_age_seconds: int = _UPDATE_CACHE_MAX_AGE_SECONDS,
+) -> dict[str, Any]:
+    """
+    Return cached update info if fresh enough, otherwise rebuild and cache it.
+    `refresh_remote=False` keeps this endpoint fast; background scheduler updates
+    the cache with remote fetches periodically.
+    """
+    now = time.time()
+    max_age = max(0, int(max_age_seconds))
+
+    with _UPDATE_CACHE_LOCK:
+        global _UPDATE_CACHE_DATA, _UPDATE_CACHE_TS
+        if not _UPDATE_CACHE_DATA:
+            disk_data, disk_ts = _load_update_info_cache_from_disk()
+            if disk_data:
+                _UPDATE_CACHE_DATA = disk_data
+                _UPDATE_CACHE_TS = disk_ts or now
+
+        if _UPDATE_CACHE_DATA and max_age > 0 and (now - _UPDATE_CACHE_TS) <= max_age:
+            return dict(_UPDATE_CACHE_DATA)
+
+    fresh = get_update_info(refresh_remote=refresh_remote)
+    with _UPDATE_CACHE_LOCK:
+        _set_update_info_cache(fresh, now)
+    return fresh
 
 
 def _state_response(

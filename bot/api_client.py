@@ -298,7 +298,7 @@ class MaintenanceAPI:
         return await delete("/api/maintenance/warp/key")
 
     # Updates
-    async def update_info(self, refresh_remote: bool = True):
+    async def update_info(self, refresh_remote: bool = False):
         return await get("/api/maintenance/update/info", refresh=str(refresh_remote).lower())
     async def update_logs(self, lines: int = 200):
         return await get("/api/maintenance/update/logs", lines=lines)

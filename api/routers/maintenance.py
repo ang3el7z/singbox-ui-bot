@@ -442,9 +442,12 @@ async def prefetch_windows_binaries(auth=Depends(require_any_auth)):
 # ─── Update (git + branch/tag + run update job) ──────────────────────────────
 
 @router.get("/update/info")
-async def update_info(refresh: bool = True, auth=Depends(require_any_auth)):
+async def update_info(refresh: bool = False, auth=Depends(require_any_auth)):
     try:
-        git = await asyncio.to_thread(update_service.get_update_info, refresh)
+        if refresh:
+            git = await asyncio.to_thread(update_service.refresh_update_info_cache, True)
+        else:
+            git = await asyncio.to_thread(update_service.get_update_info_cached, False)
         job = await asyncio.to_thread(update_service.get_update_status, 120)
     except RuntimeError as exc:
         raise HTTPException(status_code=500, detail=str(exc))

@@ -186,7 +186,7 @@ async def _get_menu_git_info() -> dict:
         return cached_git
 
     try:
-        fresh = await asyncio.wait_for(maintenance_api.update_info(refresh_remote=True), timeout=4.0)
+        fresh = await asyncio.wait_for(maintenance_api.update_info(refresh_remote=False), timeout=4.0)
         git = fresh.get("git") or {}
         if isinstance(git, dict):
             _MENU_GIT_CACHE["ts"] = now
