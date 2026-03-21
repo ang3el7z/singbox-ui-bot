@@ -102,23 +102,33 @@ function serverComponent() {
         logs: [],
         logError: "",
         loading: false,
+        pendingAction: "",
 
         async init() {
             await this.loadStatus();
         },
 
-        async loadStatus() {
+        navigateRoot(section) {
+            this.$root.page = section;
+        },
+
+        async loadStatus(action = "status") {
             this.loading = true;
+            if (action) this.pendingAction = action;
             try {
                 this.status = await api.serverStatus();
                 if (this.status?.error) {
                     this.$dispatch("toast", { msg: this.status.error, type: "error" });
                 }
-            } finally { this.loading = false; }
+            } finally {
+                this.loading = false;
+                if (action) this.pendingAction = "";
+            }
         },
 
         async loadLogs() {
             this.loading = true;
+            this.pendingAction = "logs";
             try {
                 const data = await api.serverLogs(100);
                 this.logs = data.logs || [];
@@ -126,12 +136,16 @@ function serverComponent() {
                 if (this.logError) {
                     this.$dispatch("toast", { msg: this.logError, type: "error" });
                 }
-            } finally { this.loading = false; }
+            } finally {
+                this.loading = false;
+                this.pendingAction = "";
+            }
         },
 
         async restart() {
             if (!confirm("Restart Sing-Box?")) return;
             this.loading = true;
+            this.pendingAction = "restart";
             try {
                 const data = await api.serverRestart();
                 if (data?.success) {
@@ -141,14 +155,18 @@ function serverComponent() {
                     const reason = data?.error || "Restart failed";
                     this.$dispatch("toast", { msg: reason, type: "error" });
                 }
-                await this.loadStatus();
+                await this.loadStatus(null);
             } catch (e) {
                 this.$dispatch("toast", { msg: e.message, type: "error" });
-            } finally { this.loading = false; }
+            } finally {
+                this.loading = false;
+                this.pendingAction = "";
+            }
         },
 
         async reload() {
             this.loading = true;
+            this.pendingAction = "reload";
             try {
                 const data = await api.serverReload();
                 if (data?.success) {
@@ -160,7 +178,10 @@ function serverComponent() {
                 }
             } catch (e) {
                 this.$dispatch("toast", { msg: e.message, type: "error" });
-            } finally { this.loading = false; }
+            } finally {
+                this.loading = false;
+                this.pendingAction = "";
+            }
         },
     };
 }
@@ -574,6 +595,7 @@ function nginxComponent() {
         paths: null,
         logs: "",
         loading: false,
+        pendingAction: "",
         showSslModal: false,
         sslEmail: "",
 
@@ -588,13 +610,17 @@ function nginxComponent() {
 
         async configure() {
             this.loading = true;
+            this.pendingAction = "configure";
             try {
                 const res = await api.nginxConfigure();
                 this.$dispatch("toast", { msg: res.message || "Configured", type: res.success ? "success" : "error" });
                 await this.load();
             } catch (e) {
                 this.$dispatch("toast", { msg: e.message, type: "error" });
-            } finally { this.loading = false; }
+            } finally {
+                this.loading = false;
+                this.pendingAction = "";
+            }
         },
 
         openSslModal() {
@@ -609,40 +635,60 @@ function nginxComponent() {
             }
             this.showSslModal = false;
             this.loading = true;
+            this.pendingAction = "ssl";
             try {
                 await api.nginxSsl(email || undefined);
                 this.$dispatch("toast", { msg: "SSL issued", type: "success" });
             } catch (e) {
                 this.$dispatch("toast", { msg: e.message, type: "error" });
-            } finally { this.loading = false; }
+            } finally {
+                this.loading = false;
+                this.pendingAction = "";
+            }
         },
 
         async loadLogs() {
-            const data = await api.nginxLogs(100);
-            this.logs = data.logs || "";
+            this.loading = true;
+            this.pendingAction = "logs";
+            try {
+                const data = await api.nginxLogs(100);
+                this.logs = data.logs || "";
+            } finally {
+                this.loading = false;
+                this.pendingAction = "";
+            }
         },
 
         async uploadSite(event) {
             const file = event.target.files[0];
             if (!file) return;
             this.loading = true;
+            this.pendingAction = "uploadStub";
             try {
                 const res = await api.nginxUpload(file);
                 this.$dispatch("toast", { msg: res.detail, type: "success" });
                 await this.load();
             } catch (e) {
                 this.$dispatch("toast", { msg: e.message, type: "error" });
-            } finally { this.loading = false; }
+            } finally {
+                this.loading = false;
+                this.pendingAction = "";
+            }
         },
 
         async removeOverride() {
             if (!confirm("Delete stub files for '/'?")) return;
+            this.loading = true;
+            this.pendingAction = "removeStub";
             try {
                 await api.nginxDeleteOverride();
                 this.$dispatch("toast", { msg: "Stub files removed", type: "success" });
                 await this.load();
             } catch (e) {
                 this.$dispatch("toast", { msg: e.message, type: "error" });
+            } finally {
+                this.loading = false;
+                this.pendingAction = "";
             }
         },
 
@@ -652,13 +698,17 @@ function nginxComponent() {
             const label = next ? "enable" : "disable";
             if (!confirm(`${label.charAt(0).toUpperCase() + label.slice(1)} Web UI on '/web/'? Nginx will be reloaded.`)) return;
             this.loading = true;
+            this.pendingAction = "toggleSite";
             try {
                 await api.nginxSiteToggle(next);
                 this.$dispatch("toast", { msg: `Web UI ${next ? "enabled" : "disabled"}`, type: "success" });
                 await this.load();
             } catch (e) {
                 this.$dispatch("toast", { msg: e.message, type: "error" });
-            } finally { this.loading = false; }
+            } finally {
+                this.loading = false;
+                this.pendingAction = "";
+            }
         },
     };
 }

@@ -1,4 +1,4 @@
-﻿"""Routing rules management вЂ” thin wrapper over /api/routing/"""
+"""Routing rules management — thin wrapper over /api/routing/"""
 import json
 
 from aiogram import Router, F
@@ -47,7 +47,7 @@ class ImportRulesFSM(StatesGroup):
 @router.callback_query(F.data == "menu_routing")
 async def cb_routing_menu(cq: CallbackQuery):
     await cq.message.edit_text(
-        _txt("рџ—є <b>РџСЂР°РІРёР»Р° РјР°СЂС€СЂСѓС‚РёР·Р°С†РёРё</b>", "рџ—є <b>Routing Rules</b>"),
+        _txt("🗺 <b>Правила маршрутизации</b>", "🗺 <b>Routing Rules</b>"),
         reply_markup=kb_routing_menu(),
         parse_mode="HTML",
     )
@@ -59,12 +59,12 @@ async def cb_routing_view(cq: CallbackQuery):
     try:
         rules = await routing_api.list_rules(rule_key)
         if not rules:
-            text = _txt(f"рџ“‹ РќРµС‚ РїСЂР°РІРёР» С‚РёРїР° <b>{rule_key}</b>", f"рџ“‹ No <b>{rule_key}</b> rules")
+            text = _txt(f"📋 Нет правил типа <b>{rule_key}</b>", f"📋 No <b>{rule_key}</b> rules")
         else:
-            lines = [f"вЂў {r['value']} в†’ {r['outbound']}" for r in rules]
-            text = f"рџ“‹ <b>{_rule_keys().get(rule_key, rule_key)}</b>:\n" + "\n".join(lines)
+            lines = [f"• {r['value']} → {r['outbound']}" for r in rules]
+            text = f"📋 <b>{_rule_keys().get(rule_key, rule_key)}</b>:\n" + "\n".join(lines)
     except APIError as e:
-        text = f"вќЊ {e.detail}"
+        text = f"❌ {e.detail}"
     await cq.answer()
     await cq.message.answer(text, parse_mode="HTML", reply_markup=kb_back("menu_routing"))
 
@@ -73,29 +73,29 @@ async def cb_routing_view(cq: CallbackQuery):
 async def cb_routing_add(cq: CallbackQuery, state: FSMContext):
     await state.set_state(AddRuleFSM.rule_key)
     from bot.keyboards.main import kb_rule_key_select
-    await cq.message.answer(_txt("Р’С‹Р±РµСЂРёС‚Рµ С‚РёРї РїСЂР°РІРёР»Р°:", "Select rule type:"), reply_markup=kb_rule_key_select(_rule_keys()))
+    await cq.message.answer(_txt("Выберите тип правила:", "Select rule type:"), reply_markup=kb_rule_key_select(_rule_keys()))
     await cq.answer()
 
 
 _RULE_HINTS = {
     "domain": (
-        "Р’РІРµРґРёС‚Рµ С‚РѕС‡РЅС‹Рµ РґРѕРјРµРЅС‹.\nР§РµСЂРµР· Р·Р°РїСЏС‚СѓСЋ:\n<code>youtube.com, youtu.be, ytimg.com</code>",
+        "Введите точные домены.\nЧерез запятую:\n<code>youtube.com, youtu.be, ytimg.com</code>",
         "Enter exact domain(s).\nComma-separated:\n<code>youtube.com, youtu.be, ytimg.com</code>",
     ),
     "domain_suffix": (
-        "Р’РІРµРґРёС‚Рµ СЃСѓС„С„РёРєСЃС‹ РґРѕРјРµРЅРѕРІ вЂ” Р±СѓРґРµС‚ СЃРѕРІРїР°РґРµРЅРёРµ РґР»СЏ РґРѕРјРµРЅР° Рё РІСЃРµС… РїРѕРґРґРѕРјРµРЅРѕРІ.\nР§РµСЂРµР· Р·Р°РїСЏС‚СѓСЋ:\n<code>youtube.com, googlevideo.com</code>\n<i>(.youtube.com, www.youtube.com Рё С‚.Рґ. СѓС‡РёС‚С‹РІР°СЋС‚СЃСЏ Р°РІС‚РѕРјР°С‚РёС‡РµСЃРєРё)</i>",
-        "Enter domain suffix/suffixes вЂ” matches domain and all subdomains.\nComma-separated:\n<code>youtube.com, googlevideo.com</code>\n<i>(.youtube.com, www.youtube.com etc. are matched automatically)</i>",
+        "Введите суффиксы доменов — будет совпадение для домена и всех поддоменов.\nЧерез запятую:\n<code>youtube.com, googlevideo.com</code>\n<i>(.youtube.com, www.youtube.com и т.д. учитываются автоматически)</i>",
+        "Enter domain suffix/suffixes — matches domain and all subdomains.\nComma-separated:\n<code>youtube.com, googlevideo.com</code>\n<i>(.youtube.com, www.youtube.com etc. are matched automatically)</i>",
     ),
     "domain_keyword": (
-        "Р’РІРµРґРёС‚Рµ РєР»СЋС‡РµРІС‹Рµ СЃР»РѕРІР° вЂ” СЃРѕРІРїР°РґРµРЅРёРµ СЃ Р»СЋР±С‹Рј РґРѕРјРµРЅРѕРј, РєРѕС‚РѕСЂС‹Р№ СЃРѕРґРµСЂР¶РёС‚ СЃР»РѕРІРѕ.\nР§РµСЂРµР· Р·Р°РїСЏС‚СѓСЋ:\n<code>youtube, google, twitch</code>",
-        "Enter keyword(s) вЂ” matches any domain containing the word.\nComma-separated:\n<code>youtube, google, twitch</code>",
+        "Введите ключевые слова — совпадение с любым доменом, который содержит слово.\nЧерез запятую:\n<code>youtube, google, twitch</code>",
+        "Enter keyword(s) — matches any domain containing the word.\nComma-separated:\n<code>youtube, google, twitch</code>",
     ),
     "ip_cidr": (
-        "Р’РІРµРґРёС‚Рµ IP РёР»Рё CIDR-РґРёР°РїР°Р·РѕРЅС‹.\nР§РµСЂРµР· Р·Р°РїСЏС‚СѓСЋ:\n<code>8.8.8.8/32, 142.250.0.0/15</code>",
+        "Введите IP или CIDR-диапазоны.\nЧерез запятую:\n<code>8.8.8.8/32, 142.250.0.0/15</code>",
         "Enter IP or CIDR range(s).\nComma-separated:\n<code>8.8.8.8/32, 142.250.0.0/15</code>",
     ),
     "rule_set": (
-        "Р’РІРµРґРёС‚Рµ URL SRS rule set С„Р°Р№Р»Р° (.srs binary РёР»Рё .json source).\nРџСЂРёРјРµСЂС‹:\n<code>https://github.com/SagerNet/sing-geosite/releases/download/20250101/geosite-youtube.srs</code>\n<code>https://github.com/legiz-ru/sb-rule-sets/raw/main/ru-bundle.srs</code>",
+        "Введите URL SRS rule set файла (.srs binary или .json source).\nПримеры:\n<code>https://github.com/SagerNet/sing-geosite/releases/download/20250101/geosite-youtube.srs</code>\n<code>https://github.com/legiz-ru/sb-rule-sets/raw/main/ru-bundle.srs</code>",
         "Enter URL of an SRS rule set file (.srs binary or .json source).\nExamples:\n<code>https://github.com/SagerNet/sing-geosite/releases/download/20250101/geosite-youtube.srs</code>\n<code>https://github.com/legiz-ru/sb-rule-sets/raw/main/ru-bundle.srs</code>",
     ),
 }
@@ -108,7 +108,7 @@ async def fsm_rule_key(cq: CallbackQuery, state: FSMContext):
     await state.set_state(AddRuleFSM.value)
     hint_pair = _RULE_HINTS.get(rule_key)
     hint = _txt(*hint_pair) if hint_pair else _txt(
-        f"Р’РІРµРґРёС‚Рµ Р·РЅР°С‡РµРЅРёРµ РґР»СЏ <b>{rule_key}</b>:",
+        f"Введите значение для <b>{rule_key}</b>:",
         f"Enter value for <b>{rule_key}</b>:",
     )
     await cq.message.answer(hint, parse_mode="HTML")
@@ -130,11 +130,11 @@ async def fsm_rule_value(msg: Message, state: FSMContext):
     hint = ""
     if node_tags:
         hint = _txt(
-            f"\n\nрџ“Ў <i>Р”РѕСЃС‚СѓРїРЅС‹ СѓР·Р»С‹ С„РµРґРµСЂР°С†РёРё: {', '.join(node_tags)}</i>",
-            f"\n\nрџ“Ў <i>Federation nodes available: {', '.join(node_tags)}</i>",
+            f"\n\n📡 <i>Доступны узлы федерации: {', '.join(node_tags)}</i>",
+            f"\n\n📡 <i>Federation nodes available: {', '.join(node_tags)}</i>",
         )
     await msg.answer(
-        _txt(f"Р’С‹Р±РµСЂРёС‚Рµ РґРµР№СЃС‚РІРёРµ/outbound:{hint}", f"Select action/outbound:{hint}"),
+        _txt(f"Выберите действие/outbound:{hint}", f"Select action/outbound:{hint}"),
         reply_markup=kb_outbound_select(outbounds),
         parse_mode="HTML",
     )
@@ -151,7 +151,7 @@ async def fsm_rule_outbound(cq: CallbackQuery, state: FSMContext):
         await state.set_state(AddRuleFSM.srs_interval)
         from bot.keyboards.main import kb_srs_interval
         await cq.message.answer(
-            _txt("вЏ± РљР°Рє С‡Р°СЃС‚Рѕ Sing-Box РґРѕР»Р¶РµРЅ РѕР±РЅРѕРІР»СЏС‚СЊ СЌС‚РѕС‚ rule set?", "вЏ± How often should Sing-Box update this rule set?"),
+            _txt("⏱ Как часто Sing-Box должен обновлять этот rule set?", "⏱ How often should Sing-Box update this rule set?"),
             reply_markup=kb_srs_interval(),
         )
         await cq.answer()
@@ -162,14 +162,14 @@ async def fsm_rule_outbound(cq: CallbackQuery, state: FSMContext):
         await routing_api.add_rule(data["rule_key"], data["value"], outbound)
         await cq.message.answer(
             _txt(
-                f"вњ… РџСЂР°РІРёР»Рѕ РґРѕР±Р°РІР»РµРЅРѕ: <b>{data['rule_key']}</b> = <code>{data['value']}</code> в†’ {outbound}",
-                f"вњ… Rule added: <b>{data['rule_key']}</b> = <code>{data['value']}</code> в†’ {outbound}",
+                f"✅ Правило добавлено: <b>{data['rule_key']}</b> = <code>{data['value']}</code> → {outbound}",
+                f"✅ Rule added: <b>{data['rule_key']}</b> = <code>{data['value']}</code> → {outbound}",
             ),
             parse_mode="HTML",
             reply_markup=kb_back("menu_routing"),
         )
     except APIError as e:
-        await cq.message.answer(f"вќЊ {e.detail}", reply_markup=kb_back("menu_routing"))
+        await cq.message.answer(f"❌ {e.detail}", reply_markup=kb_back("menu_routing"))
     await cq.answer()
 
 
@@ -181,12 +181,12 @@ async def fsm_srs_interval(cq: CallbackQuery, state: FSMContext):
     from bot.keyboards.main import kb_srs_detour
     await cq.message.answer(
         _txt(
-            "рџ“Ґ РљР°Рє Sing-Box РґРѕР»Р¶РµРЅ СЃРєР°С‡РёРІР°С‚СЊ СЌС‚РѕС‚ rule set?\n\n"
-            "вЂў <b>Direct</b> вЂ” РЅР°РїСЂСЏРјСѓСЋ РёР· РёРЅС‚РµСЂРЅРµС‚Р° (Р±С‹СЃС‚СЂРµРµ, РµСЃР»Рё GitHub РґРѕСЃС‚СѓРїРµРЅ)\n"
-            "вЂў <b>Proxy</b> вЂ” С‡РµСЂРµР· РїСЂРѕРєСЃРё (РµСЃР»Рё GitHub/CDN Р·Р°Р±Р»РѕРєРёСЂРѕРІР°РЅ РЅР° СЃРµСЂРІРµСЂРµ)",
-            "рџ“Ґ How should Sing-Box download this rule set?\n\n"
-            "вЂў <b>Direct</b> вЂ” download straight from the internet (fast, use if GitHub is reachable)\n"
-            "вЂў <b>Proxy</b> вЂ” download through the proxy path (use if GitHub/CDN is blocked on your server)",
+            "📥 Как Sing-Box должен скачивать этот rule set?\n\n"
+            "• <b>Direct</b> — напрямую из интернета (быстрее, если GitHub доступен)\n"
+            "• <b>Proxy</b> — через прокси (если GitHub/CDN заблокирован на сервере)",
+            "📥 How should Sing-Box download this rule set?\n\n"
+            "• <b>Direct</b> — download straight from the internet (fast, use if GitHub is reachable)\n"
+            "• <b>Proxy</b> — download through the proxy path (use if GitHub/CDN is blocked on your server)",
         ),
         reply_markup=kb_srs_detour(),
         parse_mode="HTML",
@@ -211,18 +211,18 @@ async def fsm_srs_detour(cq: CallbackQuery, state: FSMContext):
         )
         await cq.message.answer(
             _txt(
-                f"вњ… SRS rule set РґРѕР±Р°РІР»РµРЅ:\n"
+                f"✅ SRS rule set добавлен:\n"
                 f"URL: <code>{url}</code>\n"
-                f"в†’ <b>{outbound}</b> | РѕР±РЅРѕРІР»РµРЅРёРµ: {interval} | Р·Р°РіСЂСѓР·РєР° С‡РµСЂРµР·: {detour}",
-                f"вњ… SRS rule set added:\n"
+                f"→ <b>{outbound}</b> | обновление: {interval} | загрузка через: {detour}",
+                f"✅ SRS rule set added:\n"
                 f"URL: <code>{url}</code>\n"
-                f"в†’ <b>{outbound}</b> | update: {interval} | download via: {detour}",
+                f"→ <b>{outbound}</b> | update: {interval} | download via: {detour}",
             ),
             parse_mode="HTML",
             reply_markup=kb_back("menu_routing"),
         )
     except APIError as e:
-        await cq.message.answer(f"вќЊ {e.detail}", reply_markup=kb_back("menu_routing"))
+        await cq.message.answer(f"❌ {e.detail}", reply_markup=kb_back("menu_routing"))
     await cq.answer()
 
 
@@ -234,10 +234,10 @@ async def cb_routing_export(cq: CallbackQuery):
         file = BufferedInputFile(text.encode("utf-8"), filename="routing_rules.json")
         await cq.message.answer_document(
             file,
-            caption=_txt("рџ—є Р­РєСЃРїРѕСЂС‚ РїСЂР°РІРёР» РјР°СЂС€СЂСѓС‚РёР·Р°С†РёРё", "рџ—є Routing rules export"),
+            caption=_txt("🗺 Экспорт правил маршрутизации", "🗺 Routing rules export"),
         )
     except APIError as e:
-        await cq.message.answer(f"вќЊ {e.detail}")
+        await cq.message.answer(f"❌ {e.detail}")
     await cq.answer()
 
 
@@ -245,7 +245,7 @@ async def cb_routing_export(cq: CallbackQuery):
 async def cb_routing_import(cq: CallbackQuery, state: FSMContext):
     await state.set_state(ImportRulesFSM.waiting_file)
     await cq.message.answer(
-        _txt("рџ“Ћ РћС‚РїСЂР°РІСЊС‚Рµ JSON-С„Р°Р№Р» СЃ РїСЂР°РІРёР»Р°РјРё РјР°СЂС€СЂСѓС‚РёР·Р°С†РёРё РґР»СЏ РёРјРїРѕСЂС‚Р°:", "рџ“Ћ Send a JSON file with routing rules to import:")
+        _txt("📎 Отправьте JSON-файл с правилами маршрутизации для импорта:", "📎 Send a JSON file with routing rules to import:")
     )
     await cq.answer()
 
@@ -255,16 +255,16 @@ async def fsm_import_file(msg: Message, state: FSMContext):
     await state.clear()
     doc = msg.document
     if not doc.file_name.endswith(".json"):
-        await msg.answer(_txt("вќЊ РџРѕРґРґРµСЂР¶РёРІР°СЋС‚СЃСЏ С‚РѕР»СЊРєРѕ .json С„Р°Р№Р»С‹", "вќЊ Only .json files supported"))
+        await msg.answer(_txt("❌ Поддерживаются только .json файлы", "❌ Only .json files supported"))
         return
     file = await msg.bot.get_file(doc.file_id)
     content = await msg.bot.download_file(file.file_path)
     try:
         data = json.loads(content.read())
         result = await routing_api.import_rules(data)
-        imported = result.get("detail", _txt("РРјРїРѕСЂС‚РёСЂРѕРІР°РЅРѕ", "Imported"))
-        await msg.answer(f"вњ… {imported}", reply_markup=kb_back("menu_routing"))
+        imported = result.get("detail", _txt("Импортировано", "Imported"))
+        await msg.answer(f"✅ {imported}", reply_markup=kb_back("menu_routing"))
     except (json.JSONDecodeError, APIError) as e:
-        await msg.answer(f"вќЊ {e}", reply_markup=kb_back("menu_routing"))
+        await msg.answer(f"❌ {e}", reply_markup=kb_back("menu_routing"))
 
 

@@ -38,7 +38,7 @@ async def cb_inbounds_menu(cq: CallbackQuery):
         mk = kb_inbounds_list(inbounds)
     except APIError as e:
         text = f"❌ {e.detail}"
-        mk = kb_back("main_menu")
+        mk = kb_back("menu_server")
     await cq.message.edit_text(text, reply_markup=mk, parse_mode="HTML")
 
 

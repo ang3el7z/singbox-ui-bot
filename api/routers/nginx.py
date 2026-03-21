@@ -136,14 +136,31 @@ async def site_toggle(enabled: bool, auth: dict = Depends(require_any_auth)):
     Regenerates nginx config and reloads nginx automatically.
     """
     from api.routers.settings_router import get_runtime
-    nginx_service.set_site_enabled(enabled)
-    config_text = nginx_service.generate_config(domain=get_runtime("domain"), site_enabled=enabled)
-    nginx_service.write_config(config_text)
-    ok, msg = await nginx_service.test_nginx_config()
-    if not ok:
-        # Rollback
-        nginx_service.set_site_enabled(not enabled)
-        raise HTTPException(status_code=500, detail=f"Config error: {msg}")
-    await nginx_service.reload_nginx()
+
+    domain = get_runtime("domain")
+    previous_enabled = nginx_service.get_site_enabled()
+
+    async def _apply_state(target_enabled: bool) -> tuple[bool, str]:
+        nginx_service.set_site_enabled(target_enabled)
+        config_text = nginx_service.generate_config(domain=domain, site_enabled=target_enabled)
+        nginx_service.write_config(config_text)
+        ok_test, msg_test = await nginx_service.test_nginx_config()
+        if not ok_test:
+            return False, f"Config error: {msg_test}"
+        ok_reload, msg_reload = await nginx_service.reload_nginx()
+        if not ok_reload:
+            return False, f"Nginx reload failed: {msg_reload}"
+        return True, "OK"
+
+    ok_apply, msg_apply = await _apply_state(enabled)
+    if not ok_apply:
+        rollback_ok, rollback_msg = await _apply_state(previous_enabled)
+        if not rollback_ok:
+            raise HTTPException(
+                status_code=500,
+                detail=f"{msg_apply}; rollback failed: {rollback_msg}",
+            )
+        raise HTTPException(status_code=500, detail=msg_apply)
+
     await audit(auth["actor"], "nginx_web_ui_toggle", f"enabled={enabled}")
     return {"web_ui_enabled": enabled}

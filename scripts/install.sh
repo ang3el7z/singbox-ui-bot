@@ -53,6 +53,40 @@ setup_repo() {
     cd "$INSTALL_DIR"
 }
 
+record_install_version() {
+    local version_file="$INSTALL_DIR/data/install_version.json"
+    local commit commit_short ref exact_tag describe version recorded_at
+
+    commit="$(git -C "$INSTALL_DIR" rev-parse HEAD 2>/dev/null || true)"
+    commit_short="$(git -C "$INSTALL_DIR" rev-parse --short HEAD 2>/dev/null || true)"
+    ref="$(git -C "$INSTALL_DIR" rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
+    exact_tag="$(git -C "$INSTALL_DIR" describe --tags --exact-match 2>/dev/null || true)"
+    describe="$(git -C "$INSTALL_DIR" describe --tags --always --dirty --abbrev=7 2>/dev/null || true)"
+    version="${exact_tag:-$describe}"
+    recorded_at="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+
+    if [[ -z "$version" ]]; then
+        if [[ -n "$ref" && -n "$commit_short" ]]; then
+            version="${ref}@${commit_short}"
+        else
+            version="dev"
+        fi
+    fi
+
+    mkdir -p "$INSTALL_DIR/data"
+    cat > "$version_file" <<EOF
+{
+  "version": "$version",
+  "ref": "$ref",
+  "commit": "$commit",
+  "commit_short": "$commit_short",
+  "recorded_at": "$recorded_at",
+  "recorded_by": "install.sh"
+}
+EOF
+    info "Recorded install version: $version"
+}
+
 # ─── Packages ─────────────────────────────────────────────────────────────────
 
 install_packages() {
@@ -305,6 +339,7 @@ deploy() {
     cd "$INSTALL_DIR"
     docker compose pull --quiet || true
     docker compose up -d --build
+    record_install_version
     touch "$INSTALL_DIR/.installed"
     info "Deploy complete"
 }

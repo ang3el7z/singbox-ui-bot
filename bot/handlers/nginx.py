@@ -52,7 +52,7 @@ def _kb_ssl_email_skip():
 
 def _format_cert_line(cert: dict) -> str:
     if not cert or not cert.get("exists"):
-        return _txt("🔐 SSL: ❌ не выпущен", "🔐 SSL: ❌ not issued")
+        return _txt("SSL: не выпущен", "SSL: not issued")
 
     expires = cert.get("expires_at")
     days_left = cert.get("days_left")
@@ -61,15 +61,15 @@ def _format_cert_line(cert: dict) -> str:
             dt = datetime.fromisoformat(expires.replace("Z", "+00:00"))
             if _is_ru():
                 exp_human = dt.strftime("%d.%m.%Y %H:%M UTC")
-                return f"🔐 SSL: ✅ до {exp_human} ({days_left} дн.)"
+                return f"SSL: до {exp_human} ({days_left} дн.)"
             exp_human = dt.strftime("%Y-%m-%d %H:%M UTC")
-            return f"🔐 SSL: ✅ until {exp_human} ({days_left} days)"
+            return f"SSL: until {exp_human} ({days_left} days)"
         except ValueError:
             pass
 
     return _txt(
-        "🔐 SSL: ✅ выпущен",
-        "🔐 SSL: ✅ issued",
+        "SSL: выпущен",
+        "SSL: issued",
     )
 
 
@@ -160,29 +160,19 @@ async def _nginx_menu_text_and_kb():
         cert = st.get("cert") or {}
 
         domain_line = _txt(
-            f"🌍 Домен: <code>{escape(domain or '—')}</code>",
-            f"🌍 Domain: <code>{escape(domain or '—')}</code>",
+            f"Домен: <code>{escape(domain or '—')}</code>",
+            f"Domain: <code>{escape(domain or '—')}</code>",
         )
         cert_line = _format_cert_line(cert)
-        override_line = _txt(
-            f"📄 Заглушка: {'✅ загружена' if has_override else '❌ не загружена'}",
-            f"📄 Stub files: {'✅ uploaded' if has_override else '❌ not uploaded'}",
-        )
-        site_line = _txt(
-            f"🖥 Web UI: {'🟢 включен' if web_ui_enabled else '🔴 выключен'}",
-            f"🖥 Web UI: {'🟢 ON' if web_ui_enabled else '🔴 OFF'}",
-        )
+        info_block = "<blockquote>" + "\n".join([domain_line, cert_line]) + "</blockquote>"
         text = "\n".join([
-            "🌐 <b>Nginx</b>",
+            "<b>Nginx</b>",
             "",
-            domain_line,
-            cert_line,
-            override_line,
-            site_line,
+            info_block,
         ])
         kb = kb_nginx_menu(site_enabled=web_ui_enabled, has_override=has_override)
     except APIError as e:
-        text = f"❌ {escape(e.detail)}"
+        text = f"{_txt('Ошибка', 'Error')}: {escape(e.detail)}"
         kb = kb_nginx_menu()
     return text, kb
 
@@ -195,16 +185,22 @@ async def cb_nginx_menu(cq: CallbackQuery):
 
 @router.callback_query(F.data == "nginx_configure")
 async def cb_nginx_configure(cq: CallbackQuery):
-    await cq.answer(_txt("Настраиваю Nginx…", "Configuring Nginx…"))
+    await cq.message.edit_text(
+        _txt("<b>Nginx</b>\n\nПрименяем конфигурацию...", "<b>Nginx</b>\n\nApplying configuration..."),
+        reply_markup=kb_back("menu_nginx"),
+        parse_mode="HTML",
+    )
     try:
         result = await nginx_api.configure()
         if result.get("success"):
-            text = _txt("✅ Nginx настроен и перезагружен", "✅ Nginx configured and reloaded")
+            note = _txt("Конфигурация применена", "Configuration applied")
         else:
-            text = f"❌ {result.get('message', _txt('Ошибка', 'Failed'))}"
+            note = f"{_txt('Ошибка', 'Error')}: {result.get('message', _txt('Ошибка', 'Failed'))}"
     except APIError as e:
-        text = f"❌ {e.detail}"
-    await cq.message.answer(text, reply_markup=kb_back("menu_nginx"))
+        note = f"{_txt('Ошибка', 'Error')}: {e.detail}"
+    text, kb = await _nginx_menu_text_and_kb()
+    await cq.message.edit_text(f"{text}\n\n{note}", reply_markup=kb, parse_mode="HTML")
+    await cq.answer()
 
 
 @router.callback_query(F.data == "nginx_ssl")
@@ -346,14 +342,22 @@ async def handle_site_upload(msg: Message):
 @router.callback_query(F.data.in_({"nginx_site_on", "nginx_site_off"}))
 async def cb_nginx_site_toggle(cq: CallbackQuery):
     enable = cq.data == "nginx_site_on"
-    await cq.answer(_txt("Обновляю…", "Updating…"))
+    await cq.message.edit_text(
+        _txt("<b>Nginx</b>\n\nОжидаем ответ...", "<b>Nginx</b>\n\nWaiting..."),
+        reply_markup=kb_back("menu_nginx"),
+        parse_mode="HTML",
+    )
     try:
         await nginx_api.site_toggle(enable)
     except APIError as e:
+        text, kb = await _nginx_menu_text_and_kb()
+        err_line = f"{_txt('Ошибка', 'Error')}: {escape(e.detail)}"
+        await cq.message.edit_text(f"{text}\n\n{err_line}", reply_markup=kb, parse_mode="HTML")
         await cq.answer(f"❌ {e.detail}", show_alert=True)
         return
     text, kb = await _nginx_menu_text_and_kb()
     await cq.message.edit_text(text, reply_markup=kb, parse_mode="HTML")
+    await cq.answer()
 
 
 @router.callback_query(F.data == "nginx_delete_override")

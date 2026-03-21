@@ -106,11 +106,29 @@ select.form-input option { background: #1e293b; }
 .btn:disabled { opacity: 0.5; cursor: not-allowed; }
 .btn:hover:not(:disabled) { opacity: 0.85; }
 
+.btn-pending {
+    position: relative;
+    overflow: hidden;
+}
+
+.btn-pending::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    transform: translateX(-100%);
+    background: linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.28) 50%, transparent 100%);
+    animation: btnShimmer 1.1s infinite;
+}
+
 .btn-primary   { background: var(--accent); color: white; }
 .btn-success   { background: #22c55e; color: white; }
 .btn-danger    { background: #ef4444; color: white; }
 .btn-secondary { background: #334155; color: #e2e8f0; }
 .btn-ghost     { background: transparent; color: #94a3b8; border: 1px solid #334155; }
+
+@keyframes btnShimmer {
+    100% { transform: translateX(100%); }
+}
 
 /* Table */
 .data-table {

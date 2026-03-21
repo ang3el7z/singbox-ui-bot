@@ -415,6 +415,40 @@ refresh_cli_copy() {
     fi
 }
 
+record_install_version() {
+    local version_file="$INSTALL_DIR/data/install_version.json"
+    local commit commit_short ref exact_tag describe version recorded_at
+
+    commit="$(git rev-parse HEAD 2>/dev/null || true)"
+    commit_short="$(git rev-parse --short HEAD 2>/dev/null || true)"
+    ref="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
+    exact_tag="$(git describe --tags --exact-match 2>/dev/null || true)"
+    describe="$(git describe --tags --always --dirty --abbrev=7 2>/dev/null || true)"
+    recorded_at="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+
+    version="${exact_tag:-$describe}"
+    if [[ -z "$version" ]]; then
+        if [[ -n "$ref" && -n "$commit_short" ]]; then
+            version="${ref}@${commit_short}"
+        else
+            version="dev"
+        fi
+    fi
+
+    mkdir -p "$INSTALL_DIR/data"
+    cat > "$version_file" <<EOF
+{
+  "version": "$version",
+  "ref": "$ref",
+  "commit": "$commit",
+  "commit_short": "$commit_short",
+  "recorded_at": "$recorded_at",
+  "recorded_by": "manage.sh"
+}
+EOF
+    info "Recorded install version: $version"
+}
+
 resolve_target_ref() {
     local requested="${1:-latest-tag}"
     if [[ -z "$requested" ]]; then
@@ -599,6 +633,7 @@ cmd_update() {
         compose_up_recreate || return 1
     fi
 
+    record_install_version
     refresh_cli_copy
     success "Update complete (target: $target_ref)."
 }
@@ -642,6 +677,7 @@ cmd_reinstall() {
         compose_up_recreate || return 1
     fi
 
+    record_install_version
     refresh_cli_copy
     success "Reinstall complete (target: $target_ref)."
 }

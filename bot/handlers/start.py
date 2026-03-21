@@ -166,15 +166,15 @@ async def _main_menu_text(lang: str) -> str:
     )
     cert_line = _format_cert_line_for_main(cert, lang)
     version_line, update_line = _build_version_lines(git, lang)
+    info_lines = [domain_line, cert_line, version_line]
+    if update_line:
+        info_lines.append(update_line)
+    info_block = "<blockquote>" + "\n".join(info_lines) + "</blockquote>"
     lines = [
         "<b>Singbox UI Bot</b>",
         "",
-        domain_line,
-        cert_line,
-        version_line,
+        info_block,
     ]
-    if update_line:
-        lines.append(update_line)
     return "\n".join(lines)
 
 

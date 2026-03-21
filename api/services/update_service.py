@@ -30,6 +30,11 @@ STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
 RUNNER_IMAGE = "singbox-ui-bot-app:latest"
 REF_RE = re.compile(r"^[A-Za-z0-9._/-]{1,120}$")
 DOCKER_SOCK = Path("/var/run/docker.sock")
+INSTALL_VERSION_FILES = [
+    Path("/app/host_data/install_version.json"),
+    PROJECT_DIR / "data" / "install_version.json",
+    Path("/app/data/install_version.json"),
+]
 
 BACKUP_ROOT = get_backup_storage_dir()
 BACKUP_ROOT.mkdir(parents=True, exist_ok=True)
@@ -145,6 +150,60 @@ def _git_value(*args: str, default: str = "") -> str:
     return out.strip() or default
 
 
+def _load_install_version() -> dict[str, Any]:
+    for candidate in INSTALL_VERSION_FILES:
+        try:
+            if not candidate.exists():
+                continue
+            raw = json.loads(candidate.read_text(encoding="utf-8"))
+            if isinstance(raw, dict):
+                return raw
+        except Exception:
+            continue
+    return {}
+
+
+def _resolve_current_version(
+    *,
+    current_tag: str,
+    current_branch: str,
+    current_commit: str,
+    current_commit_full: str,
+) -> tuple[str, str]:
+    """
+    Resolve a human-readable current version with stable fallbacks:
+      1) exact git tag
+      2) git describe (--tags --always --dirty)
+      3) install metadata (if commit matches current HEAD)
+      4) branch@short-commit
+      5) dev
+    Returns (version, source).
+    """
+    if current_tag:
+        return current_tag, "git_tag_exact"
+
+    described = _git_value("describe", "--tags", "--always", "--dirty", "--abbrev=7", default="")
+    if described:
+        # If describe falls back to a plain hash, include branch for readability.
+        if described == current_commit and current_branch and current_branch != "HEAD":
+            return f"{current_branch}@{current_commit}", "git_branch_commit"
+        return described, "git_describe"
+
+    install_meta = _load_install_version()
+    meta_commit = str(install_meta.get("commit") or "").strip()
+    meta_version = str(install_meta.get("version") or "").strip()
+    if meta_version and (not meta_commit or not current_commit_full or meta_commit == current_commit_full):
+        return meta_version, "install_metadata"
+
+    if current_branch and current_branch != "HEAD" and current_commit and current_commit != "-":
+        return f"{current_branch}@{current_commit}", "git_branch_commit"
+
+    if current_commit and current_commit != "-":
+        return current_commit, "git_commit"
+
+    return "dev", "fallback_dev"
+
+
 def _git_tag_notes(tag: str) -> str:
     """
     Read release notes for an annotated tag.
@@ -234,7 +293,41 @@ def _list_remote_branches(limit: int = 30) -> list[str]:
 
 def get_update_info(refresh_remote: bool = True) -> dict[str, Any]:
     if not (PROJECT_DIR / ".git").exists():
-        raise RuntimeError(f"Git repository not found in {PROJECT_DIR}")
+        install_meta = _load_install_version()
+        meta_version = str(install_meta.get("version") or "").strip()
+        meta_ref = str(install_meta.get("ref") or "").strip()
+        meta_commit_full = str(install_meta.get("commit") or "").strip()
+        meta_commit = meta_commit_full[:7] if meta_commit_full else "-"
+
+        if meta_version:
+            current_version = meta_version
+            current_version_source = "install_metadata"
+        elif meta_ref and meta_commit != "-":
+            current_version = f"{meta_ref}@{meta_commit}"
+            current_version_source = "install_metadata_ref"
+        elif meta_commit != "-":
+            current_version = meta_commit
+            current_version_source = "install_metadata_commit"
+        else:
+            current_version = "dev"
+            current_version_source = "fallback_dev"
+
+        return {
+            "project_dir": str(PROJECT_DIR),
+            "current_branch": meta_ref or "-",
+            "current_commit": meta_commit,
+            "current_tag": "",
+            "current_version": current_version,
+            "current_version_source": current_version_source,
+            "latest_tag": "",
+            "latest_tag_notes": "",
+            "latest_tag_notes_i18n": {},
+            "remote_branch_commit": "",
+            "update_available_branch": False,
+            "update_available_tag": False,
+            "remote_branches": [],
+            "git_error": f"Git repository not found in {PROJECT_DIR}",
+        }
 
     git_error = ""
     if refresh_remote:
@@ -246,7 +339,12 @@ def get_update_info(refresh_remote: bool = True) -> dict[str, Any]:
     current_commit = _git_value("rev-parse", "--short", "HEAD", default="-")
     current_commit_full = _git_value("rev-parse", "HEAD", default="")
     current_tag = _git_value("describe", "--tags", "--exact-match", default="")
-    current_version = current_tag or "dev"
+    current_version, current_version_source = _resolve_current_version(
+        current_tag=current_tag,
+        current_branch=current_branch,
+        current_commit=current_commit,
+        current_commit_full=current_commit_full,
+    )
 
     tags_raw = _git_value("tag", "--sort=-v:refname", default="")
     latest_tag = tags_raw.splitlines()[0].strip() if tags_raw.strip() else ""
@@ -266,6 +364,7 @@ def get_update_info(refresh_remote: bool = True) -> dict[str, Any]:
         "current_commit": current_commit,
         "current_tag": current_tag,
         "current_version": current_version,
+        "current_version_source": current_version_source,
         "latest_tag": latest_tag,
         "latest_tag_notes": latest_tag_notes,
         "latest_tag_notes_i18n": latest_tag_notes_i18n,

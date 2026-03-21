@@ -42,7 +42,7 @@ async def cb_clients_menu(cq: CallbackQuery):
         mk = kb_clients_list(clients, page=0, page_size=PAGE_SIZE)
     except APIError as e:
         text = f"❌ {e.detail}"
-        mk = kb_back("main_menu")
+        mk = kb_back("menu_server")
     await cq.message.edit_text(text, reply_markup=mk, parse_mode="HTML")
 
 

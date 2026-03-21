@@ -23,6 +23,7 @@ COPY api/     ./api/
 COPY bot/     ./bot/
 COPY web/     ./web/
 COPY nginx/   ./nginx/
+COPY docs/    ./docs/
 
 # Create required directories
 RUN mkdir -p /app/data /app/subs /app/nginx/conf.d /app/nginx/override /app/nginx/htpasswd

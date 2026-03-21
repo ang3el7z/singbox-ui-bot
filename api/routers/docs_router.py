@@ -29,8 +29,22 @@ _DOCS_INDEX: Final[list[DocMeta]] = [
 ]
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
-_DOCS_ROOT = _REPO_ROOT / "docs" / "content"
-_WEB_DOCS_ROOT = _REPO_ROOT / "web" / "docs"
+_DOCS_ROOTS: Final[list[Path]] = [
+    _REPO_ROOT / "docs" / "content",
+    Path("/opt/singbox-ui-bot/docs/content"),
+]
+_WEB_DOCS_ROOTS: Final[list[Path]] = [
+    _REPO_ROOT / "web" / "docs",
+    Path("/opt/singbox-ui-bot/web/docs"),
+]
+
+
+def _first_existing(paths: list[Path]) -> Path:
+    for candidate in paths:
+        if candidate.exists():
+            return candidate
+    # Keep previous behavior when nothing exists: use primary path for clear errors.
+    return paths[0]
 
 
 def _lang(lang: str) -> str:
@@ -48,11 +62,13 @@ def _read_doc(doc_id: str, lang: str) -> str:
     _find_doc(doc_id)
     picked = _lang(lang)
     fallback_order = [picked, "ru", "en"]
+    roots = _DOCS_ROOTS
 
-    for code in fallback_order:
-        path = _DOCS_ROOT / code / f"{doc_id}.md"
-        if path.exists():
-            return path.read_text(encoding="utf-8").strip()
+    for root in roots:
+        for code in fallback_order:
+            path = root / code / f"{doc_id}.md"
+            if path.exists():
+                return path.read_text(encoding="utf-8").strip()
 
     raise HTTPException(
         status_code=404,
@@ -80,7 +96,7 @@ async def get_doc_public(doc_id: str, lang: str = Query("ru", pattern="^(ru|en)$
 
 @router.get("/site", response_class=HTMLResponse, summary="Standalone documentation page")
 async def docs_site():
-    page = _WEB_DOCS_ROOT / "index.html"
+    page = _first_existing(_WEB_DOCS_ROOTS) / "index.html"
     if not page.exists():
         raise HTTPException(status_code=404, detail="Docs page not found")
     html = page.read_text(encoding="utf-8")
@@ -98,7 +114,7 @@ async def docs_site_asset(asset_name: str):
     if asset_name not in allowed:
         raise HTTPException(status_code=404, detail="Asset not found")
 
-    path = _WEB_DOCS_ROOT / asset_name
+    path = _first_existing(_WEB_DOCS_ROOTS) / asset_name
     if not path.exists():
         raise HTTPException(status_code=404, detail="Asset not found")
     return FileResponse(path, media_type=allowed[asset_name])
