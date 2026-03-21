@@ -56,21 +56,20 @@ def _format_cert_line(cert: dict) -> str:
 
     expires = cert.get("expires_at")
     days_left = cert.get("days_left")
-    source = cert.get("source", "unknown")
     if isinstance(expires, str):
         try:
             dt = datetime.fromisoformat(expires.replace("Z", "+00:00"))
             if _is_ru():
                 exp_human = dt.strftime("%d.%m.%Y %H:%M UTC")
-                return f"🔐 SSL: ✅ до {exp_human} ({days_left} дн.), источник: {source}"
+                return f"🔐 SSL: ✅ до {exp_human} ({days_left} дн.)"
             exp_human = dt.strftime("%Y-%m-%d %H:%M UTC")
-            return f"🔐 SSL: ✅ until {exp_human} ({days_left} days), source: {source}"
+            return f"🔐 SSL: ✅ until {exp_human} ({days_left} days)"
         except ValueError:
             pass
 
     return _txt(
-        f"🔐 SSL: ✅ выпущен, источник: {source}",
-        f"🔐 SSL: ✅ issued, source: {source}",
+        "🔐 SSL: ✅ выпущен",
+        "🔐 SSL: ✅ issued",
     )
 
 
