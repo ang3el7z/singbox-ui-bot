@@ -41,6 +41,7 @@ def kb_main_menu() -> InlineKeyboardMarkup:
          InlineKeyboardButton(text=_txt("👑 Админы", "👑 Admin"),          callback_data="menu_admin")],
         [InlineKeyboardButton(text=_txt("📋 Шаблоны", "📋 Templates"),     callback_data="menu_templates"),
          InlineKeyboardButton(text=_txt("⚙️ Настройки", "⚙️ Settings"),   callback_data="menu_settings")],
+        [InlineKeyboardButton(text="WARP",         callback_data="menu_warp")],
         [InlineKeyboardButton(text="📚 Docs",         callback_data="menu_docs"),
          InlineKeyboardButton(text=_txt("🔧 Обслуживание", "🔧 Maintenance"), callback_data="menu_maintenance")],
     )
@@ -242,7 +243,7 @@ _OUTBOUND_ICONS = {
 def kb_outbound_select(outbounds: list[str] | None = None) -> InlineKeyboardMarkup:
     """Build outbound selector. Includes built-ins + any federation/custom node outbounds."""
     if not outbounds:
-        outbounds = ["proxy", "direct", "block", "dns"]
+        outbounds = ["proxy", "direct", "block", "warp", "dns"]
     builder = InlineKeyboardBuilder()
     for ob in outbounds:
         icon = _OUTBOUND_ICONS.get(ob, "📡")

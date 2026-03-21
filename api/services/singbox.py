@@ -21,6 +21,17 @@ class SingBoxError(Exception):
 
 
 class SingBoxService:
+    _BUILTIN_OUTBOUND_PRESETS: dict[str, dict[str, Any]] = {
+        "direct": {"type": "direct", "tag": "direct"},
+        "block": {"type": "block", "tag": "block"},
+        # Secret-Box style WARP detour: local Cloudflare WARP SOCKS proxy.
+        "warp": {
+            "type": "socks",
+            "tag": "warp",
+            "server": "127.0.0.1",
+            "server_port": 40000,
+        },
+    }
     _CONTAINER_ALIASES = ("singbox_core", "singbox_sui")
     _SERVICE_HINTS = {"singbox", "sui"}
     _EXCLUDED_NAME_HINTS = ("app", "nginx", "adguard")
@@ -610,6 +621,24 @@ class SingBoxService:
         if len(new) == len(outbounds):
             return False
         cfg["outbounds"] = new
+        self.write_config(cfg)
+        return True
+
+    def ensure_builtin_outbound(self, tag: str) -> bool:
+        """
+        Ensure a known built-in outbound exists in config.
+        Returns True if config was changed.
+        """
+        preset = self._BUILTIN_OUTBOUND_PRESETS.get(tag)
+        if not preset:
+            return False
+
+        cfg = self.read_config()
+        outbounds = cfg.setdefault("outbounds", [])
+        if any(ob.get("tag") == tag for ob in outbounds):
+            return False
+
+        outbounds.append(dict(preset))
         self.write_config(cfg)
         return True
 

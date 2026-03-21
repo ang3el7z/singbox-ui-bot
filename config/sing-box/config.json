@@ -1,42 +1,34 @@
 {
   "log": {
     "level": "info",
-    "timestamp": true,
-    "output": "/var/log/sing-box/sing-box.log"
+    "output": "/var/log/sing-box/sing-box.log",
+    "timestamp": true
   },
   "dns": {
     "servers": [
       {
-        "tag": "dns_adguard",
-        "address": "udp://127.0.0.1:53",
-        "strategy": "prefer_ipv4",
-        "detour": "direct"
-      },
-      {
-        "tag": "dns_fallback",
-        "address": "udp://8.8.8.8",
-        "detour": "direct"
+        "type": "local",
+        "tag": "dns-main"
       }
     ],
-    "rules": [
-      {
-        "outbound": "any",
-        "server": "dns_adguard",
-        "disable_cache": false
-      }
-    ],
-    "final": "dns_adguard",
-    "independent_cache": true
+    "rules": [],
+    "final": "dns-main"
   },
   "inbounds": [],
   "outbounds": [
     {
-      "tag": "direct",
-      "type": "direct"
+      "type": "direct",
+      "tag": "direct"
     },
     {
-      "tag": "block",
-      "type": "block"
+      "type": "socks",
+      "tag": "warp",
+      "server": "127.0.0.1",
+      "server_port": 40000
+    },
+    {
+      "type": "block",
+      "tag": "block"
     }
   ],
   "route": {
@@ -47,10 +39,6 @@
       {
         "protocol": "dns",
         "action": "hijack-dns"
-      },
-      {
-        "ip_is_private": true,
-        "outbound": "direct"
       }
     ],
     "rule_set": [],

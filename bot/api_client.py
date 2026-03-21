@@ -285,6 +285,18 @@ class MaintenanceAPI:
     async def prefetch_windows_binaries(self):
         return await post("/api/maintenance/windows/prefetch-binaries")
 
+    # WARP
+    async def warp_status(self):
+        return await get("/api/maintenance/warp/status")
+    async def warp_on(self):
+        return await post("/api/maintenance/warp/on")
+    async def warp_off(self):
+        return await post("/api/maintenance/warp/off")
+    async def warp_set_key(self, license_key: str):
+        return await post("/api/maintenance/warp/key", json={"license_key": license_key})
+    async def warp_clear_key(self):
+        return await delete("/api/maintenance/warp/key")
+
     # Updates
     async def update_info(self, refresh_remote: bool = True):
         return await get("/api/maintenance/update/info", refresh=str(refresh_remote).lower())

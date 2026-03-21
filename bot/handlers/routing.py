@@ -123,10 +123,10 @@ async def fsm_rule_value(msg: Message, state: FSMContext):
         data = await routing_api.get_outbounds()
         outbounds = data.get("outbounds", ["direct", "block"])
     except APIError:
-        outbounds = ["proxy", "direct", "block", "dns"]
+        outbounds = ["proxy", "direct", "block", "warp", "dns"]
     from bot.keyboards.main import kb_outbound_select
     # Build hint about federation nodes
-    node_tags = [o for o in outbounds if o not in ("proxy", "direct", "block", "dns")]
+    node_tags = [o for o in outbounds if o not in ("proxy", "direct", "block", "warp", "dns")]
     hint = ""
     if node_tags:
         hint = _txt(

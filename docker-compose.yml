@@ -7,6 +7,7 @@ volumes:
   adguard_data:
   nginx_certs:
   app_data:
+  warp_data:
 
 services:
 
@@ -35,11 +36,13 @@ services:
     environment:
       - SINGBOX_CONFIG_PATH=/etc/sing-box/config.json
       - SINGBOX_CONTAINER=singbox_core
+      - WARP_CONTAINER=singbox_warp
     networks:
       - singbox_net
     depends_on:
       - singbox
       - adguard
+      - warp
 
   # ── Sing-Box ─────────────────────────────────────────────────────────────────
   # Built from Dockerfile.singbox — pinned version, no ghcr.io dependency.
@@ -62,6 +65,21 @@ services:
     # IMPORTANT: After changing config, app sends SIGHUP or restarts this container.
 
   # ── AdGuard Home ─────────────────────────────────────────────────────────────
+  warp:
+    build:
+      context: .
+      dockerfile: Dockerfile.warp
+    container_name: singbox_warp
+    restart: unless-stopped
+    network_mode: host
+    cap_add:
+      - NET_ADMIN
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    volumes:
+      - warp_data:/var/lib/cloudflare-warp
+    command: ["sleep", "infinity"]
+
   adguard:
     image: adguard/adguardhome:v0.107.52
     container_name: singbox_adguard

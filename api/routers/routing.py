@@ -13,7 +13,7 @@ router = APIRouter()
 # For geo-based filtering use rule_set pointing to an .srs file.
 RuleKey = Literal["domain", "domain_suffix", "domain_keyword", "ip_cidr", "rule_set"]
 
-_BUILTIN_OUTBOUNDS = ["direct", "block"]
+_BUILTIN_OUTBOUNDS = ["direct", "block", "warp"]
 
 
 class RuleCreate(BaseModel):
@@ -61,6 +61,7 @@ async def list_rules(rule_key: str, auth: dict = Depends(require_any_auth)):
 @router.post("/rules")
 async def add_rule(body: RuleCreate, auth: dict = Depends(require_any_auth)):
     try:
+        singbox.ensure_builtin_outbound(body.outbound)
         singbox.add_route_rule(
             body.rule_key, body.value, body.outbound,
             download_detour=body.download_detour,

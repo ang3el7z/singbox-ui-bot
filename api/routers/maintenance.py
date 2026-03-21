@@ -17,6 +17,8 @@ from api.deps import require_any_auth, audit
 from api.services import ip_ban as ip_ban_svc
 from api.services import nginx_service
 from api.services import update_service
+from api.services.singbox import singbox
+from api.services.warp_service import warp_service, WarpServiceError
 from api.services.backup_service import (
     RestoreError,
     create_backup_file,
@@ -58,6 +60,10 @@ class ReinstallRunBody(BaseModel):
     backup_path: Optional[str] = None
 
 
+class WarpKeyBody(BaseModel):
+    license_key: str
+
+
 # ─── Status / settings ────────────────────────────────────────────────────────
 
 @router.get("/status")
@@ -66,6 +72,9 @@ async def maintenance_status(auth=Depends(require_any_auth)):
     clean_hours     = int(await get_setting("logs_clean_hours",    "0") or "0")
     backup_last     = int(await get_setting("backup_last_at",      "0") or "0")
     clean_last      = int(await get_setting("logs_clean_last_at",  "0") or "0")
+    warp_enabled    = (await get_setting("warp_enabled", "0") or "0") == "1"
+    warp_key        = (await get_setting("warp_license_key", "") or "").strip()
+    warp_runtime    = await asyncio.to_thread(warp_service.get_status)
 
     def _next(last: int, hours: int) -> Optional[str]:
         if not hours:
@@ -88,10 +97,125 @@ async def maintenance_status(auth=Depends(require_any_auth)):
         "ip_ban": {
             "count": len(ip_ban_svc.get_banned_list()),
         },
+        "warp": {
+            "enabled": warp_enabled,
+            "key_set": bool(warp_key),
+            "status": warp_runtime.get("warp", "off"),
+            "service_running": bool(warp_runtime.get("service_running")),
+            "container_running": bool(warp_runtime.get("running")),
+        },
     }
 
 
 # ─── Backup ───────────────────────────────────────────────────────────────────
+
+# ─── WARP ────────────────────────────────────────────────────────────────────
+
+def _mask_key(value: str) -> str:
+    key = (value or "").strip()
+    if not key:
+        return ""
+    if len(key) <= 8:
+        return "*" * len(key)
+    return f"{key[:4]}...{key[-4:]}"
+
+
+async def _warp_payload() -> dict:
+    enabled = (await get_setting("warp_enabled", "0") or "0") == "1"
+    key = (await get_setting("warp_license_key", "") or "").strip()
+    runtime = await asyncio.to_thread(warp_service.get_status)
+    return {
+        "enabled": enabled,
+        "license_key_set": bool(key),
+        "license_key_masked": _mask_key(key),
+        "runtime": runtime,
+    }
+
+
+@router.get("/warp/status")
+async def warp_status(auth=Depends(require_any_auth)):
+    return await _warp_payload()
+
+
+@router.post("/warp/on")
+async def warp_on(auth=Depends(require_any_auth)):
+    key = (await get_setting("warp_license_key", "") or "").strip() or None
+    try:
+        runtime = await asyncio.to_thread(warp_service.turn_on, key)
+    except WarpServiceError as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+    await set_setting("warp_enabled", "1")
+    changed = singbox.ensure_builtin_outbound("warp")
+    if changed:
+        try:
+            await singbox.reload()
+        except Exception:
+            pass
+    await audit(auth["actor"], "warp_on")
+    payload = await _warp_payload()
+    payload["runtime"] = runtime
+    return payload
+
+
+@router.post("/warp/off")
+async def warp_off(auth=Depends(require_any_auth)):
+    try:
+        runtime = await asyncio.to_thread(warp_service.turn_off, True)
+    except WarpServiceError as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+    await set_setting("warp_enabled", "0")
+    await audit(auth["actor"], "warp_off")
+    payload = await _warp_payload()
+    payload["runtime"] = runtime
+    return payload
+
+
+@router.post("/warp/key")
+async def warp_set_key(body: WarpKeyBody, auth=Depends(require_any_auth)):
+    key = (body.license_key or "").strip()
+    if not key:
+        raise HTTPException(status_code=400, detail="license_key cannot be empty")
+    if len(key) < 8:
+        raise HTTPException(status_code=400, detail="license_key looks too short")
+
+    await set_setting("warp_license_key", key)
+    enabled = (await get_setting("warp_enabled", "0") or "0") == "1"
+    applied = False
+
+    if enabled:
+        try:
+            await asyncio.to_thread(warp_service.turn_on, key)
+            applied = True
+        except WarpServiceError as exc:
+            raise HTTPException(status_code=500, detail=f"Key saved, but apply failed: {exc}")
+
+    await audit(auth["actor"], "warp_set_key", "updated")
+    payload = await _warp_payload()
+    payload["applied_now"] = applied
+    return payload
+
+
+@router.delete("/warp/key")
+async def warp_clear_key(auth=Depends(require_any_auth)):
+    await set_setting("warp_license_key", "")
+    enabled = (await get_setting("warp_enabled", "0") or "0") == "1"
+
+    # Recreate registration without license if WARP is enabled,
+    # otherwise just remove the current registration.
+    try:
+        await asyncio.to_thread(warp_service.turn_off, True)
+        if enabled:
+            await asyncio.to_thread(warp_service.turn_on, None)
+    except WarpServiceError as exc:
+        raise HTTPException(status_code=500, detail=f"Key cleared, but refresh failed: {exc}")
+
+    await audit(auth["actor"], "warp_clear_key")
+    payload = await _warp_payload()
+    payload["applied_now"] = enabled
+    return payload
+
 
 @router.get("/backup/download")
 async def backup_download(auth=Depends(require_any_auth)):

@@ -148,6 +148,7 @@ WEB_ADMIN_PASSWORD=$WEB_PASS
 # ── Sing-Box ──────────────────────────────────────────────────────────────────
 SINGBOX_CONFIG_PATH=/etc/sing-box/config.json
 SINGBOX_CONTAINER=singbox_core
+WARP_CONTAINER=singbox_warp
 
 # ── AdGuard Home ──────────────────────────────────────────────────────────────
 ADGUARD_URL=http://adguard:3000

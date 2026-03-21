@@ -330,7 +330,7 @@ cmd_restore() {
     fi
 
     info "Recreating containers to apply restored environment..."
-    DC up -d --force-recreate app singbox nginx adguard
+    DC up -d --force-recreate app singbox nginx adguard warp
 
     APP_CID=$(app_container_id)
     if [[ -z "${APP_CID:-}" ]]; then
@@ -342,7 +342,7 @@ cmd_restore() {
     docker cp "$TMP_DIR/data/app.db" "${APP_CID}:/app/data/app.db"
 
     info "Restarting the stack..."
-    DC restart app singbox nginx adguard
+    DC restart app singbox nginx adguard warp
 
     success "Restore complete."
     echo
@@ -497,7 +497,7 @@ clean_repo_keep_runtime() {
 
 compose_up_recreate() {
     info "Recreating stack from current files..."
-    DC up -d --build --force-recreate app singbox nginx adguard || {
+    DC up -d --build --force-recreate app singbox nginx adguard warp || {
         error "Failed to recreate containers."
         return 1
     }

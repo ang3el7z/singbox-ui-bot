@@ -36,6 +36,10 @@ async def lifespan(app: FastAPI):
         await adguard.bootstrap_admin_password()
     except Exception as e:
         logger.warning("AdGuard bootstrap skipped: %s", e)
+    try:
+        await _apply_warp_state_on_startup()
+    except Exception as e:
+        logger.warning("WARP startup apply skipped: %s", e)
     # Start background scheduler
     from api.services.scheduler import scheduler_loop
     _sched_task = asyncio.create_task(scheduler_loop())
@@ -93,6 +97,22 @@ async def _seed_default_templates() -> None:
                 config_json=json.dumps(t["config"], ensure_ascii=False),
             ))
         await session.commit()
+
+
+async def _apply_warp_state_on_startup() -> None:
+    """
+    If WARP was enabled by user before restart, re-apply it automatically.
+    """
+    from api.routers.settings_router import get_setting
+    from api.services.warp_service import warp_service
+
+    enabled = (await get_setting("warp_enabled", "0") or "0") == "1"
+    if not enabled:
+        return
+
+    license_key = (await get_setting("warp_license_key", "") or "").strip() or None
+    import asyncio
+    await asyncio.to_thread(warp_service.turn_on, license_key)
 
 
 def create_app() -> FastAPI:

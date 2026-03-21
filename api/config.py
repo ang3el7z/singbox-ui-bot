@@ -29,6 +29,7 @@ class Settings(BaseSettings):
     # ── Sing-Box ───────────────────────────────────────────────────────────────
     singbox_config_path: str = "/etc/sing-box/config.json"
     singbox_container: str = "singbox_core"
+    warp_container: str = "singbox_warp"
 
     # ── AdGuard ────────────────────────────────────────────────────────────────
     adguard_url: str = "http://adguard:3000"
