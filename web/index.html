@@ -1403,20 +1403,20 @@ tailwind.config = {
               <h3 class="font-semibold text-white">⬆️ Project updates</h3>
               <button class="btn btn-primary text-sm"
                       x-show="updateHasUpdates && !updateRunning"
-                      @click="runUpdate()"
+                      @click="runUpdate(true)"
                       :disabled="updateLoading || updateRunning">
-                ⬆️ Update
+                ⬆️ Update + backup
               </button>
             </div>
             <div x-show="!updateInfo" class="text-slate-400 text-sm">Open this tab again to refresh git status.</div>
             <div x-show="updateInfo" class="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
               <div class="bg-slate-800 rounded p-3">
-                <div class="text-slate-400">Branch</div>
-                <div class="text-white font-mono" x-text="updateInfo?.current_branch || '-' "></div>
+                <div class="text-slate-400">Version</div>
+                <div class="text-white font-mono" x-text="currentVersionLabel"></div>
               </div>
               <div class="bg-slate-800 rounded p-3">
-                <div class="text-slate-400">Commit</div>
-                <div class="text-white font-mono" x-text="updateInfo?.current_commit || '-' "></div>
+                <div class="text-slate-400">Branch</div>
+                <div class="text-white font-mono" x-text="updateInfo?.current_branch || '-' "></div>
               </div>
               <div class="bg-slate-800 rounded p-3">
                 <div class="text-slate-400">Current tag</div>
@@ -1435,23 +1435,14 @@ tailwind.config = {
           <div class="card mb-4">
             <h3 class="font-semibold text-white mb-3">Actions</h3>
             <p class="text-slate-400 text-sm mb-3">
-              Update pulls latest code for selected branch. Reinstall recreates containers from current files.
-              Clean reinstall resets runtime data and settings.
+              Update installs latest tag (only when new tag is available). Reinstall always reinstalls current version.
             </p>
             <div class="flex flex-col gap-3">
-              <div class="flex gap-2 flex-wrap items-center" x-show="updateHasUpdates">
-                <label class="text-slate-400 text-sm">Branch:</label>
-                <input class="form-input w-72" x-model="updateBranch" :placeholder="suggestedBranch" list="update-branches-list"/>
-                <datalist id="update-branches-list">
-                  <template x-for="b in (updateInfo?.remote_branches || [])" :key="b">
-                    <option :value="b"></option>
-                  </template>
-                </datalist>
-              </div>
               <div class="flex gap-2 flex-wrap">
-                <button class="btn btn-primary" x-show="updateHasUpdates" @click="runUpdate()" :disabled="updateLoading || updateRunning">⬆️ Update</button>
-                <button class="btn btn-danger" @click="runReinstall('preserve')" :disabled="updateLoading || updateRunning">♻️ Reinstall (keep data)</button>
-                <button class="btn btn-danger" @click="runReinstall('clean')" :disabled="updateLoading || updateRunning">🧹 Clean reinstall</button>
+                <button class="btn btn-primary" x-show="updateHasUpdates" @click="runUpdate(true)" :disabled="updateLoading || updateRunning">⬆️ Update (with backup)</button>
+                <button class="btn btn-danger" x-show="updateHasUpdates" @click="runUpdate(false)" :disabled="updateLoading || updateRunning">⚠️ Update (without backup)</button>
+                <button class="btn btn-danger" @click="runReinstall(true)" :disabled="updateLoading || updateRunning">♻️ Reinstall (with backup)</button>
+                <button class="btn btn-danger" @click="runReinstall(false)" :disabled="updateLoading || updateRunning">🧹 Reinstall (without backup)</button>
                 <button class="btn" x-show="updateRunning || updateJob?.container_name" @click="loadUpdateLogs()" :disabled="updateLoading">📜 Logs</button>
                 <button class="btn btn-ghost" x-show="updateJob?.container_name" @click="cleanupUpdateJob()" :disabled="updateLoading || updateRunning || !updateJob?.container_name">🧹 Cleanup</button>
               </div>

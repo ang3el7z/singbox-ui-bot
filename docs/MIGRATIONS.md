@@ -3,54 +3,32 @@
 ## 1) Base mechanism: `schema_version + migrations`
 
 - Source of truth: `app_settings.schema_version` (key in `AppSetting` table).
-- Code location: `api/services/migrations.py`.
+- Code location:
+  - Core: `api/services/schema_migrations/core.py`
+  - Versions: `api/services/schema_migrations/versions/`
+  - Discovery: automatic by filename pattern `vNNN_*.py` (no manual registry).
 - Startup flow:
   1. `init_db()` creates tables if needed.
   2. `run_migrations()` reads current `schema_version`.
   3. Pending migrations are applied in ascending order.
   4. After each successful migration, `schema_version` is updated.
-- Runtime code must stay single-path. Permanent dual logic is not allowed.
 
-## 2) One-time migrator pattern
+Runtime code must stay single-path. Permanent dual logic is not allowed.
 
-Use one-time migrators to convert old state to new state and then remove compatibility code.
+## 2) What we migrate
 
-Example pattern:
+- Keep migrations for data/schema changes that affect persisted state.
+- Keep backup/restore format stable and versioned.
+- Do not add permanent compatibility branches in runtime code.
 
-1. Add `Migration(version=N, name=..., fn=...)` to `MIGRATIONS`.
-2. In `fn`, detect old format/state.
-3. Convert old state to new state.
-4. If old state is absent, do nothing (idempotent behavior).
-5. Do not keep fallback reads in runtime logic.
+## 3) Developer checklist
 
-Current example:
-
-- Migration `1`: rename nginx marker
-  - from `nginx/.site_enabled`
-  - to `nginx/.web_ui_enabled`
-
-## 3) Compatibility rules (short)
-
-Keep compatibility only when at least one condition is true:
-
-- We cannot safely auto-migrate in one step.
-- External integrations depend on old format and cannot be switched immediately.
-- Rollout requires phased migration between versions.
-
-Remove compatibility when:
-
-- One-time migrator exists and was shipped.
-- Runtime can work with a single canonical format.
-- At least one stable release has passed after migration (or project policy window is closed).
-
-Hard rule:
-
-- No hidden forever-compatibility. Every temporary compatibility path must have a removal issue/task and target release.
-
-## 4) Developer checklist for new changes
-
-1. Define new canonical format/state.
-2. Implement one-time migration for existing installs.
-3. Bump `CURRENT_SCHEMA_VERSION`.
-4. Keep runtime logic only for canonical format.
-5. Document migration intent in PR/commit message.
+1. Define the canonical target state.
+2. Add a new file `api/services/schema_migrations/versions/vNNN_<name>.py`.
+3. Export:
+   - `MIGRATION_VERSION = NNN`
+   - `MIGRATION_NAME = "Human-readable name"`
+   - `async def run_migration() -> None`
+4. Make migration idempotent (safe to re-run).
+5. Keep runtime code working only with canonical state.
+6. Document migration intent in PR/commit message.

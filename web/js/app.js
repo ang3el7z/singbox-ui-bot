@@ -1054,7 +1054,6 @@ function maintenanceComponent() {
         updateInfo: null,
         updateJob: null,
         updateLogs: "",
-        updateBranch: "",
         updateLoading: false,
 
         get winReady() { return this.winStatus?.ready === true; },
@@ -1073,13 +1072,13 @@ function maintenanceComponent() {
             return `${status} (exit: ${exit})`;
         },
         get updateHasUpdates() {
-            return Boolean(this.updateInfo?.update_available_branch) || Boolean(this.updateInfo?.update_available_tag);
+            return Boolean(this.updateInfo?.update_available_tag);
         },
         get updateTargetVersion() {
-            return this.updateInfo?.latest_tag || this.updateInfo?.remote_branch_commit || "latest";
+            return this.updateInfo?.latest_tag || "latest";
         },
-        get suggestedBranch() {
-            return this.updateInfo?.current_branch || "main";
+        get currentVersionLabel() {
+            return this.updateInfo?.current_version || this.updateInfo?.current_tag || "-";
         },
 
         async init() {
@@ -1116,9 +1115,6 @@ function maintenanceComponent() {
                 const data = await api.maintUpdateInfo();
                 this.updateInfo = data?.git || null;
                 this.updateJob = data?.job || null;
-                if (!this.updateBranch) {
-                    this.updateBranch = this.updateInfo?.current_branch || "";
-                }
                 if (loadLogs) {
                     await this.loadUpdateLogs(false);
                 }
@@ -1143,7 +1139,7 @@ function maintenanceComponent() {
             }
         },
 
-        async runUpdate(branchOverride = null) {
+        async runUpdate(withBackup = true) {
             if (this.updateRunning) {
                 this.$dispatch("toast", { msg: "Another maintenance job is already running", type: "error" });
                 return;
@@ -1153,14 +1149,29 @@ function maintenanceComponent() {
                 return;
             }
 
-            const branch = (branchOverride ?? this.updateBranch ?? this.suggestedBranch ?? "").trim();
-            const targetBranch = branch || this.suggestedBranch;
-            if (!confirm(`Run update for branch '${targetBranch}'?`)) return;
+            const question = withBackup
+                ? "Run update to latest tag? A backup ZIP will be downloaded first."
+                : "Run update to latest tag WITHOUT backup/restore?";
+            if (!confirm(question)) return;
+            if (!withBackup) {
+                const finalQuestion = "Confirm update WITHOUT backup one more time.";
+                if (!confirm(finalQuestion)) return;
+            }
 
             this.updateLoading = true;
             try {
-                const result = await api.maintUpdateRun(targetBranch || null);
-                this.msg = `✅ Update started for branch: ${result.branch || targetBranch}`;
+                let backupPath = null;
+                if (withBackup) {
+                    const backup = await api.maintBackupDownload();
+                    backupPath = (backup?.backupPath || "").trim();
+                    if (!backupPath) throw new Error("Cannot detect backup path on server.");
+                }
+
+                const result = await api.maintUpdateRun("latest_tag", null, withBackup, backupPath || null);
+                const tag = result?.target_ref || this.updateInfo?.latest_tag || "latest";
+                this.msg = withBackup
+                    ? `✅ Update started for tag: ${tag} (with backup/restore).`
+                    : `✅ Update started for tag: ${tag} (without backup/restore).`;
                 this.$dispatch("toast", { msg: "Update started", type: "success" });
                 await this.loadUpdateInfo(true);
             } catch (e) {
@@ -1171,30 +1182,35 @@ function maintenanceComponent() {
             }
         },
 
-        async runReinstall(mode = "preserve") {
+        async runReinstall(withBackup = true) {
             if (this.updateRunning) {
                 this.$dispatch("toast", { msg: "Another maintenance job is already running", type: "error" });
                 return;
             }
 
-            const clean = mode === "clean";
-            const question = clean
-                ? "Run clean reinstall now? This will reset settings and data."
-                : "Reinstall containers now? Settings and data will be preserved.";
+            const question = withBackup
+                ? "Run reinstall for current version? A backup ZIP will be downloaded first."
+                : "Run reinstall for current version without backup/restore?";
             if (!confirm(question)) return;
+            if (!withBackup) {
+                const finalQuestion = "Confirm reinstall WITHOUT backup one more time.";
+                if (!confirm(finalQuestion)) return;
+            }
 
             this.updateLoading = true;
             try {
-                await api.maintReinstallRun(clean);
-                this.msg = clean
-                    ? "✅ Clean reinstall started. Settings and data will be reset."
-                    : "✅ Reinstall started. Settings and data are preserved.";
-                this.$dispatch("toast", {
-                    msg: clean
-                        ? "Clean reinstall started. Bot/Web can be unavailable for up to a minute."
-                        : "Reinstall started. Bot/Web can be unavailable for up to a minute.",
-                    type: "success",
-                });
+                let backupPath = null;
+                if (withBackup) {
+                    const backup = await api.maintBackupDownload();
+                    backupPath = (backup?.backupPath || "").trim();
+                    if (!backupPath) throw new Error("Cannot detect backup path on server.");
+                }
+
+                await api.maintReinstallRun(true, "current", null, withBackup, backupPath || null);
+                this.msg = withBackup
+                    ? "✅ Reinstall started for current version (with backup/restore)."
+                    : "✅ Reinstall started for current version (without backup/restore).";
+                this.$dispatch("toast", { msg: "Reinstall started", type: "success" });
                 await this.loadUpdateInfo(true);
             } catch (e) {
                 this.msg = e.message;

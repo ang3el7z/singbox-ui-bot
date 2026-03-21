@@ -4,6 +4,7 @@ set -eu
 INSTALL_DIR="/opt/singbox-ui-bot"
 BACKUP_ZIP="${1:-}"
 LOG_PATH="${2:-$INSTALL_DIR/data/recovery/restore-worker.log}"
+RESTORE_BUILD="${RESTORE_BUILD:-0}"
 
 if [ -z "$BACKUP_ZIP" ] || [ ! -f "$BACKUP_ZIP" ]; then
     echo "Backup archive not found: ${BACKUP_ZIP:-<empty>}" >&2
@@ -113,7 +114,11 @@ dc() {
 }
 
 echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] Recreating containers"
-dc up -d --force-recreate app singbox nginx adguard
+if [ "$RESTORE_BUILD" = "1" ]; then
+    dc up -d --build --force-recreate app singbox nginx adguard
+else
+    dc up -d --force-recreate app singbox nginx adguard
+fi
 
 APP_CID="$(dc ps -q app 2>/dev/null | head -n 1 || true)"
 if [ -z "$APP_CID" ]; then
@@ -130,5 +135,4 @@ docker cp "$TMP_DIR/data/app.db" "$APP_CID:/app/data/app.db"
 echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] Restarting stack"
 dc restart app singbox nginx adguard
 
-rm -f "$BACKUP_ZIP"
 echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] Restore completed successfully"

@@ -56,6 +56,46 @@ def _txt(ru: str, en: str) -> str:
     return ru if _is_ru() else en
 
 
+async def _send_preflight_backup(cq: CallbackQuery, *, reason_ru: str, reason_en: str) -> str | None:
+    try:
+        pkg = await maintenance_api.backup_download_package()
+        payload = pkg.get("content") or b""
+        backup_path = (pkg.get("backup_path") or "").strip()
+        from datetime import datetime
+
+        ts = datetime.now().strftime("%Y-%m-%d_%H-%M")
+        archive = BufferedInputFile(payload, filename=f"backup_{ts}.zip")
+        caption = _txt(f"Backup before {reason_ru}", f"Backup before {reason_en}")
+        await cq.message.answer_document(archive, caption=caption, parse_mode="HTML")
+        if not backup_path:
+            await cq.message.answer(
+                _txt("Cannot detect backup path on server.", "Cannot detect backup path on server."),
+                reply_markup=kb_back("maint_update_menu"),
+            )
+            return None
+        return backup_path
+    except APIError as exc:
+        await cq.message.answer(
+            _txt(
+                f"Failed to prepare backup: <code>{escape(exc.detail)}</code>",
+                f"Failed to prepare backup: <code>{escape(exc.detail)}</code>",
+            ),
+            parse_mode="HTML",
+            reply_markup=kb_back("maint_update_menu"),
+        )
+        return None
+    except Exception as exc:
+        await cq.message.answer(
+            _txt(
+                f"Failed to prepare backup: <code>{escape(str(exc))}</code>",
+                f"Failed to prepare backup: <code>{escape(str(exc))}</code>",
+            ),
+            parse_mode="HTML",
+            reply_markup=kb_back("maint_update_menu"),
+        )
+        return None
+
+
 def _kb_main(status: dict) -> InlineKeyboardMarkup:
     b_hours = status.get("backup", {}).get("auto_hours", 0)
     c_hours = status.get("logs", {}).get("auto_clean_hours", 0)
@@ -141,7 +181,7 @@ def _kb_update_menu(info: dict) -> InlineKeyboardMarkup:
     job = info.get("job", {})
     running = bool(job.get("running"))
     action = str(job.get("action") or "update").lower()
-    updates = bool(git.get("update_available_branch")) or bool(git.get("update_available_tag"))
+    updates = bool(git.get("update_available_tag"))
 
     builder = InlineKeyboardBuilder()
     if running:
@@ -153,7 +193,7 @@ def _kb_update_menu(info: dict) -> InlineKeyboardMarkup:
         builder.row(InlineKeyboardButton(text=running_label, callback_data="maint_update_menu"))
     else:
         if updates:
-            builder.row(InlineKeyboardButton(text=_txt("⬆️ Обновить", "⬆️ Update"), callback_data="maint_update_run"))
+            builder.row(InlineKeyboardButton(text=_txt("⬆️ Обновить", "⬆️ Update"), callback_data="maint_update_run_menu"))
         builder.row(
             InlineKeyboardButton(
                 text=_txt("♻️ Переустановить", "♻️ Reinstall"),
@@ -161,12 +201,7 @@ def _kb_update_menu(info: dict) -> InlineKeyboardMarkup:
             )
         )
 
-    if updates:
-        builder.row(
-            InlineKeyboardButton(text=_txt("🌿 Сменить ветку", "🌿 Switch branch"), callback_data="maint_update_branch_menu"),
-            InlineKeyboardButton(text=_txt("📜 Логи", "📜 Logs"), callback_data="maint_update_logs"),
-        )
-    elif running or job.get("container_name"):
+    if running or job.get("container_name"):
         builder.row(InlineKeyboardButton(text=_txt("📜 Логи", "📜 Logs"), callback_data="maint_update_logs"))
     if not running and job.get("container_name"):
         builder.row(
@@ -181,47 +216,45 @@ def _kb_update_menu(info: dict) -> InlineKeyboardMarkup:
     return builder.as_markup()
 
 
-def _kb_reinstall_menu() -> InlineKeyboardMarkup:
+def _kb_update_run_menu() -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
     builder.row(
         InlineKeyboardButton(
-            text=_txt("♻️ С сохранением данных", "♻️ Keep data"),
-            callback_data="maint_reinstall_keep",
+            text=_txt("⬆️ Обновить + backup", "⬆️ Update + backup"),
+            callback_data="maint_update_latest_backup",
         )
     )
     builder.row(
         InlineKeyboardButton(
-            text=_txt("🧹 Чистая переустановка", "🧹 Clean reinstall"),
-            callback_data="maint_reinstall_clean",
+            text=_txt("⚠️ Обновить без backup", "⚠️ Update without backup"),
+            callback_data="maint_update_latest_nobackup_prompt",
         )
     )
     builder.row(InlineKeyboardButton(text="⬅️ Back", callback_data="maint_update_menu"))
     return builder.as_markup()
 
 
-def _enc_branch(branch: str) -> str:
-    return branch.replace("/", "|")
-
-
-def _dec_branch(value: str) -> str:
-    return value.replace("|", "/")
-
-
-def _kb_update_branches(branches: list[str], current: str) -> InlineKeyboardMarkup:
+def _kb_confirm_nobackup(*, confirm_cb: str, back_cb: str = "maint_update_menu") -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
-    added = 0
-    for branch in branches[:20]:
-        encoded = _enc_branch(branch)
-        callback = f"maint_upd_branch_{encoded}"
-        if len(callback) > 64:
-            continue
-        mark = "✅ " if branch == current else ""
-        builder.row(InlineKeyboardButton(text=f"{mark}{branch}", callback_data=callback))
-        added += 1
+    builder.row(InlineKeyboardButton(text=_txt("✅ Подтвердить", "✅ Confirm"), callback_data=confirm_cb))
+    builder.row(InlineKeyboardButton(text="⬅️ Back", callback_data=back_cb))
+    return builder.as_markup()
 
-    if added == 0:
-        builder.row(InlineKeyboardButton(text=_txt("Нет веток в лимите callback", "No branch fits callback limit"), callback_data="maint_update_menu"))
 
+def _kb_reinstall_menu() -> InlineKeyboardMarkup:
+    builder = InlineKeyboardBuilder()
+    builder.row(
+        InlineKeyboardButton(
+            text=_txt("♻️ Переустановить + backup", "♻️ Reinstall + backup"),
+            callback_data="maint_reinstall_cur_backup",
+        )
+    )
+    builder.row(
+        InlineKeyboardButton(
+            text=_txt("🧹 Переустановить без backup", "🧹 Reinstall without backup"),
+            callback_data="maint_reinstall_cur_nobackup_prompt",
+        )
+    )
     builder.row(InlineKeyboardButton(text="⬅️ Back", callback_data="maint_update_menu"))
     return builder.as_markup()
 
@@ -230,19 +263,18 @@ def _render_update_text(info: dict) -> str:
     git = info.get("git", {})
     job = info.get("job", {})
 
+    version = git.get("current_version") or "-"
     branch = git.get("current_branch", "-")
     commit = git.get("current_commit", "-")
     current_tag = git.get("current_tag") or "—"
     latest_tag = git.get("latest_tag") or "—"
     remote_commit = git.get("remote_branch_commit") or "—"
 
-    upd_branch = "✅ yes" if git.get("update_available_branch") else "❌ no"
     upd_tag = "✅ yes" if git.get("update_available_tag") else "❌ no"
     action = str(job.get("action") or "update").lower()
     mode = str(job.get("mode") or "preserve").lower()
     action_label = "update" if action == "update" else "reinstall"
     if _is_ru():
-        upd_branch = "✅ да" if git.get("update_available_branch") else "❌ нет"
         upd_tag = "✅ да" if git.get("update_available_tag") else "❌ нет"
         action_label = "обновление" if action == "update" else "переустановка"
     if action == "reinstall":
@@ -259,12 +291,12 @@ def _render_update_text(info: dict) -> str:
 
     text = (
         f"⬆️ <b>{_txt('Обновления', 'Updates')}</b>\n\n"
+        f"• {_txt('Версия', 'Version')}: <code>{escape(str(version))}</code>\n"
         f"• {_txt('Текущая ветка', 'Current branch')}: <code>{escape(str(branch))}</code>\n"
         f"• {_txt('Текущий коммит', 'Current commit')}: <code>{escape(str(commit))}</code>\n"
         f"• {_txt('Текущий тег', 'Current tag')}: <code>{escape(str(current_tag))}</code>\n"
         f"• {_txt('Последний тег', 'Latest tag')}: <code>{escape(str(latest_tag))}</code>\n"
         f"• {_txt('origin/ветка', 'origin/branch')}: <code>{escape(str(remote_commit))}</code>\n\n"
-        f"• {_txt('Обновление по ветке', 'Branch update available')}: <b>{upd_branch}</b>\n"
         f"• {_txt('Новый тег доступен', 'New tag available')}: <b>{upd_tag}</b>\n\n"
         f"• {_txt('Тип задачи', 'Job action')}: <code>{escape(action_label)}</code>\n"
         f"• {_txt('Статус джоба', 'Job status')}: <code>{escape(str(status))}</code>\n"
@@ -303,30 +335,22 @@ async def cb_maint_menu(cq: CallbackQuery, state: FSMContext):
 async def cb_backup_now(cq: CallbackQuery):
     await cq.answer("Creating backup…")
     try:
-        import httpx
-        from api.config import settings
+        pkg = await maintenance_api.backup_download_package()
+        payload = pkg.get("content") or b""
+        from datetime import datetime
 
-        async with httpx.AsyncClient(
-            base_url="http://localhost:8080",
-            headers={"X-Internal-Token": settings.internal_token},
-            timeout=60,
-        ) as client:
-            response = await client.get("/api/maintenance/backup/download")
-            if response.is_success:
-                from datetime import datetime
-
-                ts = datetime.now().strftime("%Y-%m-%d_%H-%M")
-                archive = BufferedInputFile(response.content, filename=f"backup_{ts}.zip")
-                await cq.message.answer_document(
-                    archive,
-                    caption="💾 <b>Backup ready</b>",
-                    parse_mode="HTML",
-                )
-                await cq.message.answer("✅ Backup sent!", reply_markup=kb_back("menu_maintenance"))
-            else:
-                await cq.message.answer("❌ Backup failed", reply_markup=kb_back("menu_maintenance"))
+        ts = datetime.now().strftime("%Y-%m-%d_%H-%M")
+        archive = BufferedInputFile(payload, filename=f"backup_{ts}.zip")
+        await cq.message.answer_document(
+            archive,
+            caption="💾 <b>Backup ready</b>",
+            parse_mode="HTML",
+        )
+        await cq.message.answer("✅ Backup sent!", reply_markup=kb_back("menu_maintenance"))
+    except APIError as exc:
+        await cq.message.answer(f"❌ {escape(exc.detail)}", reply_markup=kb_back("menu_maintenance"), parse_mode="HTML")
     except Exception as exc:
-        await cq.message.answer(f"❌ {exc}", reply_markup=kb_back("menu_maintenance"))
+        await cq.message.answer(f"❌ {escape(str(exc))}", reply_markup=kb_back("menu_maintenance"), parse_mode="HTML")
 
 
 @router.callback_query(F.data == "maint_restore_zip")
@@ -717,8 +741,7 @@ async def cb_update_menu(cq: CallbackQuery):
         )
 
 
-@router.callback_query(F.data == "maint_update_run")
-async def cb_update_run(cq: CallbackQuery):
+async def _run_update(cq: CallbackQuery, *, with_backup: bool) -> None:
     await cq.answer(_txt("Запускаю обновление…", "Starting update…"))
     try:
         info = await maintenance_api.update_info()
@@ -729,22 +752,49 @@ async def cb_update_run(cq: CallbackQuery):
             )
             return
         git = info.get("git", {})
-        has_updates = bool(git.get("update_available_branch")) or bool(git.get("update_available_tag"))
+        has_updates = bool(git.get("update_available_tag"))
         if not has_updates:
             await cq.message.answer(
                 _txt("ℹ️ Новых обновлений не обнаружено.", "ℹ️ No updates detected."),
                 reply_markup=kb_back("maint_update_menu"),
             )
             return
-        branch = info.get("git", {}).get("current_branch")
-        result = await maintenance_api.update_run(branch=branch)
+
+        backup_path = ""
+        if with_backup:
+            detected_path = await _send_preflight_backup(cq, reason_ru="update", reason_en="update")
+            if not detected_path:
+                return
+            backup_path = detected_path
+
+        result = await maintenance_api.update_run(
+            target="latest_tag",
+            with_backup=with_backup,
+            backup_path=backup_path or None,
+        )
+        target_ref = result.get("target_ref") or git.get("latest_tag") or "-"
+        ru_msg = (
+            f"✅ Обновление запущено.\nТег: <code>{escape(str(target_ref))}</code>\n"
+            "Backup+restore включены.\n"
+            "Проверьте логи через 10-20 секунд."
+            if with_backup
+            else
+            f"✅ Обновление запущено.\nТег: <code>{escape(str(target_ref))}</code>\n"
+            "Запущено без backup/restore.\n"
+            "Проверьте логи через 10-20 секунд."
+        )
+        en_msg = (
+            f"✅ Update started.\nTag: <code>{escape(str(target_ref))}</code>\n"
+            "Backup+restore enabled.\n"
+            "Check logs in 10-20 seconds."
+            if with_backup
+            else
+            f"✅ Update started.\nTag: <code>{escape(str(target_ref))}</code>\n"
+            "Started without backup/restore.\n"
+            "Check logs in 10-20 seconds."
+        )
         await cq.message.answer(
-            _txt(
-                f"✅ Обновление запущено.\nВетка: <code>{escape(result.get('branch', branch or '-'))}</code>\n"
-                "Проверьте логи через 10-20 секунд.",
-                f"✅ Update started.\nBranch: <code>{escape(result.get('branch', branch or '-'))}</code>\n"
-                "Check logs in 10-20 seconds.",
-            ),
+            _txt(ru_msg, en_msg),
             parse_mode="HTML",
             reply_markup=kb_back("maint_update_menu"),
         )
@@ -759,29 +809,85 @@ async def cb_update_run(cq: CallbackQuery):
         await cq.message.answer(f"❌ {escape(exc.detail)}", reply_markup=kb_back("maint_update_menu"), parse_mode="HTML")
 
 
+@router.callback_query(F.data == "maint_update_run")
+async def cb_update_run_legacy(cq: CallbackQuery):
+    # Backward-compatible callback: update with backup
+    await _run_update(cq, with_backup=True)
+
+
+@router.callback_query(F.data == "maint_update_run_menu")
+async def cb_update_run_menu(cq: CallbackQuery):
+    await cq.answer()
+    await cq.message.edit_text(
+        _txt(
+            "⬆️ <b>Обновление</b>\n\n"
+            "Доступны два режима:\n"
+            "• С backup: отправляем архив, затем update и restore.\n"
+            "• Без backup: update без restore (требует подтверждение).",
+            "⬆️ <b>Update</b>\n\n"
+            "Two modes are available:\n"
+            "• With backup: send archive, then update and restore.\n"
+            "• Without backup: update without restore (requires confirmation).",
+        ),
+        reply_markup=_kb_update_run_menu(),
+        parse_mode="HTML",
+    )
+
+
+@router.callback_query(F.data == "maint_update_latest_backup")
+async def cb_update_latest_backup(cq: CallbackQuery):
+    await _run_update(cq, with_backup=True)
+
+
+@router.callback_query(F.data == "maint_update_latest_nobackup_prompt")
+async def cb_update_latest_nobackup_prompt(cq: CallbackQuery):
+    await cq.answer()
+    await cq.message.edit_text(
+        _txt(
+            "⚠️ <b>Обновление без backup</b>\n\n"
+            "В этом режиме не будет создан архив и не будет restore.\n"
+            "Продолжить?",
+            "⚠️ <b>Update without backup</b>\n\n"
+            "No archive will be created and no restore will be performed.\n"
+            "Continue?",
+        ),
+        reply_markup=_kb_confirm_nobackup(
+            confirm_cb="maint_update_latest_nobackup_confirm",
+            back_cb="maint_update_run_menu",
+        ),
+        parse_mode="HTML",
+    )
+
+
+@router.callback_query(F.data == "maint_update_latest_nobackup_confirm")
+async def cb_update_latest_nobackup_confirm(cq: CallbackQuery):
+    await _run_update(cq, with_backup=False)
+
+
 @router.callback_query(F.data == "maint_reinstall_menu")
 async def cb_reinstall_menu(cq: CallbackQuery):
     await cq.answer()
     await cq.message.edit_text(
         _txt(
             "♻️ <b>Переустановка</b>\n\n"
+            "Переустановка всегда выполняется на текущую установленную версию.\n"
             "Выберите режим:\n"
-            "• С сохранением данных: сохраняет настройки и базу.\n"
-            "• Чистая: удаляет данные и поднимает систему заново.",
+            "• C backup: сначала отправить backup, затем hard reinstall и restore.\n"
+            "• Без backup: только hard reinstall без restore.",
             "♻️ <b>Reinstall</b>\n\n"
+            "Reinstall always runs for the currently installed version.\n"
             "Choose mode:\n"
-            "• Keep data: keeps settings and DB.\n"
-            "• Clean: wipes runtime data and recreates stack.",
+            "• With backup: send backup first, then hard reinstall and restore.\n"
+            "• Without backup: hard reinstall only, no restore.",
         ),
         reply_markup=_kb_reinstall_menu(),
         parse_mode="HTML",
     )
 
 
-async def _run_reinstall(cq: CallbackQuery, *, clean: bool) -> None:
+async def _run_reinstall(cq: CallbackQuery, *, with_backup: bool) -> None:
     await cq.answer(
-        _txt("Запускаю чистую переустановку…" if clean else "Запускаю переустановку…",
-             "Starting clean reinstall…" if clean else "Starting reinstall…")
+        _txt("Запускаю переустановку…", "Starting reinstall…")
     )
     try:
         info = await maintenance_api.update_info()
@@ -792,26 +898,40 @@ async def _run_reinstall(cq: CallbackQuery, *, clean: bool) -> None:
             )
             return
 
-        await maintenance_api.reinstall_run(clean=clean)
-        await cq.message.answer(
-            _txt(
-                "✅ Чистая переустановка запущена.\n"
-                "Данные и настройки будут сброшены.\n"
-                "Бот/веб могут быть недоступны 30-60 секунд."
-                if clean else
-                "✅ Переустановка запущена.\n"
-                "Настройки и данные сохраняются.\n"
-                "Бот/веб могут быть недоступны 30-60 секунд.",
-                "✅ Clean reinstall started.\n"
-                "Data and settings will be reset.\n"
-                "Bot/Web may be unavailable for 30-60 seconds."
-                if clean else
-                "✅ Reinstall started.\n"
-                "Settings and data are preserved.\n"
-                "Bot/Web may be unavailable for 30-60 seconds.",
-            ),
-            reply_markup=kb_back("maint_update_menu"),
+        backup_path = ""
+        if with_backup:
+            detected_path = await _send_preflight_backup(cq, reason_ru="reinstall", reason_en="reinstall")
+            if not detected_path:
+                return
+            backup_path = detected_path
+
+        await maintenance_api.reinstall_run(
+            clean=True,
+            target="current",
+            with_backup=with_backup,
+            backup_path=backup_path or None,
         )
+        ru_msg = (
+            "✅ Переустановка запущена (current version).\n"
+            "Бот/веб могут быть недоступны 30-60 секунд.\n"
+            "Backup+restore включены."
+            if with_backup
+            else
+            "✅ Переустановка запущена (current version).\n"
+            "Бот/веб могут быть недоступны 30-60 секунд.\n"
+            "Запущено без backup/restore."
+        )
+        en_msg = (
+            "✅ Reinstall started (current version).\n"
+            "Bot/Web may be unavailable for 30-60 seconds.\n"
+            "Backup+restore enabled."
+            if with_backup
+            else
+            "✅ Reinstall started (current version).\n"
+            "Bot/Web may be unavailable for 30-60 seconds.\n"
+            "Started without backup/restore."
+        )
+        await cq.message.answer(_txt(ru_msg, en_msg), reply_markup=kb_back("maint_update_menu"))
         fresh = await maintenance_api.update_info()
         await cq.message.edit_text(
             _render_update_text(fresh),
@@ -822,63 +942,34 @@ async def _run_reinstall(cq: CallbackQuery, *, clean: bool) -> None:
         await cq.message.answer(f"❌ {escape(exc.detail)}", reply_markup=kb_back("maint_update_menu"), parse_mode="HTML")
 
 
-@router.callback_query(F.data == "maint_reinstall_keep")
-async def cb_reinstall_keep(cq: CallbackQuery):
-    await _run_reinstall(cq, clean=False)
+@router.callback_query(F.data == "maint_reinstall_cur_backup")
+async def cb_reinstall_cur_backup(cq: CallbackQuery):
+    await _run_reinstall(cq, with_backup=True)
 
 
-@router.callback_query(F.data == "maint_reinstall_clean")
-async def cb_reinstall_clean(cq: CallbackQuery):
-    await _run_reinstall(cq, clean=True)
-
-
-@router.callback_query(F.data == "maint_update_branch_menu")
-async def cb_update_branch_menu(cq: CallbackQuery):
+@router.callback_query(F.data == "maint_reinstall_cur_nobackup_prompt")
+async def cb_reinstall_cur_nobackup_prompt(cq: CallbackQuery):
     await cq.answer()
-    try:
-        info = await maintenance_api.update_info()
-        branches = info.get("git", {}).get("remote_branches", [])
-        current = info.get("git", {}).get("current_branch", "")
-        await cq.message.edit_text(
-            _txt(
-                "🌿 <b>Выберите ветку для обновления</b>\n"
-                "После выбора запустится update-job.",
-                "🌿 <b>Select branch to update</b>\n"
-                "After selecting, update job will start.",
-            ),
-            reply_markup=_kb_update_branches(branches, current),
-            parse_mode="HTML",
-        )
-    except APIError as exc:
-        await cq.message.answer(f"❌ {escape(exc.detail)}", reply_markup=kb_back("maint_update_menu"), parse_mode="HTML")
+    await cq.message.edit_text(
+        _txt(
+            "⚠️ <b>Переустановка без backup</b>\n\n"
+            "В этом режиме не будет создан архив и не будет restore.\n"
+            "Продолжить?",
+            "⚠️ <b>Reinstall without backup</b>\n\n"
+            "No archive will be created and no restore will be performed.\n"
+            "Continue?",
+        ),
+        reply_markup=_kb_confirm_nobackup(
+            confirm_cb="maint_reinstall_cur_nobackup_confirm",
+            back_cb="maint_reinstall_menu",
+        ),
+        parse_mode="HTML",
+    )
 
 
-@router.callback_query(F.data.startswith("maint_upd_branch_"))
-async def cb_update_run_branch(cq: CallbackQuery):
-    encoded = cq.data[len("maint_upd_branch_"):]
-    branch = _dec_branch(encoded).strip()
-    if not branch:
-        await cq.answer(_txt("Пустая ветка", "Empty branch"), show_alert=True)
-        return
-
-    await cq.answer(_txt("Запускаю update…", "Starting update…"))
-    try:
-        result = await maintenance_api.update_run(branch=branch)
-        await cq.message.edit_text(
-            _txt(
-                f"✅ Запущено обновление ветки <code>{escape(result.get('branch', branch))}</code>.",
-                f"✅ Started update for branch <code>{escape(result.get('branch', branch))}</code>.",
-            ),
-            parse_mode="HTML",
-            reply_markup=InlineKeyboardMarkup(
-                inline_keyboard=[
-                    [InlineKeyboardButton(text=_txt("📜 Логи обновления", "📜 Update logs"), callback_data="maint_update_logs")],
-                    [InlineKeyboardButton(text="⬅️ Back", callback_data="maint_update_menu")],
-                ]
-            ),
-        )
-    except APIError as exc:
-        await cq.message.answer(f"❌ {escape(exc.detail)}", reply_markup=kb_back("maint_update_menu"), parse_mode="HTML")
+@router.callback_query(F.data == "maint_reinstall_cur_nobackup_confirm")
+async def cb_reinstall_cur_nobackup_confirm(cq: CallbackQuery):
+    await _run_reinstall(cq, with_backup=False)
 
 
 @router.callback_query(F.data == "maint_update_logs")

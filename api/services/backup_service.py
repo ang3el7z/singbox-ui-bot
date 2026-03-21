@@ -29,6 +29,7 @@ NGINX_DIR = BASE_DIR / "nginx"
 INSTALL_DIR = Path("/opt/singbox-ui-bot")
 HOST_ENV_FILE = INSTALL_DIR / ".env"
 RECOVERY_DIR = INSTALL_DIR / "data" / "recovery"
+EXTERNAL_BACKUP_DIR = INSTALL_DIR.parent / "temp-singbox-ui-bot"
 
 BACKUP_FORMAT = "singbox-ui-bot-backup-v2"
 MAX_RESTORE_UPLOAD_BYTES = 100 * 1024 * 1024
@@ -229,6 +230,35 @@ def build_backup_zip() -> bytes:
 
     buf.seek(0)
     return buf.getvalue()
+
+
+def get_backup_storage_dir() -> Path:
+    """
+    Return directory for preflight/update backups.
+    Preference: external sibling dir near install root (/opt/temp-singbox-ui-bot),
+    fallback: internal recovery dir.
+    """
+    for candidate in (EXTERNAL_BACKUP_DIR, RECOVERY_DIR):
+        try:
+            candidate.mkdir(parents=True, exist_ok=True)
+            return candidate
+        except Exception:
+            continue
+    return RECOVERY_DIR
+
+
+def create_backup_file(*, prefix: str = "backup") -> Path:
+    """
+    Create a backup ZIP on disk and return its absolute path.
+    Files are stored in the external backup dir by default so hard reinstalls
+    do not touch them.
+    """
+    backup_dir = get_backup_storage_dir()
+    backup_dir.mkdir(parents=True, exist_ok=True)
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+    path = backup_dir / f"{prefix}_{ts}.zip"
+    path.write_bytes(build_backup_zip())
+    return path
 
 
 def inspect_backup_zip(content: bytes) -> dict:

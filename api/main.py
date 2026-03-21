@@ -16,7 +16,7 @@ from api.deps import hash_password
 from api.routers import auth, server, clients, inbounds, routing, adguard, nginx, federation, admin
 from api.routers import docs_router, settings_router, client_templates
 from api.routers import maintenance as maintenance_router
-from api.services.migrations import run_migrations
+from api.services.schema_migrations import run_migrations
 from sqlalchemy import select
 
 logger = logging.getLogger(__name__)

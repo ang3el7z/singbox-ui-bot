@@ -115,12 +115,11 @@ def _format_cert_line_for_main(cert: dict, lang: str) -> str:
 
 def _build_version_lines(git: dict, lang: str) -> tuple[str, str]:
     current_tag = (git.get("current_tag") or "").strip()
-    current_commit = (git.get("current_commit") or "").strip()
+    current_version_raw = (git.get("current_version") or current_tag or "-").strip()
     latest_tag = (git.get("latest_tag") or "").strip()
-    remote_commit = (git.get("remote_branch_commit") or "").strip()
-    has_updates = bool(git.get("update_available_branch")) or bool(git.get("update_available_tag"))
+    has_updates = bool(git.get("update_available_tag"))
 
-    current_version = current_tag or current_commit or "-"
+    current_version = current_version_raw or "-"
     version_line = (
         f"Версия: <code>{escape(current_version)}</code>"
         if lang == "ru"
@@ -130,7 +129,7 @@ def _build_version_lines(git: dict, lang: str) -> tuple[str, str]:
     if not has_updates:
         return version_line, ("Обновлений нет" if lang == "ru" else "No updates detected")
 
-    new_version = latest_tag or remote_commit or "latest"
+    new_version = latest_tag or "latest"
     update_line = (
         f"Доступно обновление: <code>{escape(new_version)}</code>"
         if lang == "ru"

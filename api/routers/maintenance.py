@@ -19,7 +19,7 @@ from api.services import nginx_service
 from api.services import update_service
 from api.services.backup_service import (
     RestoreError,
-    build_backup_zip,
+    create_backup_file,
     schedule_restore_job,
 )
 from api.routers.settings_router import get_setting, set_setting
@@ -42,11 +42,20 @@ class IntervalBody(BaseModel):
 
 
 class UpdateRunBody(BaseModel):
+    # Backward-compatible field: maps to target=custom ref=<branch>
     branch: Optional[str] = None
+    target: str = "latest_tag"     # latest_tag | custom
+    ref: Optional[str] = None
+    with_backup: bool = True
+    backup_path: Optional[str] = None
 
 
 class ReinstallRunBody(BaseModel):
-    clean: bool = False
+    clean: bool = True
+    target: str = "current"        # current | latest_tag | custom
+    ref: Optional[str] = None
+    with_backup: bool = True
+    backup_path: Optional[str] = None
 
 
 # ─── Status / settings ────────────────────────────────────────────────────────
@@ -87,13 +96,17 @@ async def maintenance_status(auth=Depends(require_any_auth)):
 @router.get("/backup/download")
 async def backup_download(auth=Depends(require_any_auth)):
     """Create and stream a recovery ZIP."""
-    buf = io.BytesIO(build_backup_zip())
+    backup_path = create_backup_file(prefix="preflight_backup")
+    buf = io.BytesIO(backup_path.read_bytes())
     ts = datetime.now().strftime("%Y%m%d_%H%M")
     await audit(auth["actor"], "backup_download")
     return StreamingResponse(
         buf,
         media_type="application/zip",
-        headers={"Content-Disposition": f'attachment; filename="backup_{ts}.zip"'},
+        headers={
+            "Content-Disposition": f'attachment; filename="backup_{ts}.zip"',
+            "X-Singbox-Backup-Path": str(backup_path),
+        },
     )
 
 
@@ -324,20 +337,44 @@ async def update_logs(lines: int = 200, auth=Depends(require_any_auth)):
 @router.post("/update/run")
 async def update_run(body: UpdateRunBody = UpdateRunBody(), auth=Depends(require_any_auth)):
     try:
-        result = await asyncio.to_thread(update_service.start_update, body.branch, auth["actor"])
+        result = await asyncio.to_thread(
+            update_service.start_update,
+            actor=auth["actor"],
+            backup_path=body.backup_path,
+            target=body.target,
+            ref=body.ref,
+            with_backup=body.with_backup,
+            branch=body.branch,
+        )
     except RuntimeError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
-    await audit(auth["actor"], "maintenance_update_run", f"branch={result.get('branch')}")
+    await audit(
+        auth["actor"],
+        "maintenance_update_run",
+        f"target={result.get('target')} ref={result.get('target_ref')}",
+    )
     return result
 
 
 @router.post("/reinstall/run")
 async def reinstall_run(body: ReinstallRunBody = ReinstallRunBody(), auth=Depends(require_any_auth)):
     try:
-        result = await asyncio.to_thread(update_service.start_reinstall, auth["actor"], body.clean)
+        result = await asyncio.to_thread(
+            update_service.start_reinstall,
+            actor=auth["actor"],
+            clean=body.clean,
+            backup_path=body.backup_path,
+            with_backup=body.with_backup,
+            target=body.target,
+            ref=body.ref,
+        )
     except RuntimeError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
-    await audit(auth["actor"], "maintenance_reinstall_run", f"clean={body.clean}")
+    await audit(
+        auth["actor"],
+        "maintenance_reinstall_run",
+        f"clean={body.clean} target={body.target} with_backup={body.with_backup}",
+    )
     return result
 
 

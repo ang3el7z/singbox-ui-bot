@@ -176,8 +176,31 @@ const api = {
     maintIpBanClearAuto:  ()        => apiFetch("POST", "/api/maintenance/ip-ban/clear-auto"),
     maintUpdateInfo:      (refresh=true) => apiFetch("GET",  `/api/maintenance/update/info?refresh=${refresh}`),
     maintUpdateLogs:      (lines=220) => apiFetch("GET", `/api/maintenance/update/logs?lines=${lines}`),
-    maintUpdateRun:       (branch=null) => apiFetch("POST", "/api/maintenance/update/run", branch ? { branch } : {}),
-    maintReinstallRun:    (clean=false) => apiFetch("POST", "/api/maintenance/reinstall/run", { clean }),
+    maintUpdateRun: (
+        target = "latest_tag",
+        ref = null,
+        withBackup = true,
+        backupPath = null,
+        branch = null,
+    ) => {
+        const body = { target, with_backup: Boolean(withBackup) };
+        if (ref) body.ref = ref;
+        if (branch) body.branch = branch; // backward-compatible
+        if (backupPath) body.backup_path = backupPath;
+        return apiFetch("POST", "/api/maintenance/update/run", body);
+    },
+    maintReinstallRun: (
+        clean = true,
+        target = "current",
+        ref = null,
+        withBackup = true,
+        backupPath = null,
+    ) => {
+        const body = { clean: Boolean(clean), target, with_backup: Boolean(withBackup) };
+        if (ref) body.ref = ref;
+        if (backupPath) body.backup_path = backupPath;
+        return apiFetch("POST", "/api/maintenance/reinstall/run", body);
+    },
     maintUpdateCleanup:   ()        => apiFetch("POST", "/api/maintenance/update/cleanup"),
 
     async maintBackupDownload() {
@@ -186,6 +209,7 @@ const api = {
             headers: { "Authorization": `Bearer ${token}` },
         });
         if (!res.ok) throw new Error((await res.json()).detail || res.statusText);
+        const backupPath = (res.headers.get("X-Singbox-Backup-Path") || "").trim();
         const blob = await res.blob();
         const url = URL.createObjectURL(blob);
         const a = document.createElement("a");
@@ -193,6 +217,7 @@ const api = {
         a.download = `backup_${new Date().toISOString().slice(0, 16).replace("T", "_")}.zip`;
         a.click();
         URL.revokeObjectURL(url);
+        return { backupPath };
     },
 
     async maintRestore(file, createSafetyBackup = true) {

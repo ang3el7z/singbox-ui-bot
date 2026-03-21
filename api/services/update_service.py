@@ -1,8 +1,8 @@
 """
-Update service:
-- Reads git/branch/tag update information from the project repo
-- Starts update/reinstall jobs in a detached helper container
-- Tracks last job state and returns logs
+Update/reinstall orchestration:
+- reads git update metadata
+- starts detached maintenance jobs in helper containers
+- tracks job state/logs
 """
 from __future__ import annotations
 
@@ -17,6 +17,8 @@ import urllib.parse
 from pathlib import Path
 from typing import Any
 
+from api.services.backup_service import create_backup_file, get_backup_storage_dir
+
 
 PROJECT_DIR = Path("/opt/singbox-ui-bot")
 if not PROJECT_DIR.exists():
@@ -26,14 +28,22 @@ STATE_FILE = Path("/app/data/update_state.json")
 STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
 
 RUNNER_IMAGE = "singbox-ui-bot-app:latest"
-BRANCH_RE = re.compile(r"^[A-Za-z0-9._/-]{1,120}$")
-BACKUP_HOME = "/opt/singbox-ui-bot/data/recovery"
+REF_RE = re.compile(r"^[A-Za-z0-9._/-]{1,120}$")
 DOCKER_SOCK = Path("/var/run/docker.sock")
+
+BACKUP_ROOT = get_backup_storage_dir()
+BACKUP_ROOT.mkdir(parents=True, exist_ok=True)
+BACKUP_HOME = str(BACKUP_ROOT)
 
 ACTION_UPDATE = "update"
 ACTION_REINSTALL = "reinstall"
 REINSTALL_MODE_PRESERVE = "preserve"
 REINSTALL_MODE_CLEAN = "clean"
+
+TARGET_CURRENT = "current"
+TARGET_LATEST_TAG = "latest_tag"
+TARGET_CUSTOM = "custom"
+TARGETS = {TARGET_CURRENT, TARGET_LATEST_TAG, TARGET_CUSTOM}
 
 
 def _run(cmd: list[str], cwd: Path | None = None, timeout: int = 30) -> tuple[int, str]:
@@ -174,6 +184,7 @@ def get_update_info(refresh_remote: bool = True) -> dict[str, Any]:
     current_commit = _git_value("rev-parse", "--short", "HEAD", default="-")
     current_commit_full = _git_value("rev-parse", "HEAD", default="")
     current_tag = _git_value("describe", "--tags", "--exact-match", default="")
+    current_version = current_tag or "dev"
 
     tags_raw = _git_value("tag", "--sort=-v:refname", default="")
     latest_tag = tags_raw.splitlines()[0].strip() if tags_raw.strip() else ""
@@ -190,6 +201,7 @@ def get_update_info(refresh_remote: bool = True) -> dict[str, Any]:
         "current_branch": current_branch,
         "current_commit": current_commit,
         "current_tag": current_tag,
+        "current_version": current_version,
         "latest_tag": latest_tag,
         "remote_branch_commit": remote_commit_short,
         "update_available_branch": update_available_branch,
@@ -214,6 +226,10 @@ def _state_response(
         "status": status or state.get("status", "idle"),
         "container_name": container_name,
         "branch": state.get("branch", ""),
+        "target": state.get("target", TARGET_CURRENT),
+        "target_ref": state.get("target_ref", ""),
+        "with_backup": bool(state.get("with_backup", True)),
+        "backup_path": state.get("backup_path", ""),
         "started_at": state.get("started_at", ""),
         "finished_at": state.get("finished_at", ""),
         "exit_code": state.get("exit_code"),
@@ -288,13 +304,53 @@ def get_update_status(log_lines: int = 200) -> dict[str, Any]:
     )
 
 
-def _normalize_branch(branch: str | None) -> str:
-    branch = (branch or "").strip()
-    if not branch:
-        branch = _git_value("rev-parse", "--abbrev-ref", "HEAD", default="main")
-    if not BRANCH_RE.match(branch):
-        raise RuntimeError("Invalid branch name")
-    return branch
+def _normalize_target(target: str | None) -> str:
+    value = (target or "").strip().lower()
+    if not value:
+        return TARGET_CURRENT
+    if value not in TARGETS:
+        raise RuntimeError(f"Invalid target: {target}")
+    return value
+
+
+def _normalize_ref(ref: str | None) -> str:
+    value = (ref or "").strip()
+    if not value:
+        raise RuntimeError("ref is required for custom target")
+    if not REF_RE.match(value):
+        raise RuntimeError("Invalid ref")
+    return value
+
+
+def _normalize_backup_path(path: str | None, *, required: bool) -> str:
+    """
+    Resolve a backup archive path for maintenance jobs.
+    If `required=True` and path is missing, create a preflight backup automatically.
+    """
+    if not required:
+        if not path or not path.strip():
+            return ""
+        raw = path.strip()
+    else:
+        if not path or not path.strip():
+            backup_file = create_backup_file(prefix="preflight_backup")
+            return str(backup_file)
+        raw = path.strip()
+
+    candidate = Path(raw)
+    if not candidate.is_absolute():
+        candidate = (PROJECT_DIR / candidate).resolve()
+    else:
+        candidate = candidate.resolve()
+
+    root = BACKUP_ROOT.resolve()
+    if candidate != root and root not in candidate.parents:
+        raise RuntimeError(f"backup_path must be inside {root}")
+    if candidate.suffix.lower() != ".zip":
+        raise RuntimeError("backup_path must point to a .zip file")
+    if not candidate.exists() or not candidate.is_file():
+        raise RuntimeError(f"backup_path not found: {candidate}")
+    return str(candidate)
 
 
 def _start_job(
@@ -303,6 +359,10 @@ def _start_job(
     inner_cmd: str,
     branch: str = "",
     mode: str = "",
+    target: str = TARGET_CURRENT,
+    target_ref: str = "",
+    with_backup: bool = True,
+    backup_path: str = "",
     actor: str = "",
 ) -> dict[str, Any]:
     current = get_update_status(log_lines=50)
@@ -317,6 +377,15 @@ def _start_job(
         f"{inner_cmd}"
     )
 
+    binds = [
+        f"{PROJECT_DIR}:/opt/singbox-ui-bot",
+        "/var/run/docker.sock:/var/run/docker.sock",
+    ]
+    project_root = PROJECT_DIR.resolve()
+    backup_root = BACKUP_ROOT.resolve()
+    if backup_root != project_root and project_root not in backup_root.parents:
+        binds.append(f"{backup_root}:{backup_root}")
+
     create_body = {
         "Image": RUNNER_IMAGE,
         "Cmd": ["bash", "-lc", final_inner_cmd],
@@ -324,12 +393,7 @@ def _start_job(
         "AttachStdout": True,
         "AttachStderr": True,
         "Tty": True,
-        "HostConfig": {
-            "Binds": [
-                f"{PROJECT_DIR}:/opt/singbox-ui-bot",
-                "/var/run/docker.sock:/var/run/docker.sock",
-            ]
-        },
+        "HostConfig": {"Binds": binds},
     }
 
     create_code, create_out = _docker_request(
@@ -369,6 +433,10 @@ def _start_job(
         "container_name": container_name,
         "container_id": container_id,
         "branch": branch,
+        "target": target,
+        "target_ref": target_ref,
+        "with_backup": with_backup,
+        "backup_path": backup_path,
         "started_at": datetime_utc_iso(),
         "finished_at": "",
         "exit_code": None,
@@ -384,66 +452,95 @@ def _start_job(
         "container_name": container_name,
         "container_id": container_id,
         "branch": branch,
+        "target": target,
+        "target_ref": target_ref,
+        "with_backup": with_backup,
+        "backup_path": backup_path,
     }
 
 
-def start_update(branch: str | None = None, actor: str = "") -> dict[str, Any]:
-    branch = _normalize_branch(branch)
-    branch_q = shlex.quote(branch)
+def start_update(
+    *,
+    actor: str = "",
+    backup_path: str | None = None,
+    target: str = TARGET_LATEST_TAG,
+    ref: str | None = None,
+    with_backup: bool = True,
+    branch: str | None = None,
+) -> dict[str, Any]:
+    # backward-compatible input: branch=<name> maps to custom ref update
+    if branch and not ref:
+        target = TARGET_CUSTOM
+        ref = branch
+
+    target_mode = _normalize_target(target)
+    if target_mode == TARGET_CURRENT:
+        target_mode = TARGET_LATEST_TAG
+
+    requested_ref = "latest-tag" if target_mode == TARGET_LATEST_TAG else _normalize_ref(ref)
+    backup_enabled = bool(with_backup)
+    backup_file = _normalize_backup_path(backup_path, required=backup_enabled)
+
+    env_prefix = [
+        f"UPDATE_WITH_BACKUP={'1' if backup_enabled else '0'}",
+        "DELETE_BACKUP_AFTER=1",
+    ]
+    if backup_file:
+        env_prefix.append(f"BACKUP_FILE_OVERRIDE={shlex.quote(backup_file)}")
+    env_block = " ".join(env_prefix)
+
     return _start_job(
         action=ACTION_UPDATE,
-        inner_cmd=f"printf 'y\\n' | bash scripts/manage.sh update {branch_q}",
-        branch=branch,
+        inner_cmd=f"printf 'y\\n' | {env_block} bash scripts/manage.sh update {shlex.quote(requested_ref)}",
+        branch=_git_value("rev-parse", "--abbrev-ref", "HEAD", default="main"),
         mode=REINSTALL_MODE_PRESERVE,
+        target=target_mode,
+        target_ref=requested_ref,
+        with_backup=backup_enabled,
+        backup_path=backup_file,
         actor=actor,
     )
 
 
-def start_reinstall(actor: str = "", clean: bool = False) -> dict[str, Any]:
-    branch = _git_value("rev-parse", "--abbrev-ref", "HEAD", default="main")
+def start_reinstall(
+    *,
+    actor: str = "",
+    clean: bool = True,
+    backup_path: str | None = None,
+    with_backup: bool = True,
+    target: str = TARGET_CURRENT,
+    ref: str | None = None,
+) -> dict[str, Any]:
+    target_mode = _normalize_target(target)
+    requested_ref = {
+        TARGET_CURRENT: "current",
+        TARGET_LATEST_TAG: "latest-tag",
+    }.get(target_mode, "")
+    if not requested_ref:
+        requested_ref = _normalize_ref(ref)
+
+    backup_enabled = bool(with_backup)
+    backup_file = _normalize_backup_path(backup_path, required=backup_enabled)
     mode = REINSTALL_MODE_CLEAN if clean else REINSTALL_MODE_PRESERVE
-    if clean:
-        inner_cmd = (
-            "set -e; "
-            "bash scripts/manage.sh backup || true; "
-            "if docker compose version >/dev/null 2>&1; then "
-            "docker compose down --volumes --remove-orphans; "
-            "else "
-            "docker-compose down --volumes --remove-orphans; "
-            "fi; "
-            "rm -rf -- "
-            "data/* subs/* configs/* "
-            "config/sing-box/* config/adguard/* "
-            "nginx/override/* nginx/htpasswd/* nginx/certs/* nginx/certbot/* "
-            "nginx/conf.d/* nginx/logs/*; "
-            "rm -f -- nginx/.web_ui_enabled nginx/.banned_ips.json; "
-            "mkdir -p "
-            "data subs configs "
-            "config/sing-box config/adguard "
-            "nginx/override nginx/htpasswd nginx/certs nginx/certbot nginx/conf.d nginx/logs; "
-            "if docker compose version >/dev/null 2>&1; then "
-            "docker compose up -d --build; "
-            "else "
-            "docker-compose up -d --build; "
-            "fi"
-        )
-    else:
-        inner_cmd = (
-            "set -e; "
-            "bash scripts/manage.sh backup || true; "
-            "if docker compose version >/dev/null 2>&1; then "
-            "docker compose down; "
-            "docker compose up -d --build; "
-            "else "
-            "docker-compose down; "
-            "docker-compose up -d --build; "
-            "fi"
-        )
+
+    env_prefix = [
+        f"REINSTALL_WITH_BACKUP={'1' if backup_enabled else '0'}",
+        f"REINSTALL_CLEAN={'1' if clean else '0'}",
+        "DELETE_BACKUP_AFTER=1",
+    ]
+    if backup_file:
+        env_prefix.append(f"BACKUP_FILE_OVERRIDE={shlex.quote(backup_file)}")
+    env_block = " ".join(env_prefix)
+
     return _start_job(
         action=ACTION_REINSTALL,
-        inner_cmd=inner_cmd,
-        branch=branch,
+        inner_cmd=f"printf 'y\\n' | {env_block} bash scripts/manage.sh reinstall {shlex.quote(requested_ref)}",
+        branch=_git_value("rev-parse", "--abbrev-ref", "HEAD", default="main"),
         mode=mode,
+        target=target_mode,
+        target_ref=requested_ref,
+        with_backup=backup_enabled,
+        backup_path=backup_file,
         actor=actor,
     )
 

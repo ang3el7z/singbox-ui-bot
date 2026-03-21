@@ -1,24 +1,23 @@
 """
-Application data migrations.
+Application data migrations core.
 
 Goals:
 - Keep runtime code single-path (no permanent dual logic).
-- Apply compatibility only as one-time migrations.
+- Keep persisted schema changes explicit and versioned.
 - Track applied migration level via AppSetting(schema_version).
 """
 from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Awaitable, Callable
 
 from api.database import AppSetting, async_session
+from api.services.schema_migrations.versions import MIGRATION_SPECS
 
 logger = logging.getLogger(__name__)
 
 SCHEMA_VERSION_KEY = "schema_version"
-CURRENT_SCHEMA_VERSION = 1
 
 
 @dataclass(frozen=True)
@@ -28,31 +27,11 @@ class Migration:
     fn: Callable[[], Awaitable[None]]
 
 
-async def _migration_001_web_ui_marker() -> None:
-    """
-    One-time marker rename:
-      nginx/.site_enabled -> nginx/.web_ui_enabled
-
-    Applies only once on upgrade. New installs simply mark schema version.
-    """
-    nginx_dir = Path(__file__).resolve().parents[2] / "nginx"
-    old_marker = nginx_dir / ".site_enabled"
-    new_marker = nginx_dir / ".web_ui_enabled"
-
-    if old_marker.exists():
-        new_marker.parent.mkdir(parents=True, exist_ok=True)
-        new_marker.touch(exist_ok=True)
-        old_marker.unlink(missing_ok=True)
-        logger.info("migration[1]: moved %s -> %s", old_marker, new_marker)
-
-
 MIGRATIONS: list[Migration] = [
-    Migration(
-        version=1,
-        name="Move nginx site marker to web_ui marker",
-        fn=_migration_001_web_ui_marker,
-    ),
+    Migration(version=version, name=name, fn=fn)
+    for version, name, fn in MIGRATION_SPECS
 ]
+CURRENT_SCHEMA_VERSION = max((m.version for m in MIGRATIONS), default=0)
 
 
 async def _get_schema_version() -> int:
@@ -103,4 +82,3 @@ async def run_migrations() -> int:
         current = migration.version
 
     return current
-

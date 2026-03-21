@@ -225,6 +225,18 @@ class MaintenanceAPI:
         return await post("/api/maintenance/backup/settings", json={"hours": hours})
     async def run_backup(self):
         return await post("/api/maintenance/backup/run")
+    async def backup_download_package(self) -> dict[str, Any]:
+        async with _client() as c:
+            r = await c.get("/api/maintenance/backup/download")
+            if not r.is_success:
+                raise APIError(r.status_code, _extract_detail(r))
+            return {
+                "content": r.content,
+                "backup_path": (r.headers.get("X-Singbox-Backup-Path") or "").strip(),
+            }
+    async def backup_download_bytes(self) -> bytes:
+        pkg = await self.backup_download_package()
+        return pkg["content"]
     async def restore(self, filename: str, content: bytes, create_safety_backup: bool = True):
         async with httpx.AsyncClient(base_url=_BASE, headers=_HEADERS, timeout=120.0) as c:
             files = {"file": (filename, content, "application/zip")}
@@ -278,11 +290,45 @@ class MaintenanceAPI:
         return await get("/api/maintenance/update/info", refresh=str(refresh_remote).lower())
     async def update_logs(self, lines: int = 200):
         return await get("/api/maintenance/update/logs", lines=lines)
-    async def update_run(self, branch: str | None = None):
-        payload = {"branch": branch} if branch else {}
+    async def update_run(
+        self,
+        *,
+        target: str = "latest_tag",
+        ref: str | None = None,
+        with_backup: bool = True,
+        backup_path: str | None = None,
+        branch: str | None = None,  # backward-compatible
+    ):
+        payload: dict[str, Any] = {}
+        payload["target"] = target
+        payload["with_backup"] = bool(with_backup)
+        if ref:
+            payload["ref"] = ref
+        if branch:
+            payload["branch"] = branch
+        if backup_path:
+            payload["backup_path"] = backup_path
         return await post("/api/maintenance/update/run", json=payload, timeout=20.0)
-    async def reinstall_run(self, clean: bool = False):
-        return await post("/api/maintenance/reinstall/run", json={"clean": bool(clean)}, timeout=20.0)
+
+    async def reinstall_run(
+        self,
+        *,
+        clean: bool = True,
+        target: str = "current",
+        ref: str | None = None,
+        with_backup: bool = True,
+        backup_path: str | None = None,
+    ):
+        payload: dict[str, Any] = {
+            "clean": bool(clean),
+            "target": target,
+            "with_backup": bool(with_backup),
+        }
+        if ref:
+            payload["ref"] = ref
+        if backup_path:
+            payload["backup_path"] = backup_path
+        return await post("/api/maintenance/reinstall/run", json=payload, timeout=20.0)
     async def update_cleanup(self):
         return await post("/api/maintenance/update/cleanup")
 

@@ -1,27 +1,27 @@
 #!/usr/bin/env bash
-# ────────────────────────────────────────────────────────────────────────────
-#  singbox-ui-bot — Management CLI
+# в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+#  singbox-ui-bot вЂ” Management CLI
 #  Installed to /usr/local/bin/singbox-ui-bot by install.sh
 #
 #  Usage:
-#    singbox-ui-bot            — interactive menu
-#    singbox-ui-bot backup     — quick backup (no menu)
-#    singbox-ui-bot status     — quick status (no menu)
-#    singbox-ui-bot uninstall  — uninstall with confirmation
-# ────────────────────────────────────────────────────────────────────────────
+#    singbox-ui-bot            вЂ” interactive menu
+#    singbox-ui-bot backup     вЂ” quick backup (no menu)
+#    singbox-ui-bot status     вЂ” quick status (no menu)
+#    singbox-ui-bot uninstall  вЂ” uninstall with confirmation
+# в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
 set -euo pipefail
 
-# ── Color helpers ─────────────────────────────────────────────────────────────
+# в”Ђв”Ђ Color helpers в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
 RED='\033[0;31m';  GREEN='\033[0;32m';  YELLOW='\033[1;33m'
 CYAN='\033[0;36m'; BOLD='\033[1m';      RESET='\033[0m'
 
-info()    { echo -e "${CYAN}ℹ  $*${RESET}"; }
-success() { echo -e "${GREEN}✔  $*${RESET}"; }
-warn()    { echo -e "${YELLOW}⚠  $*${RESET}"; }
-error()   { echo -e "${RED}✖  $*${RESET}"; }
-header()  { echo -e "\n${BOLD}${CYAN}══ $* ══${RESET}\n"; }
+info()    { echo -e "${CYAN}в„№  $*${RESET}"; }
+success() { echo -e "${GREEN}вњ”  $*${RESET}"; }
+warn()    { echo -e "${YELLOW}вљ   $*${RESET}"; }
+error()   { echo -e "${RED}вњ–  $*${RESET}"; }
+header()  { echo -e "\n${BOLD}${CYAN}в•ђв•ђ $* в•ђв•ђ${RESET}\n"; }
 
-# ── Locate installation ───────────────────────────────────────────────────────
+# в”Ђв”Ђ Locate installation в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
 INSTALL_DIR="/opt/singbox-ui-bot"
 
 if [[ ! -d "$INSTALL_DIR" ]]; then
@@ -38,7 +38,7 @@ fi
 
 cd "$INSTALL_DIR"
 
-# ── Helper: check if docker compose is available ─────────────────────────────
+# в”Ђв”Ђ Helper: check if docker compose is available в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
 DC() {
     if command -v "docker" &>/dev/null && docker compose version &>/dev/null 2>&1; then
         docker compose "$@"
@@ -51,7 +51,9 @@ app_container_id() {
     DC ps -a -q app 2>/dev/null | head -1
 }
 
-# ── Firewall (apply SSH port from bot/app) ────────────────────────────────────
+LAST_BACKUP_FILE=""
+
+# в”Ђв”Ђ Firewall (apply SSH port from bot/app) в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
 cmd_firewall() {
     header "Apply firewall (SSH port)"
     PORT_FILE="$INSTALL_DIR/data/ssh_port"
@@ -70,7 +72,7 @@ cmd_firewall() {
     success "Firewall updated. SSH port: $SSH_PORT"
 }
 
-# ── Status ────────────────────────────────────────────────────────────────────
+# в”Ђв”Ђ Status в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
 cmd_status() {
     header "Status"
     echo -e "${BOLD}Installation directory:${RESET} $INSTALL_DIR"
@@ -106,7 +108,7 @@ cmd_status() {
     fi
 }
 
-# ── Backup ────────────────────────────────────────────────────────────────────
+# в”Ђв”Ђ Backup в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
 cmd_backup() {
     header "Backup"
 
@@ -224,47 +226,11 @@ PYEOF
     while IFS= read -r ITEM; do
         [[ -n "$ITEM" ]] && echo "  - $ITEM"
     done <<< "$(cd "$TMP_DIR" && find . -type f | sed 's#^\./##' | sort)"
+    LAST_BACKUP_FILE="$BACKUP_FILE"
     return 0
-
-    # Files to include
-    FILES=()
-    [[ -f "$INSTALL_DIR/config/sing-box/config.json" ]] && FILES+=("$INSTALL_DIR/config/sing-box/config.json")
-    [[ -f "$INSTALL_DIR/.env"                        ]] && FILES+=("$INSTALL_DIR/.env")
-
-    APP_CID=$(app_container_id)
-    if [[ -n "${APP_CID:-}" ]] && docker cp "${APP_CID}:/app/data/app.db" "$TMP_DIR/app.db" >/dev/null 2>&1; then
-        FILES+=("$TMP_DIR/app.db")
-    fi
-
-    if [[ ${#FILES[@]} -eq 0 ]]; then
-        warn "No backup files found (config.json, app.db, .env)"
-        return 1
-    fi
-
-    # Create zip (use python3 as fallback if zip not available)
-    if command -v zip &>/dev/null; then
-        zip -j "$BACKUP_FILE" "${FILES[@]}" > /dev/null
-    else
-        python3 - "${FILES[@]}" "$BACKUP_FILE" <<'PYEOF'
-import sys, zipfile, os
-files = sys.argv[1:-1]
-out   = sys.argv[-1]
-with zipfile.ZipFile(out, 'w', zipfile.ZIP_DEFLATED) as zf:
-    for f in files:
-        zf.write(f, os.path.basename(f))
-PYEOF
-    fi
-
-    SIZE=$(du -sh "$BACKUP_FILE" | cut -f1)
-    success "Backup created: $BACKUP_FILE ($SIZE)"
-    echo
-    echo -e "${BOLD}Contents:${RESET}"
-    for f in "${FILES[@]}"; do
-        echo "  • $(basename "$f")"
-    done
 }
 
-# ── Logs ──────────────────────────────────────────────────────────────────────
+# в”Ђв”Ђ Logs в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
 extract_backup_zip() {
     local backup_file="$1"
     local output_dir="$2"
@@ -406,7 +372,7 @@ cmd_logs() {
     esac
 }
 
-# ── Restart ───────────────────────────────────────────────────────────────────
+# в”Ђв”Ђ Restart в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
 cmd_restart() {
     header "Restart"
     echo "What to restart?"
@@ -419,7 +385,7 @@ cmd_restart() {
 
     case "$CHOICE" in
         1)
-            info "Restarting all containers…"
+            info "Restarting all containersвЂ¦"
             DC restart
             success "All containers restarted"
             ;;
@@ -430,58 +396,257 @@ cmd_restart() {
     esac
 }
 
-# ── Update ────────────────────────────────────────────────────────────────────
+# Update / Reinstall helpers
+ensure_docker_cli() {
+    if ! command -v docker >/dev/null 2>&1; then
+        error "Docker CLI is not installed inside this runtime."
+        return 1
+    fi
+    if ! docker version >/dev/null 2>&1; then
+        error "Docker daemon is not reachable from this runtime."
+        return 1
+    fi
+}
+
+refresh_cli_copy() {
+    if [[ -f "$INSTALL_DIR/scripts/manage.sh" ]]; then
+        cp "$INSTALL_DIR/scripts/manage.sh" /usr/local/bin/singbox-ui-bot 2>/dev/null || true
+        chmod +x /usr/local/bin/singbox-ui-bot 2>/dev/null || true
+    fi
+}
+
+resolve_target_ref() {
+    local requested="${1:-latest-tag}"
+    if [[ -z "$requested" ]]; then
+        requested="latest-tag"
+    fi
+
+    if [[ "$requested" == "current" ]]; then
+        echo "current"
+        return 0
+    fi
+
+    if [[ "$requested" == "latest-tag" ]]; then
+        local latest_tag
+        latest_tag="$(git tag --sort=-v:refname | head -1 || true)"
+        if [[ -z "$latest_tag" ]]; then
+            error "No tags found in repository."
+            return 1
+        fi
+        echo "$latest_tag"
+        return 0
+    fi
+
+    if [[ ! "$requested" =~ ^[A-Za-z0-9._/-]{1,120}$ ]]; then
+        error "Invalid git ref: $requested"
+        return 1
+    fi
+    echo "$requested"
+}
+
+checkout_target_ref() {
+    local target_ref="$1"
+    if [[ "$target_ref" == "current" ]]; then
+        info "Keeping current checked out ref."
+        return 0
+    fi
+
+    if git show-ref --verify --quiet "refs/remotes/origin/$target_ref"; then
+        info "Switching to branch '$target_ref' (origin/$target_ref)..."
+        git checkout -B "$target_ref" "origin/$target_ref" || { error "git checkout failed for branch '$target_ref'."; return 1; }
+        git reset --hard "origin/$target_ref" || { error "git reset --hard failed for branch '$target_ref'."; return 1; }
+        return 0
+    fi
+
+    if git show-ref --verify --quiet "refs/tags/$target_ref"; then
+        info "Switching to tag '$target_ref'..."
+        git checkout --detach "$target_ref" || { error "git checkout failed for tag '$target_ref'."; return 1; }
+        git reset --hard "$target_ref" || { error "git reset --hard failed for tag '$target_ref'."; return 1; }
+        return 0
+    fi
+
+    if git rev-parse --verify --quiet "${target_ref}^{commit}" >/dev/null; then
+        info "Switching to ref '$target_ref'..."
+        git checkout --detach "$target_ref" || { error "git checkout failed for ref '$target_ref'."; return 1; }
+        git reset --hard "$target_ref" || { error "git reset --hard failed for ref '$target_ref'."; return 1; }
+        return 0
+    fi
+
+    error "Ref '$target_ref' not found in repository."
+    return 1
+}
+
+clean_repo_keep_runtime() {
+    info "Cleaning repository (preserving runtime data)..."
+    git clean -fd \
+        -e .env \
+        -e .installed \
+        -e data/ \
+        -e subs/ \
+        -e configs/ \
+        -e config/sing-box/ \
+        -e config/adguard/ \
+        -e nginx/conf.d/ \
+        -e nginx/logs/ \
+        -e nginx/override/ \
+        -e nginx/htpasswd/ \
+        -e nginx/certs/ \
+        -e nginx/certbot/ \
+        || { error "git clean failed."; return 1; }
+}
+
+compose_up_recreate() {
+    info "Recreating stack from current files..."
+    DC up -d --build --force-recreate app singbox nginx adguard || {
+        error "Failed to recreate containers."
+        return 1
+    }
+}
+
+compose_down_for_maintenance() {
+    local clean="${1:-0}"
+    if [[ "$clean" == "1" ]]; then
+        info "Stopping stack (with volumes)..."
+        DC down --volumes --remove-orphans || { error "Failed to stop stack."; return 1; }
+    else
+        info "Stopping stack..."
+        DC down --remove-orphans || { error "Failed to stop stack."; return 1; }
+    fi
+}
+
+SELECTED_BACKUP_ZIP=""
+prepare_backup_for_maintenance() {
+    local with_backup="${1:-1}"
+    SELECTED_BACKUP_ZIP=""
+
+    if [[ "$with_backup" != "1" ]]; then
+        return 0
+    fi
+
+    local backup_zip="${BACKUP_FILE_OVERRIDE:-}"
+    if [[ -n "$backup_zip" ]]; then
+        if [[ ! -f "$backup_zip" ]]; then
+            error "Provided BACKUP_FILE_OVERRIDE does not exist: $backup_zip"
+            return 1
+        fi
+        info "Using preflight backup: $backup_zip"
+        SELECTED_BACKUP_ZIP="$backup_zip"
+        return 0
+    fi
+
+    info "Creating backup before maintenance..."
+    cmd_backup || return 1
+    backup_zip="${LAST_BACKUP_FILE:-}"
+    if [[ -z "$backup_zip" || ! -f "$backup_zip" ]]; then
+        backup_zip="$(ls -1t "$HOME"/singbox-backup_*.zip 2>/dev/null | head -1 || true)"
+    fi
+    if [[ -z "$backup_zip" || ! -f "$backup_zip" ]]; then
+        error "Cannot find backup ZIP after backup step."
+        return 1
+    fi
+    SELECTED_BACKUP_ZIP="$backup_zip"
+}
+
+run_restore_from_backup() {
+    local backup_zip="$1"
+    local action_prefix="${2:-maintenance}"
+
+    local recovery_dir="$INSTALL_DIR/data/recovery"
+    local restore_log="$recovery_dir/${action_prefix}_restore_$(date +%Y%m%d_%H%M%S).log"
+    mkdir -p "$recovery_dir"
+
+    info "Restoring runtime state from backup..."
+    RESTORE_BUILD=1 sh "$INSTALL_DIR/scripts/restore-worker.sh" "$backup_zip" "$restore_log" || {
+        error "Restore failed. See log: $restore_log"
+        return 1
+    }
+
+    if [[ "${DELETE_BACKUP_AFTER:-0}" == "1" ]]; then
+        rm -f "$backup_zip" 2>/dev/null || true
+    fi
+    info "Restore log: $restore_log"
+}
+
+# Update
 cmd_update() {
-    local requested_branch="${1:-}"
-    local current_branch target_branch
-    current_branch="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo main)"
-    target_branch="${requested_branch:-$current_branch}"
+    local requested_ref="${1:-latest-tag}"
+    local with_backup="${UPDATE_WITH_BACKUP:-1}"
+    local target_ref
 
     header "Update"
-    warn "This will pull latest code from Git and rebuild containers (app, nginx, singbox)."
-    warn "Your data (config.json, app.db, .env) will NOT be affected."
-    echo "Current branch: $current_branch"
-    echo "Target branch:  $target_branch"
-    if [[ -n "$requested_branch" ]]; then
-        warn "Branch was provided explicitly: $requested_branch"
-    fi
+    warn "Hard update: stop stack, checkout target ref, clean repo, recreate containers."
+    warn "Runtime data can be restored from backup when enabled."
+    echo "Requested target: $requested_ref"
     echo
     read -rp "Continue? [y/N]: " CONFIRM
     [[ "$CONFIRM" != [yY] ]] && { info "Update cancelled."; return; }
 
-    if ! git diff --quiet || ! git diff --cached --quiet; then
-        warn "Local git changes detected. Commit/stash them first to avoid conflicts."
-        return 1
+    ensure_docker_cli || return 1
+
+    info "Fetching latest refs/tags..."
+    git fetch --tags --prune origin || { error "git fetch failed. Check your internet connection."; return 1; }
+    target_ref="$(resolve_target_ref "$requested_ref")" || return 1
+
+    prepare_backup_for_maintenance "$with_backup" || return 1
+    compose_down_for_maintenance 0 || return 1
+    checkout_target_ref "$target_ref" || return 1
+    clean_repo_keep_runtime || return 1
+
+    if [[ "$with_backup" == "1" ]]; then
+        run_restore_from_backup "$SELECTED_BACKUP_ZIP" "update" || return 1
+        info "Backup used: $SELECTED_BACKUP_ZIP"
+    else
+        compose_up_recreate || return 1
     fi
 
-    info "Creating backup before update…"
-    cmd_backup
-
-    info "Fetching latest refs…"
-    git fetch origin || { error "git fetch failed. Check your internet connection."; return 1; }
-
-    if [[ "$current_branch" != "$target_branch" ]]; then
-        info "Switching branch to $target_branch…"
-        if git show-ref --verify --quiet "refs/heads/$target_branch"; then
-            git checkout "$target_branch" || { error "git checkout $target_branch failed."; return 1; }
-        elif git show-ref --verify --quiet "refs/remotes/origin/$target_branch"; then
-            git checkout -b "$target_branch" "origin/$target_branch" || { error "Failed to create local branch $target_branch."; return 1; }
-        else
-            error "Branch '$target_branch' not found in local or origin."
-            return 1
-        fi
-    fi
-
-    info "Pulling latest changes for $target_branch…"
-    git pull --ff-only origin "$target_branch" || { error "git pull failed. Resolve conflicts or check branch."; return 1; }
-
-    info "Rebuilding and restarting containers…"
-    DC up -d --build app nginx singbox || { error "docker compose update failed."; return 1; }
-
-    success "Update complete on branch '$target_branch'!"
+    refresh_cli_copy
+    success "Update complete (target: $target_ref)."
 }
 
-# ── Clear logs ────────────────────────────────────────────────────────────────
+# Reinstall
+cmd_reinstall() {
+    local requested_ref="${1:-current}"
+    local with_backup="${REINSTALL_WITH_BACKUP:-1}"
+    local clean="${REINSTALL_CLEAN:-1}"
+    local target_ref
+
+    header "Reinstall"
+    warn "Hard reinstall: stop stack, optionally checkout target ref, recreate containers."
+    warn "By default this command reinstalls the current checked out version."
+    echo "Requested target: $requested_ref"
+    echo "With backup: $with_backup"
+    echo "Clean mode:  $clean"
+    echo
+    read -rp "Continue? [y/N]: " CONFIRM
+    [[ "$CONFIRM" != [yY] ]] && { info "Reinstall cancelled."; return; }
+
+    ensure_docker_cli || return 1
+
+    if [[ "$requested_ref" == "current" ]]; then
+        target_ref="current"
+    else
+        info "Fetching latest refs/tags..."
+        git fetch --tags --prune origin || { error "git fetch failed. Check your internet connection."; return 1; }
+        target_ref="$(resolve_target_ref "$requested_ref")" || return 1
+        checkout_target_ref "$target_ref" || return 1
+        clean_repo_keep_runtime || return 1
+    fi
+
+    prepare_backup_for_maintenance "$with_backup" || return 1
+    compose_down_for_maintenance "$clean" || return 1
+
+    if [[ "$with_backup" == "1" ]]; then
+        run_restore_from_backup "$SELECTED_BACKUP_ZIP" "reinstall" || return 1
+        info "Backup used: $SELECTED_BACKUP_ZIP"
+    else
+        compose_up_recreate || return 1
+    fi
+
+    refresh_cli_copy
+    success "Reinstall complete (target: $target_ref)."
+}
+
+# в”Ђв”Ђ Clear logs в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
 cmd_clear_logs() {
     header "Clear Nginx Logs"
     LOGS_DIR="$INSTALL_DIR/nginx/logs"
@@ -505,17 +670,17 @@ cmd_clear_logs() {
     success "All logs cleared"
 }
 
-# ── Uninstall ─────────────────────────────────────────────────────────────────
+# в”Ђв”Ђ Uninstall в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
 cmd_uninstall() {
     header "Uninstall"
 
     echo -e "${RED}${BOLD}WARNING: This will PERMANENTLY delete all data!${RESET}"
     echo
     echo "The following will be removed:"
-    echo "  • All running containers (app, singbox, nginx, adguard)"
-    echo "  • Docker images used by this project"
-    echo "  • Installation directory: $INSTALL_DIR"
-    echo "  • This management script: /usr/local/bin/singbox-ui-bot"
+    echo "  вЂў All running containers (app, singbox, nginx, adguard)"
+    echo "  вЂў Docker images used by this project"
+    echo "  вЂў Installation directory: $INSTALL_DIR"
+    echo "  вЂў This management script: /usr/local/bin/singbox-ui-bot"
     echo
     echo -e "${YELLOW}Crontab entries for SSL renewal will also be removed.${RESET}"
     echo
@@ -523,7 +688,7 @@ cmd_uninstall() {
     # First, offer a backup
     read -rp "Create a backup before uninstalling? [Y/n]: " DO_BACKUP
     if [[ "$DO_BACKUP" != [nN] ]]; then
-        cmd_backup || warn "Backup failed, continuing anyway…"
+        cmd_backup || warn "Backup failed, continuing anywayвЂ¦"
         echo
     fi
 
@@ -534,47 +699,48 @@ cmd_uninstall() {
         return
     fi
 
-    info "Stopping and removing containers…"
+    info "Stopping and removing containersвЂ¦"
     DC down --volumes --remove-orphans 2>/dev/null || true
 
-    info "Removing Docker images…"
+    info "Removing Docker imagesвЂ¦"
     # Remove images built by this project
     docker rmi "$(DC images -q)" 2>/dev/null || true
     # Remove singbox-ui-bot-app image specifically
     docker rmi singbox-ui-bot-app 2>/dev/null || true
 
-    info "Removing crontab entries…"
+    info "Removing crontab entriesвЂ¦"
     (crontab -l 2>/dev/null | grep -v "singbox-ui-bot\|certbot" | crontab -) 2>/dev/null || true
 
-    info "Removing installation directory…"
+    info "Removing installation directoryвЂ¦"
     rm -rf "$INSTALL_DIR"
 
-    info "Removing management script…"
+    info "Removing management scriptвЂ¦"
     rm -f /usr/local/bin/singbox-ui-bot
 
     echo
     success "Uninstall complete. The server has been cleaned."
     echo -e "${CYAN}If you had a backup, it is saved at: ~/singbox-backup_*.zip${RESET}"
     echo
-    # Script about to delete itself — exit cleanly
+    # Script about to delete itself вЂ” exit cleanly
     exit 0
 }
 
-# ── Main menu ─────────────────────────────────────────────────────────────────
+# в”Ђв”Ђ Main menu в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
 show_menu() {
     echo
-    echo -e "${BOLD}${CYAN}╔══════════════════════════════════╗${RESET}"
-    echo -e "${BOLD}${CYAN}║      singbox-ui-bot  CLI         ║${RESET}"
-    echo -e "${BOLD}${CYAN}╚══════════════════════════════════╝${RESET}"
+    echo -e "${BOLD}${CYAN}в•”в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•—${RESET}"
+    echo -e "${BOLD}${CYAN}в•‘      singbox-ui-bot  CLI         в•‘${RESET}"
+    echo -e "${BOLD}${CYAN}в•љв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ќ${RESET}"
     echo
-    echo -e "  ${BOLD}1)${RESET} 📊 Status"
-    echo -e "  ${BOLD}2)${RESET} 💾 Backup"
-    echo -e "  ${BOLD}3)${RESET} 📋 Logs"
-    echo -e "  ${BOLD}4)${RESET} 🔄 Restart"
-    echo -e "  ${BOLD}5)${RESET} ⬆️  Update"
-    echo -e "  ${BOLD}6)${RESET} 🧹 Clear logs"
-    echo -e "  ${BOLD}7)${RESET} 🔐 Apply firewall (SSH port from bot)"
-    echo -e "  ${BOLD}8)${RESET} 🗑  Uninstall (cleanup server)"
+    echo -e "  ${BOLD}1)${RESET} рџ“Љ Status"
+    echo -e "  ${BOLD}2)${RESET} рџ’ѕ Backup"
+    echo -e "  ${BOLD}3)${RESET} рџ“‹ Logs"
+    echo -e "  ${BOLD}4)${RESET} рџ”„ Restart"
+    echo -e "  ${BOLD}5)${RESET} в¬†пёЏ  Update"
+    echo -e "  ${BOLD}6)${RESET} в™»пёЏ Reinstall"
+    echo -e "  ${BOLD}7)${RESET} рџ§№ Clear logs"
+    echo -e "  ${BOLD}8)${RESET} рџ”ђ Apply firewall (SSH port from bot)"
+    echo -e "  ${BOLD}9)${RESET} рџ—‘  Uninstall (cleanup server)"
     echo -e "  ${BOLD}0)${RESET} Exit"
     echo
 }
@@ -589,11 +755,12 @@ main() {
             logs)      cmd_logs ;;
             restart)   cmd_restart ;;
             update)    shift; cmd_update "${1:-}" ;;
+            reinstall) shift; cmd_reinstall "${1:-current}" ;;
             firewall)  cmd_firewall ;;
             uninstall) cmd_uninstall ;;
             *)
                 error "Unknown command: $1"
-                echo "Usage: singbox-ui-bot [status|backup|restore <backup.zip>|logs|restart|update [branch]|firewall|uninstall]"
+                echo "Usage: singbox-ui-bot [status|backup|restore <backup.zip>|logs|restart|update [ref]|reinstall [ref]|firewall|uninstall]"
                 exit 1
                 ;;
         esac
@@ -610,15 +777,17 @@ main() {
             3) cmd_logs ;;
             4) cmd_restart ;;
             5) cmd_update ;;
-            6) cmd_clear_logs ;;
-            7) cmd_firewall ;;
-            8) cmd_uninstall ;;
+            6) cmd_reinstall ;;
+            7) cmd_clear_logs ;;
+            8) cmd_firewall ;;
+            9) cmd_uninstall ;;
             0) echo; info "Bye!"; exit 0 ;;
             *) warn "Invalid option: $CHOICE" ;;
         esac
         echo
-        read -rp "Press Enter to return to menu…" _
+        read -rp "Press Enter to return to menuвЂ¦" _
     done
 }
 
 main "$@"
+
