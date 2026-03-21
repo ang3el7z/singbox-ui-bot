@@ -21,22 +21,8 @@ from bot.keyboards.main import kb_back
 
 router = Router()
 
-_BACKUP_INTERVALS = [
-    ("🚫 Off", 0),
-    ("6 hours", 6),
-    ("12 hours", 12),
-    ("24 hours", 24),
-    ("48 hours", 48),
-    ("7 days", 168),
-]
-
-_CLEAN_INTERVALS = [
-    ("🚫 Off", 0),
-    ("24 hours", 24),
-    ("3 days", 72),
-    ("7 days", 168),
-    ("30 days", 720),
-]
+_BACKUP_INTERVALS = [0, 6, 12, 24, 48, 168]
+_CLEAN_INTERVALS = [0, 24, 72, 168, 720]
 
 
 class IpBanFSM(StatesGroup):
@@ -54,6 +40,34 @@ def _is_ru() -> bool:
 
 def _txt(ru: str, en: str) -> str:
     return ru if _is_ru() else en
+
+
+def _ru_plural(num: int, one: str, few: str, many: str) -> str:
+    n = abs(num)
+    if n % 10 == 1 and n % 100 != 11:
+        return one
+    if 2 <= n % 10 <= 4 and not (12 <= n % 100 <= 14):
+        return few
+    return many
+
+
+def _duration_label(hours: int) -> str:
+    if hours == 0:
+        return _txt("🚫 Выкл", "🚫 Off")
+    if hours % 24 == 0:
+        days = hours // 24
+        day_ru = _ru_plural(days, "день", "дня", "дней")
+        day_en = "day" if days == 1 else "days"
+        return _txt(f"{days} {day_ru}", f"{days} {day_en}")
+    hour_ru = _ru_plural(hours, "час", "часа", "часов")
+    hour_en = "hour" if hours == 1 else "hours"
+    return _txt(f"{hours} {hour_ru}", f"{hours} {hour_en}")
+
+
+def _schedule_label(hours: int) -> str:
+    if hours <= 0:
+        return _txt("выкл", "off")
+    return _txt(f"каждые {hours}ч", f"every {hours}h")
 
 
 def _pick_localized_notes(git: dict, lang: str) -> str:
@@ -89,11 +103,11 @@ async def _send_preflight_backup(cq: CallbackQuery, *, reason_ru: str, reason_en
 
         ts = datetime.now().strftime("%Y-%m-%d_%H-%M")
         archive = BufferedInputFile(payload, filename=f"backup_{ts}.zip")
-        caption = _txt(f"Backup before {reason_ru}", f"Backup before {reason_en}")
+        caption = _txt(f"Backup перед {reason_ru}", f"Backup before {reason_en}")
         await cq.message.answer_document(archive, caption=caption, parse_mode="HTML")
         if not backup_path:
             await cq.message.answer(
-                _txt("Cannot detect backup path on server.", "Cannot detect backup path on server."),
+                _txt("Не удалось определить путь backup на сервере.", "Cannot detect backup path on server."),
                 reply_markup=kb_back("maint_update_menu"),
             )
             return None
@@ -101,7 +115,7 @@ async def _send_preflight_backup(cq: CallbackQuery, *, reason_ru: str, reason_en
     except APIError as exc:
         await cq.message.answer(
             _txt(
-                f"Failed to prepare backup: <code>{escape(exc.detail)}</code>",
+                f"Не удалось подготовить backup: <code>{escape(exc.detail)}</code>",
                 f"Failed to prepare backup: <code>{escape(exc.detail)}</code>",
             ),
             parse_mode="HTML",
@@ -111,7 +125,7 @@ async def _send_preflight_backup(cq: CallbackQuery, *, reason_ru: str, reason_en
     except Exception as exc:
         await cq.message.answer(
             _txt(
-                f"Failed to prepare backup: <code>{escape(str(exc))}</code>",
+                f"Не удалось подготовить backup: <code>{escape(str(exc))}</code>",
                 f"Failed to prepare backup: <code>{escape(str(exc))}</code>",
             ),
             parse_mode="HTML",
@@ -125,30 +139,64 @@ def _kb_main(status: dict) -> InlineKeyboardMarkup:
     c_hours = status.get("logs", {}).get("auto_clean_hours", 0)
     ban_cnt = status.get("ip_ban", {}).get("count", 0)
 
-    b_label = f"{'🔄' if b_hours else '⏸'} Backup: {'every ' + str(b_hours) + 'h' if b_hours else 'off'}"
-    c_label = f"{'🧹' if c_hours else '⏸'} Log clean: {'every ' + str(c_hours) + 'h' if c_hours else 'off'}"
+    b_label = _txt(
+        f"💾 Backup ({_schedule_label(b_hours)})",
+        f"💾 Backup ({_schedule_label(b_hours)})",
+    )
+    l_label = _txt(
+        f"📋 Логи ({_schedule_label(c_hours)}, IP Ban: {ban_cnt})",
+        f"📋 Logs ({_schedule_label(c_hours)}, IP Ban: {ban_cnt})",
+    )
 
     builder = InlineKeyboardBuilder()
-    builder.row(
-        InlineKeyboardButton(text="💾 Backup now", callback_data="maint_backup_now"),
-        InlineKeyboardButton(text="♻️ Restore ZIP", callback_data="maint_restore_zip"),
-    )
-    builder.row(InlineKeyboardButton(text=b_label, callback_data="maint_backup_interval"))
-    builder.row(InlineKeyboardButton(text="📋 Logs", callback_data="maint_logs_menu"))
-    builder.row(InlineKeyboardButton(text=c_label, callback_data="maint_clean_interval"))
-    builder.row(InlineKeyboardButton(text=f"🚫 IP Ban ({ban_cnt})", callback_data="maint_ipban_menu"))
-    builder.row(InlineKeyboardButton(text="🪟 Windows Service", callback_data="maint_windows"))
+    builder.row(InlineKeyboardButton(text=b_label, callback_data="maint_backup_menu"))
+    builder.row(InlineKeyboardButton(text=l_label, callback_data="maint_logs_root"))
+    builder.row(InlineKeyboardButton(text=_txt("🔐 SSH порт", "🔐 SSH port"), callback_data="server_ssh_port"))
+    builder.row(InlineKeyboardButton(text=_txt("🪟 Windows Service", "🪟 Windows Service"), callback_data="maint_windows"))
     builder.row(InlineKeyboardButton(text=_txt("⬆️ Обновления", "⬆️ Updates"), callback_data="maint_update_menu"))
-    builder.row(InlineKeyboardButton(text="⬅️ Back", callback_data="main_menu"))
+    builder.row(InlineKeyboardButton(text=_txt("⬅️ Назад", "⬅️ Back"), callback_data="main_menu"))
     return builder.as_markup()
 
 
-def _kb_intervals(items: list, prefix: str, current: int) -> InlineKeyboardMarkup:
+def _kb_backup_menu(status: dict) -> InlineKeyboardMarkup:
+    b_hours = int(status.get("backup", {}).get("auto_hours", 0) or 0)
     builder = InlineKeyboardBuilder()
-    for label, hours in items:
+    builder.row(InlineKeyboardButton(text=_txt("💾 Backup сейчас", "💾 Backup now"), callback_data="maint_backup_now"))
+    builder.row(InlineKeyboardButton(text=_txt("♻️ Restore ZIP", "♻️ Restore ZIP"), callback_data="maint_restore_zip"))
+    builder.row(
+        InlineKeyboardButton(
+            text=_txt(f"⏱ Авто-backup: {_schedule_label(b_hours)}", f"⏱ Auto-backup: {_schedule_label(b_hours)}"),
+            callback_data="maint_backup_interval",
+        )
+    )
+    builder.row(InlineKeyboardButton(text=_txt("⬅️ Назад", "⬅️ Back"), callback_data="menu_maintenance"))
+    return builder.as_markup()
+
+
+def _kb_logs_root(status: dict) -> InlineKeyboardMarkup:
+    c_hours = int(status.get("logs", {}).get("auto_clean_hours", 0) or 0)
+    ban_cnt = int(status.get("ip_ban", {}).get("count", 0) or 0)
+    builder = InlineKeyboardBuilder()
+    builder.row(InlineKeyboardButton(text=_txt("📋 Логи Nginx", "📋 Nginx logs"), callback_data="maint_logs_menu"))
+    builder.row(
+        InlineKeyboardButton(
+            text=_txt(f"⏱ Авто-очистка: {_schedule_label(c_hours)}", f"⏱ Auto cleanup: {_schedule_label(c_hours)}"),
+            callback_data="maint_clean_interval",
+        )
+    )
+    builder.row(InlineKeyboardButton(text=_txt(f"🚫 IP Ban ({ban_cnt})", f"🚫 IP Ban ({ban_cnt})"), callback_data="maint_ipban_menu"))
+    builder.row(InlineKeyboardButton(text=_txt("⬅️ Назад", "⬅️ Back"), callback_data="menu_maintenance"))
+    return builder.as_markup()
+
+
+def _kb_intervals(items: list, prefix: str, current: int, *, back_cb: str = "menu_maintenance") -> InlineKeyboardMarkup:
+    builder = InlineKeyboardBuilder()
+    for hours in items:
         tick = "✅ " if hours == current else ""
-        builder.row(InlineKeyboardButton(text=f"{tick}{label}", callback_data=f"{prefix}_{hours}"))
-    builder.row(InlineKeyboardButton(text="⬅️ Back", callback_data="menu_maintenance"))
+        builder.row(
+            InlineKeyboardButton(text=f"{tick}{_duration_label(hours)}", callback_data=f"{prefix}_{hours}")
+        )
+    builder.row(InlineKeyboardButton(text=_txt("⬅️ Назад", "⬅️ Back"), callback_data=back_cb))
     return builder.as_markup()
 
 
@@ -161,8 +209,8 @@ def _kb_logs(files: list) -> InlineKeyboardMarkup:
             InlineKeyboardButton(text=f"⬇️ {name} ({size}KB)", callback_data=f"maint_log_dl_{name}"),
             InlineKeyboardButton(text="🗑", callback_data=f"maint_log_clr_{name}"),
         )
-    builder.row(InlineKeyboardButton(text="🧹 Clear all logs", callback_data="maint_log_clr_all"))
-    builder.row(InlineKeyboardButton(text="⬅️ Back", callback_data="menu_maintenance"))
+    builder.row(InlineKeyboardButton(text=_txt("🧹 Очистить все логи", "🧹 Clear all logs"), callback_data="maint_log_clr_all"))
+    builder.row(InlineKeyboardButton(text=_txt("⬅️ Назад", "⬅️ Back"), callback_data="maint_logs_root"))
     return builder.as_markup()
 
 
@@ -175,17 +223,17 @@ def _kb_ipban(banned: list) -> InlineKeyboardMarkup:
         builder.row(
             InlineKeyboardButton(text=f"{icon} {ip} ({reason})", callback_data=f"maint_unban_{ip}")
         )
-    builder.row(InlineKeyboardButton(text="➕ Ban IP manually", callback_data="maint_ban_manual"))
-    builder.row(InlineKeyboardButton(text="🔍 Analyze logs", callback_data="maint_analyze"))
-    builder.row(InlineKeyboardButton(text="🧹 Clear auto-bans", callback_data="maint_clear_auto"))
-    builder.row(InlineKeyboardButton(text="⬅️ Back", callback_data="menu_maintenance"))
+    builder.row(InlineKeyboardButton(text=_txt("➕ Заблокировать IP вручную", "➕ Ban IP manually"), callback_data="maint_ban_manual"))
+    builder.row(InlineKeyboardButton(text=_txt("🔍 Анализ логов", "🔍 Analyze logs"), callback_data="maint_analyze"))
+    builder.row(InlineKeyboardButton(text=_txt("🧹 Очистить авто-баны", "🧹 Clear auto-bans"), callback_data="maint_clear_auto"))
+    builder.row(InlineKeyboardButton(text=_txt("⬅️ Назад", "⬅️ Back"), callback_data="maint_logs_root"))
     return builder.as_markup()
 
 
 def _kb_restore_confirm() -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
-    builder.row(InlineKeyboardButton(text="✅ Start restore", callback_data="maint_restore_confirm"))
-    builder.row(InlineKeyboardButton(text="⬅️ Cancel", callback_data="menu_maintenance"))
+    builder.row(InlineKeyboardButton(text=_txt("✅ Начать восстановление", "✅ Start restore"), callback_data="maint_restore_confirm"))
+    builder.row(InlineKeyboardButton(text=_txt("⬅️ Отмена", "⬅️ Cancel"), callback_data="maint_backup_menu"))
     return builder.as_markup()
 
 
@@ -193,10 +241,20 @@ def _kb_windows(status: dict) -> InlineKeyboardMarkup:
     ready = status.get("ready", False)
     builder = InlineKeyboardBuilder()
     if ready:
-        builder.row(InlineKeyboardButton(text="🔄 Re-download binaries", callback_data="maint_win_prefetch"))
+        builder.row(
+            InlineKeyboardButton(
+                text=_txt("🔄 Перекачать бинарники", "🔄 Re-download binaries"),
+                callback_data="maint_win_prefetch",
+            )
+        )
     else:
-        builder.row(InlineKeyboardButton(text="⬇️ Download binaries", callback_data="maint_win_prefetch"))
-    builder.row(InlineKeyboardButton(text="⬅️ Back", callback_data="menu_maintenance"))
+        builder.row(
+            InlineKeyboardButton(
+                text=_txt("⬇️ Скачать бинарники", "⬇️ Download binaries"),
+                callback_data="maint_win_prefetch",
+            )
+        )
+    builder.row(InlineKeyboardButton(text=_txt("⬅️ Назад", "⬅️ Back"), callback_data="menu_maintenance"))
     return builder.as_markup()
 
 
@@ -235,7 +293,7 @@ def _kb_update_menu(info: dict) -> InlineKeyboardMarkup:
             )
         )
     builder.row(
-        InlineKeyboardButton(text="⬅️ Back", callback_data="menu_maintenance"),
+        InlineKeyboardButton(text=_txt("⬅️ Назад", "⬅️ Back"), callback_data="menu_maintenance"),
     )
     return builder.as_markup()
 
@@ -254,14 +312,14 @@ def _kb_update_run_menu() -> InlineKeyboardMarkup:
             callback_data="maint_update_latest_nobackup_prompt",
         )
     )
-    builder.row(InlineKeyboardButton(text="⬅️ Back", callback_data="maint_update_menu"))
+    builder.row(InlineKeyboardButton(text=_txt("⬅️ Назад", "⬅️ Back"), callback_data="maint_update_menu"))
     return builder.as_markup()
 
 
 def _kb_confirm_nobackup(*, confirm_cb: str, back_cb: str = "maint_update_menu") -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
     builder.row(InlineKeyboardButton(text=_txt("✅ Подтвердить", "✅ Confirm"), callback_data=confirm_cb))
-    builder.row(InlineKeyboardButton(text="⬅️ Back", callback_data=back_cb))
+    builder.row(InlineKeyboardButton(text=_txt("⬅️ Назад", "⬅️ Back"), callback_data=back_cb))
     return builder.as_markup()
 
 
@@ -279,7 +337,7 @@ def _kb_reinstall_menu() -> InlineKeyboardMarkup:
             callback_data="maint_reinstall_cur_nobackup_prompt",
         )
     )
-    builder.row(InlineKeyboardButton(text="⬅️ Back", callback_data="maint_update_menu"))
+    builder.row(InlineKeyboardButton(text=_txt("⬅️ Назад", "⬅️ Back"), callback_data="maint_update_menu"))
     return builder.as_markup()
 
 
@@ -340,13 +398,15 @@ async def cb_maint_menu(cq: CallbackQuery, state: FSMContext):
     await state.clear()
     try:
         status = await maintenance_api.status()
+        backup_hours = int(status["backup"]["auto_hours"] or 0)
+        clean_hours = int(status["logs"]["auto_clean_hours"] or 0)
         text = (
-            "🔧 <b>Maintenance</b>\n\n"
-            f"• Backup: <b>{'every ' + str(status['backup']['auto_hours']) + 'h' if status['backup']['auto_hours'] else 'off'}</b>"
-            f" (next: {status['backup']['next_at'] or '—'})\n"
-            f"• Log cleanup: <b>{'every ' + str(status['logs']['auto_clean_hours']) + 'h' if status['logs']['auto_clean_hours'] else 'off'}</b>"
-            f" (next: {status['logs']['next_clean_at'] or '—'})\n"
-            f"• Banned IPs: <b>{status['ip_ban']['count']}</b>"
+            f"🔧 <b>{_txt('Обслуживание', 'Maintenance')}</b>\n\n"
+            f"• {_txt('Backup', 'Backup')}: <b>{_schedule_label(backup_hours)}</b>"
+            f" ({_txt('следующий', 'next')}: {status['backup']['next_at'] or '—'})\n"
+            f"• {_txt('Очистка логов', 'Log cleanup')}: <b>{_schedule_label(clean_hours)}</b>"
+            f" ({_txt('следующая', 'next')}: {status['logs']['next_clean_at'] or '—'})\n"
+            f"• {_txt('Заблокированные IP', 'Banned IPs')}: <b>{status['ip_ban']['count']}</b>"
         )
         kb = _kb_main(status)
     except APIError as exc:
@@ -355,9 +415,48 @@ async def cb_maint_menu(cq: CallbackQuery, state: FSMContext):
     await cq.message.edit_text(text, reply_markup=kb, parse_mode="HTML")
 
 
+@router.callback_query(F.data == "maint_backup_menu")
+async def cb_backup_menu(cq: CallbackQuery):
+    await cq.answer()
+    try:
+        status = await maintenance_api.status()
+        backup_hours = int(status.get("backup", {}).get("auto_hours", 0) or 0)
+        text = (
+            f"💾 <b>{_txt('Backup', 'Backup')}</b>\n\n"
+            f"• {_txt('Интервал', 'Interval')}: <b>{_schedule_label(backup_hours)}</b>\n"
+            f"• {_txt('Следующий запуск', 'Next run')}: <code>{status.get('backup', {}).get('next_at') or '—'}</code>\n\n"
+            f"{_txt('Выберите действие ниже.', 'Choose an action below.')}"
+        )
+        kb = _kb_backup_menu(status)
+    except APIError as exc:
+        text = f"❌ {exc.detail}"
+        kb = kb_back("menu_maintenance")
+    await cq.message.edit_text(text, reply_markup=kb, parse_mode="HTML")
+
+
+@router.callback_query(F.data == "maint_logs_root")
+async def cb_logs_root(cq: CallbackQuery):
+    await cq.answer()
+    try:
+        status = await maintenance_api.status()
+        clean_hours = int(status.get("logs", {}).get("auto_clean_hours", 0) or 0)
+        ban_cnt = int(status.get("ip_ban", {}).get("count", 0) or 0)
+        text = (
+            f"📋 <b>{_txt('Логи', 'Logs')}</b>\n\n"
+            f"• {_txt('Авто-очистка', 'Auto cleanup')}: <b>{_schedule_label(clean_hours)}</b>\n"
+            f"• IP Ban: <b>{ban_cnt}</b>\n\n"
+            f"{_txt('Выберите действие ниже.', 'Choose an action below.')}"
+        )
+        kb = _kb_logs_root(status)
+    except APIError as exc:
+        text = f"❌ {exc.detail}"
+        kb = kb_back("menu_maintenance")
+    await cq.message.edit_text(text, reply_markup=kb, parse_mode="HTML")
+
+
 @router.callback_query(F.data == "maint_backup_now")
 async def cb_backup_now(cq: CallbackQuery):
-    await cq.answer("Creating backup…")
+    await cq.answer(_txt("Создаю backup…", "Creating backup…"))
     try:
         pkg = await maintenance_api.backup_download_package()
         payload = pkg.get("content") or b""
@@ -367,14 +466,17 @@ async def cb_backup_now(cq: CallbackQuery):
         archive = BufferedInputFile(payload, filename=f"backup_{ts}.zip")
         await cq.message.answer_document(
             archive,
-            caption="💾 <b>Backup ready</b>",
+            caption=_txt("💾 <b>Backup готов</b>", "💾 <b>Backup ready</b>"),
             parse_mode="HTML",
         )
-        await cq.message.answer("✅ Backup sent!", reply_markup=kb_back("menu_maintenance"))
+        await cq.message.answer(
+            _txt("✅ Backup отправлен!", "✅ Backup sent!"),
+            reply_markup=kb_back("maint_backup_menu"),
+        )
     except APIError as exc:
-        await cq.message.answer(f"❌ {escape(exc.detail)}", reply_markup=kb_back("menu_maintenance"), parse_mode="HTML")
+        await cq.message.answer(f"❌ {escape(exc.detail)}", reply_markup=kb_back("maint_backup_menu"), parse_mode="HTML")
     except Exception as exc:
-        await cq.message.answer(f"❌ {escape(str(exc))}", reply_markup=kb_back("menu_maintenance"), parse_mode="HTML")
+        await cq.message.answer(f"❌ {escape(str(exc))}", reply_markup=kb_back("maint_backup_menu"), parse_mode="HTML")
 
 
 @router.callback_query(F.data == "maint_restore_zip")
@@ -382,12 +484,18 @@ async def cb_restore_zip(cq: CallbackQuery, state: FSMContext):
     await state.set_state(RestoreFSM.archive)
     await state.update_data(restore_file_id=None, restore_name=None)
     await cq.message.answer(
-        "♻️ <b>Restore from ZIP</b>\n\n"
-        "Send the recovery ZIP archive as a file.\n"
-        "After upload, I will ask for final confirmation before restore starts.\n\n"
-        "⚠️ Restore recreates the stack, so the bot and Web UI may disconnect for 30-60 seconds.",
+        _txt(
+            "♻️ <b>Restore из ZIP</b>\n\n"
+            "Отправьте ZIP-архив восстановления как файл.\n"
+            "После загрузки я попрошу финальное подтверждение перед запуском restore.\n\n"
+            "⚠️ Restore пересоздаёт стек, поэтому бот и Web UI могут отключиться на 30-60 секунд.",
+            "♻️ <b>Restore from ZIP</b>\n\n"
+            "Send the recovery ZIP archive as a file.\n"
+            "After upload, I will ask for final confirmation before restore starts.\n\n"
+            "⚠️ Restore recreates the stack, so the bot and Web UI may disconnect for 30-60 seconds.",
+        ),
         parse_mode="HTML",
-        reply_markup=kb_back("menu_maintenance"),
+        reply_markup=kb_back("maint_backup_menu"),
     )
     await cq.answer()
 
@@ -398,20 +506,27 @@ async def fsm_restore_zip_uploaded(msg: Message, state: FSMContext):
     name = doc.file_name or ""
     if not name.lower().endswith(".zip"):
         await msg.answer(
-            "❌ Send a <b>.zip</b> recovery archive.",
+            _txt("❌ Отправьте архив восстановления <b>.zip</b>.", "❌ Send a <b>.zip</b> recovery archive."),
             parse_mode="HTML",
-            reply_markup=kb_back("menu_maintenance"),
+            reply_markup=kb_back("maint_backup_menu"),
         )
         return
 
     await state.set_state(RestoreFSM.confirm)
     await state.update_data(restore_file_id=doc.file_id, restore_name=name)
     await msg.answer(
-        "⚠️ <b>Ready to restore</b>\n\n"
-        f"Archive: <code>{name}</code>\n"
-        "A safety backup will be created first.\n"
-        "Then the current stack will be recreated from this archive.\n\n"
-        "Press <b>Start restore</b> to continue.",
+        _txt(
+            "⚠️ <b>Готово к restore</b>\n\n"
+            f"Архив: <code>{name}</code>\n"
+            "Сначала будет создан защитный backup.\n"
+            "Затем текущий стек будет пересоздан из этого архива.\n\n"
+            "Нажмите <b>Начать восстановление</b>, чтобы продолжить.",
+            "⚠️ <b>Ready to restore</b>\n\n"
+            f"Archive: <code>{name}</code>\n"
+            "A safety backup will be created first.\n"
+            "Then the current stack will be recreated from this archive.\n\n"
+            "Press <b>Start restore</b> to continue.",
+        ),
         parse_mode="HTML",
         reply_markup=_kb_restore_confirm(),
     )
@@ -420,8 +535,8 @@ async def fsm_restore_zip_uploaded(msg: Message, state: FSMContext):
 @router.message(RestoreFSM.archive)
 async def fsm_restore_zip_waiting(msg: Message):
     await msg.answer(
-        "📎 Send the recovery ZIP archive as a file.",
-        reply_markup=kb_back("menu_maintenance"),
+        _txt("📎 Отправьте ZIP-архив восстановления как файл.", "📎 Send the recovery ZIP archive as a file."),
+        reply_markup=kb_back("maint_backup_menu"),
     )
 
 
@@ -432,15 +547,23 @@ async def cb_restore_confirm(cq: CallbackQuery, state: FSMContext):
     name = data.get("restore_name") or "backup.zip"
     if not file_id:
         await state.clear()
-        await cq.message.answer("❌ Restore session expired.", reply_markup=kb_back("menu_maintenance"))
+        await cq.message.answer(
+            _txt("❌ Сессия restore истекла.", "❌ Restore session expired."),
+            reply_markup=kb_back("maint_backup_menu"),
+        )
         await cq.answer()
         return
 
-    await cq.answer("Starting restore…")
+    await cq.answer(_txt("Запускаю restore…", "Starting restore…"))
     await cq.message.edit_text(
-        "⏳ <b>Starting restore...</b>\n\n"
-        "Downloading the archive and scheduling the restore job.\n"
-        "The bot and Web UI may disconnect shortly.",
+        _txt(
+            "⏳ <b>Запуск restore...</b>\n\n"
+            "Скачиваю архив и ставлю задачу восстановления.\n"
+            "Бот и Web UI могут временно отключиться.",
+            "⏳ <b>Starting restore...</b>\n\n"
+            "Downloading the archive and scheduling the restore job.\n"
+            "The bot and Web UI may disconnect shortly.",
+        ),
         parse_mode="HTML",
     )
 
@@ -451,27 +574,27 @@ async def cb_restore_confirm(cq: CallbackQuery, state: FSMContext):
         await state.clear()
 
         lines = [
-            "✅ <b>Restore started</b>",
+            _txt("✅ <b>Restore запущен</b>", "✅ <b>Restore started</b>"),
             "",
-            f"Archive: <code>{name}</code>",
-            "Wait 30-60 seconds, then reopen the bot or Web UI.",
+            _txt(f"Архив: <code>{name}</code>", f"Archive: <code>{name}</code>"),
+            _txt("Подождите 30-60 секунд, затем снова откройте бота или Web UI.", "Wait 30-60 seconds, then reopen the bot or Web UI."),
         ]
         if result.get("safety_backup_path"):
-            lines.append(f"Safety backup: <code>{result['safety_backup_path']}</code>")
+            lines.append(_txt(f"Защитный backup: <code>{result['safety_backup_path']}</code>", f"Safety backup: <code>{result['safety_backup_path']}</code>"))
         if result.get("restore_log_path"):
-            lines.append(f"Restore log: <code>{result['restore_log_path']}</code>")
+            lines.append(_txt(f"Лог restore: <code>{result['restore_log_path']}</code>", f"Restore log: <code>{result['restore_log_path']}</code>"))
 
         await cq.message.answer(
             "\n".join(lines),
             parse_mode="HTML",
-            reply_markup=kb_back("menu_maintenance"),
+            reply_markup=kb_back("maint_backup_menu"),
         )
     except APIError as exc:
         await state.clear()
-        await cq.message.answer(f"❌ {exc.detail}", reply_markup=kb_back("menu_maintenance"))
+        await cq.message.answer(f"❌ {exc.detail}", reply_markup=kb_back("maint_backup_menu"))
     except Exception as exc:
         await state.clear()
-        await cq.message.answer(f"❌ {exc}", reply_markup=kb_back("menu_maintenance"))
+        await cq.message.answer(f"❌ {exc}", reply_markup=kb_back("maint_backup_menu"))
 
 
 @router.callback_query(F.data == "maint_backup_interval")
@@ -482,8 +605,11 @@ async def cb_backup_interval_menu(cq: CallbackQuery):
     except APIError:
         current = 0
     await cq.message.edit_text(
-        "⏱ <b>Auto-backup interval</b>\n\nBackup will be sent to all Telegram admins automatically.",
-        reply_markup=_kb_intervals(_BACKUP_INTERVALS, "maint_bset", current),
+        _txt(
+            "⏱ <b>Интервал авто-backup</b>\n\nBackup будет автоматически отправляться всем Telegram-админам.",
+            "⏱ <b>Auto-backup interval</b>\n\nBackup will be sent to all Telegram admins automatically.",
+        ),
+        reply_markup=_kb_intervals(_BACKUP_INTERVALS, "maint_bset", current, back_cb="maint_backup_menu"),
         parse_mode="HTML",
     )
 
@@ -493,10 +619,16 @@ async def cb_backup_set(cq: CallbackQuery):
     hours = int(cq.data.split("_")[-1])
     try:
         await maintenance_api.set_backup_interval(hours)
-        label = f"every {hours}h" if hours else "off"
-        await cq.answer(f"✅ Auto-backup: {label}")
+        label = _schedule_label(hours)
+        await cq.answer(_txt(f"✅ Авто-backup: {label}", f"✅ Auto-backup: {label}"))
         status = await maintenance_api.status()
-        await cq.message.edit_text("🔧 <b>Maintenance</b>", reply_markup=_kb_main(status), parse_mode="HTML")
+        await cq.message.edit_text(
+            f"💾 <b>{_txt('Backup', 'Backup')}</b>\n\n"
+            f"• {_txt('Интервал', 'Interval')}: <b>{_schedule_label(int(status.get('backup', {}).get('auto_hours', 0) or 0))}</b>\n"
+            f"• {_txt('Следующий запуск', 'Next run')}: <code>{status.get('backup', {}).get('next_at') or '—'}</code>",
+            reply_markup=_kb_backup_menu(status),
+            parse_mode="HTML",
+        )
     except APIError as exc:
         await cq.answer(f"❌ {exc.detail}", show_alert=True)
 
@@ -506,25 +638,28 @@ async def cb_logs_menu(cq: CallbackQuery):
     try:
         data = await maintenance_api.logs_list()
         files = data.get("files", [])
-        text = "📋 <b>Nginx logs</b>\n\nClick ⬇️ to download, 🗑 to clear."
+        text = _txt(
+            "📋 <b>Логи Nginx</b>\n\nНажмите ⬇️ для скачивания, 🗑 для очистки.",
+            "📋 <b>Nginx logs</b>\n\nClick ⬇️ to download, 🗑 to clear.",
+        )
         kb = _kb_logs(files)
     except APIError as exc:
         text = f"❌ {exc.detail}"
-        kb = kb_back("menu_maintenance")
+        kb = kb_back("maint_logs_root")
     await cq.message.edit_text(text, reply_markup=kb, parse_mode="HTML")
 
 
 @router.callback_query(F.data.startswith("maint_log_dl_"))
 async def cb_log_download(cq: CallbackQuery):
     name = cq.data[len("maint_log_dl_"):]
-    await cq.answer("Downloading…")
+    await cq.answer(_txt("Скачиваю…", "Downloading…"))
     try:
         content = await maintenance_api.log_download(name)
         if content:
             file = BufferedInputFile(content if isinstance(content, bytes) else content.encode(), filename=name)
             await cq.message.answer_document(file, caption=f"📋 <code>{name}</code>", parse_mode="HTML")
         else:
-            await cq.message.answer("⚠️ Log file is empty")
+            await cq.message.answer(_txt("⚠️ Файл лога пуст.", "⚠️ Log file is empty"))
     except APIError as exc:
         await cq.message.answer(f"❌ {exc.detail}")
 
@@ -536,13 +671,13 @@ async def cb_log_clear(cq: CallbackQuery):
         if name == "all":
             result = await maintenance_api.log_clear_all()
             cleared = result.get("cleared", [])
-            await cq.answer(f"✅ Cleared {len(cleared)} files")
+            await cq.answer(_txt(f"✅ Очищено файлов: {len(cleared)}", f"✅ Cleared {len(cleared)} files"))
         else:
             await maintenance_api.log_clear_one(name)
-            await cq.answer(f"✅ {name} cleared")
+            await cq.answer(_txt(f"✅ {name} очищен", f"✅ {name} cleared"))
         data = await maintenance_api.logs_list()
         await cq.message.edit_text(
-            "📋 <b>Nginx logs</b>",
+            _txt("📋 <b>Логи Nginx</b>", "📋 <b>Nginx logs</b>"),
             reply_markup=_kb_logs(data.get("files", [])),
             parse_mode="HTML",
         )
@@ -558,8 +693,11 @@ async def cb_clean_interval_menu(cq: CallbackQuery):
     except APIError:
         current = 0
     await cq.message.edit_text(
-        "⏱ <b>Auto log cleanup interval</b>\n\nNginx access/error logs will be truncated automatically.",
-        reply_markup=_kb_intervals(_CLEAN_INTERVALS, "maint_cset", current),
+        _txt(
+            "⏱ <b>Интервал авто-очистки логов</b>\n\nЛоги доступа/ошибок Nginx будут автоматически очищаться.",
+            "⏱ <b>Auto log cleanup interval</b>\n\nNginx access/error logs will be truncated automatically.",
+        ),
+        reply_markup=_kb_intervals(_CLEAN_INTERVALS, "maint_cset", current, back_cb="maint_logs_root"),
         parse_mode="HTML",
     )
 
@@ -569,10 +707,16 @@ async def cb_clean_set(cq: CallbackQuery):
     hours = int(cq.data.split("_")[-1])
     try:
         await maintenance_api.set_log_clean_interval(hours)
-        label = f"every {hours}h" if hours else "off"
-        await cq.answer(f"✅ Auto cleanup: {label}")
+        label = _schedule_label(hours)
+        await cq.answer(_txt(f"✅ Авто-очистка: {label}", f"✅ Auto cleanup: {label}"))
         status = await maintenance_api.status()
-        await cq.message.edit_text("🔧 <b>Maintenance</b>", reply_markup=_kb_main(status), parse_mode="HTML")
+        await cq.message.edit_text(
+            f"📋 <b>{_txt('Логи', 'Logs')}</b>\n\n"
+            f"• {_txt('Авто-очистка', 'Auto cleanup')}: <b>{_schedule_label(int(status.get('logs', {}).get('auto_clean_hours', 0) or 0))}</b>\n"
+            f"• IP Ban: <b>{int(status.get('ip_ban', {}).get('count', 0) or 0)}</b>",
+            reply_markup=_kb_logs_root(status),
+            parse_mode="HTML",
+        )
     except APIError as exc:
         await cq.answer(f"❌ {exc.detail}", show_alert=True)
 
@@ -582,11 +726,14 @@ async def cb_ipban_menu(cq: CallbackQuery):
     try:
         data = await maintenance_api.ip_ban_list()
         banned = data.get("banned", [])
-        text = f"🚫 <b>IP Ban list</b> ({len(banned)} IPs)\n\nClick IP to unban."
+        text = _txt(
+            f"🚫 <b>Список IP Ban</b> ({len(banned)} IP)\n\nНажмите на IP, чтобы разблокировать.",
+            f"🚫 <b>IP Ban list</b> ({len(banned)} IPs)\n\nClick IP to unban.",
+        )
         kb = _kb_ipban(banned)
     except APIError as exc:
         text = f"❌ {exc.detail}"
-        kb = kb_back("menu_maintenance")
+        kb = kb_back("maint_logs_root")
     await cq.message.edit_text(text, reply_markup=kb, parse_mode="HTML")
 
 
@@ -594,7 +741,10 @@ async def cb_ipban_menu(cq: CallbackQuery):
 async def cb_ban_manual(cq: CallbackQuery, state: FSMContext):
     await state.set_state(IpBanFSM.manual_ip)
     await cq.message.answer(
-        "✏️ Enter IP address to ban (e.g. <code>1.2.3.4</code>):",
+        _txt(
+            "✏️ Введите IP для блокировки (например, <code>1.2.3.4</code>):",
+            "✏️ Enter IP address to ban (e.g. <code>1.2.3.4</code>):",
+        ),
         parse_mode="HTML",
         reply_markup=kb_back("maint_ipban_menu"),
     )
@@ -608,7 +758,10 @@ async def fsm_ban_ip(msg: Message, state: FSMContext):
     try:
         result = await maintenance_api.ip_ban_add(ip, reason="manual")
         await msg.answer(
-            f"✅ <code>{ip}</code> banned\nNginx reloaded: {'✅' if result.get('nginx_reloaded') else '⚠️'}",
+            _txt(
+                f"✅ <code>{ip}</code> заблокирован\nNginx перезагружен: {'✅' if result.get('nginx_reloaded') else '⚠️'}",
+                f"✅ <code>{ip}</code> banned\nNginx reloaded: {'✅' if result.get('nginx_reloaded') else '⚠️'}",
+            ),
             parse_mode="HTML",
             reply_markup=kb_back("maint_ipban_menu"),
         )
@@ -621,11 +774,14 @@ async def cb_unban(cq: CallbackQuery):
     ip = cq.data[len("maint_unban_"):]
     try:
         await maintenance_api.ip_ban_remove(ip)
-        await cq.answer(f"✅ {ip} unbanned")
+        await cq.answer(_txt(f"✅ {ip} разблокирован", f"✅ {ip} unbanned"))
         data = await maintenance_api.ip_ban_list()
         banned = data.get("banned", [])
         await cq.message.edit_text(
-            f"🚫 <b>IP Ban list</b> ({len(banned)} IPs)",
+            _txt(
+                f"🚫 <b>Список IP Ban</b> ({len(banned)} IP)",
+                f"🚫 <b>IP Ban list</b> ({len(banned)} IPs)",
+            ),
             reply_markup=_kb_ipban(banned),
             parse_mode="HTML",
         )
@@ -635,20 +791,26 @@ async def cb_unban(cq: CallbackQuery):
 
 @router.callback_query(F.data == "maint_analyze")
 async def cb_analyze(cq: CallbackQuery):
-    await cq.answer("Analyzing logs…")
+    await cq.answer(_txt("Анализирую логи…", "Analyzing logs…"))
     try:
         data = await maintenance_api.ip_ban_analyze()
         suspicious = data.get("suspicious", [])
         if not suspicious:
-            await cq.message.answer("✅ No suspicious IPs found in logs.", reply_markup=kb_back("maint_ipban_menu"))
+            await cq.message.answer(
+                _txt("✅ Подозрительные IP в логах не найдены.", "✅ No suspicious IPs found in logs."),
+                reply_markup=kb_back("maint_ipban_menu"),
+            )
             return
 
         lines = [f"• <code>{entry['ip']}</code> — {entry['reason']}" for entry in suspicious[:20]]
-        text = f"🔍 <b>Suspicious IPs ({len(suspicious)}):</b>\n" + "\n".join(lines)
+        text = _txt(
+            f"🔍 <b>Подозрительные IP ({len(suspicious)}):</b>\n",
+            f"🔍 <b>Suspicious IPs ({len(suspicious)}):</b>\n",
+        ) + "\n".join(lines)
         kb = InlineKeyboardMarkup(
             inline_keyboard=[
-                [InlineKeyboardButton(text=f"🚫 Ban all {len(suspicious)} IPs", callback_data="maint_ban_all_analyzed")],
-                [InlineKeyboardButton(text="⬅️ Back", callback_data="maint_ipban_menu")],
+                [InlineKeyboardButton(text=_txt(f"🚫 Заблокировать все {len(suspicious)} IP", f"🚫 Ban all {len(suspicious)} IPs"), callback_data="maint_ban_all_analyzed")],
+                [InlineKeyboardButton(text=_txt("⬅️ Назад", "⬅️ Back"), callback_data="maint_ipban_menu")],
             ]
         )
         await cq.message.answer(text, reply_markup=kb, parse_mode="HTML")
@@ -658,12 +820,15 @@ async def cb_analyze(cq: CallbackQuery):
 
 @router.callback_query(F.data == "maint_ban_all_analyzed")
 async def cb_ban_all_analyzed(cq: CallbackQuery):
-    await cq.answer("Banning…")
+    await cq.answer(_txt("Блокирую…", "Banning…"))
     try:
         result = await maintenance_api.ip_ban_all_analyzed()
         count = result.get("banned", 0)
         await cq.message.edit_text(
-            f"✅ Banned <b>{count}</b> IPs. Nginx reloaded.",
+            _txt(
+                f"✅ Заблокировано <b>{count}</b> IP. Nginx перезагружен.",
+                f"✅ Banned <b>{count}</b> IPs. Nginx reloaded.",
+            ),
             reply_markup=kb_back("maint_ipban_menu"),
             parse_mode="HTML",
         )
@@ -676,10 +841,13 @@ async def cb_clear_auto_bans(cq: CallbackQuery):
     try:
         result = await maintenance_api.ip_ban_clear_auto()
         count = result.get("removed", 0)
-        await cq.answer(f"✅ Removed {count} auto-bans")
+        await cq.answer(_txt(f"✅ Удалено авто-банов: {count}", f"✅ Removed {count} auto-bans"))
         data = await maintenance_api.ip_ban_list()
         await cq.message.edit_text(
-            f"🚫 <b>IP Ban list</b> ({len(data.get('banned', []))} IPs)",
+            _txt(
+                f"🚫 <b>Список IP Ban</b> ({len(data.get('banned', []))} IP)",
+                f"🚫 <b>IP Ban list</b> ({len(data.get('banned', []))} IPs)",
+            ),
             reply_markup=_kb_ipban(data.get("banned", [])),
             parse_mode="HTML",
         )
@@ -695,14 +863,24 @@ async def cb_windows_menu(cq: CallbackQuery):
         sing_box = "✅" if status.get("sing_box_cached") else "❌"
         winsw = "✅" if status.get("winsw_cached") else "❌"
         ready = status.get("ready", False)
-        state_text = "✅ Ready — clients can download ZIP" if ready else "⚠️ Binaries not downloaded yet"
+        state_text = _txt(
+            "✅ Готово — клиенты могут скачивать ZIP",
+            "✅ Ready — clients can download ZIP",
+        ) if ready else _txt(
+            "⚠️ Бинарники ещё не загружены",
+            "⚠️ Binaries not downloaded yet",
+        )
         await cq.message.edit_text(
-            f"🪟 <b>Windows Service Binaries</b>\n\n"
+            f"🪟 <b>{_txt('Бинарники Windows Service', 'Windows Service Binaries')}</b>\n\n"
             f"{sing_box} sing-box.exe (v{version})\n"
             f"{winsw} winsw3.exe\n\n"
             f"{state_text}\n\n"
-            "After downloading, each client can get a ready-to-use ZIP archive "
-            "(sing-box.exe + winsw3.exe + scripts + XML) via Sub URL.",
+            + _txt(
+                "После загрузки каждый клиент сможет получить готовый ZIP-архив "
+                "(sing-box.exe + winsw3.exe + scripts + XML) через Sub URL.",
+                "After downloading, each client can get a ready-to-use ZIP archive "
+                "(sing-box.exe + winsw3.exe + scripts + XML) via Sub URL.",
+            ),
             reply_markup=_kb_windows(status),
             parse_mode="HTML",
         )
@@ -712,32 +890,46 @@ async def cb_windows_menu(cq: CallbackQuery):
 
 @router.callback_query(F.data == "maint_win_prefetch")
 async def cb_win_prefetch(cq: CallbackQuery):
-    await cq.answer("⏳ Downloading… this may take 1-2 minutes")
+    await cq.answer(_txt("⏳ Скачиваю… это может занять 1-2 минуты", "⏳ Downloading… this may take 1-2 minutes"))
     await cq.message.edit_text(
-        "⏳ <b>Downloading Windows binaries...</b>\n\n"
-        "• sing-box.exe (Windows AMD64)\n"
-        "• winsw3.exe\n\n"
-        "Please wait, this usually takes 1-2 minutes.",
+        _txt(
+            "⏳ <b>Скачиваю бинарники Windows...</b>\n\n"
+            "• sing-box.exe (Windows AMD64)\n"
+            "• winsw3.exe\n\n"
+            "Пожалуйста, подождите, обычно это занимает 1-2 минуты.",
+            "⏳ <b>Downloading Windows binaries...</b>\n\n"
+            "• sing-box.exe (Windows AMD64)\n"
+            "• winsw3.exe\n\n"
+            "Please wait, this usually takes 1-2 minutes.",
+        ),
         parse_mode="HTML",
     )
     try:
         await maintenance_api.prefetch_windows_binaries()
         status = await maintenance_api.windows_binaries_status()
         await cq.message.edit_text(
-            "✅ <b>Windows binaries downloaded!</b>\n\n"
-            "Clients can now download the Windows Service ZIP from their Sub URL.",
+            _txt(
+                "✅ <b>Бинарники Windows загружены!</b>\n\n"
+                "Теперь клиенты могут скачивать ZIP Windows Service через свой Sub URL.",
+                "✅ <b>Windows binaries downloaded!</b>\n\n"
+                "Clients can now download the Windows Service ZIP from their Sub URL.",
+            ),
             reply_markup=_kb_windows(status),
             parse_mode="HTML",
         )
     except APIError as exc:
         await cq.message.edit_text(
-            f"❌ <b>Download failed</b>\n\n{exc.detail}\n\n"
-            "Check that the server has internet access and try again.",
+            _txt(
+                f"❌ <b>Ошибка загрузки</b>\n\n{exc.detail}\n\n"
+                "Проверьте, что у сервера есть доступ в интернет, и попробуйте снова.",
+                f"❌ <b>Download failed</b>\n\n{exc.detail}\n\n"
+                "Check that the server has internet access and try again.",
+            ),
             reply_markup=InlineKeyboardMarkup(
                 inline_keyboard=[
                     [
-                        InlineKeyboardButton(text="🔄 Retry", callback_data="maint_win_prefetch"),
-                        InlineKeyboardButton(text="⬅️ Back", callback_data="maint_windows"),
+                        InlineKeyboardButton(text=_txt("🔄 Повторить", "🔄 Retry"), callback_data="maint_win_prefetch"),
+                        InlineKeyboardButton(text=_txt("⬅️ Назад", "⬅️ Back"), callback_data="maint_windows"),
                     ]
                 ]
             ),
@@ -786,7 +978,7 @@ async def _run_update(cq: CallbackQuery, *, with_backup: bool) -> None:
 
         backup_path = ""
         if with_backup:
-            detected_path = await _send_preflight_backup(cq, reason_ru="update", reason_en="update")
+            detected_path = await _send_preflight_backup(cq, reason_ru="обновлением", reason_en="update")
             if not detected_path:
                 return
             backup_path = detected_path
@@ -946,7 +1138,7 @@ async def _run_reinstall(cq: CallbackQuery, *, with_backup: bool) -> None:
 
         backup_path = ""
         if with_backup:
-            detected_path = await _send_preflight_backup(cq, reason_ru="reinstall", reason_en="reinstall")
+            detected_path = await _send_preflight_backup(cq, reason_ru="переустановкой", reason_en="reinstall")
             if not detected_path:
                 return
             backup_path = detected_path
@@ -1045,7 +1237,7 @@ async def cb_update_logs(cq: CallbackQuery):
             reply_markup=InlineKeyboardMarkup(
                 inline_keyboard=[
                     [InlineKeyboardButton(text=_txt("🔄 Обновить логи", "🔄 Refresh logs"), callback_data="maint_update_logs")],
-                    [InlineKeyboardButton(text="⬅️ Back", callback_data="maint_update_menu")],
+                    [InlineKeyboardButton(text=_txt("⬅️ Назад", "⬅️ Back"), callback_data="maint_update_menu")],
                 ]
             ),
         )

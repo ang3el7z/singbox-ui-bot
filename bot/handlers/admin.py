@@ -4,6 +4,7 @@ from aiogram.types import CallbackQuery, Message
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 
+from api.routers.settings_router import get_runtime
 from bot.api_client import admin_api, APIError
 from bot.keyboards.main import kb_back, kb_admin_menu
 
@@ -14,9 +15,21 @@ class AddAdminFSM(StatesGroup):
     telegram_id = State()
 
 
+def _is_ru() -> bool:
+    return get_runtime("bot_lang", "ru") == "ru"
+
+
+def _txt(ru: str, en: str) -> str:
+    return ru if _is_ru() else en
+
+
 @router.callback_query(F.data == "menu_admin")
 async def cb_admin_menu(cq: CallbackQuery):
-    await cq.message.edit_text("👑 <b>Admin Panel</b>", reply_markup=kb_admin_menu(), parse_mode="HTML")
+    await cq.message.edit_text(
+        _txt("👑 <b>Панель админа</b>", "👑 <b>Admin Panel</b>"),
+        reply_markup=kb_admin_menu(),
+        parse_mode="HTML",
+    )
 
 
 @router.callback_query(F.data == "admin_list")
@@ -25,9 +38,9 @@ async def cb_admin_list(cq: CallbackQuery):
         admins = await admin_api.list_admins()
         if admins:
             lines = [f"• {a['telegram_id']} (@{a.get('username', 'N/A')})" for a in admins]
-            text = "👑 <b>Admins:</b>\n" + "\n".join(lines)
+            text = _txt("👑 <b>Админы:</b>\n", "👑 <b>Admins:</b>\n") + "\n".join(lines)
         else:
-            text = "No additional admins"
+            text = _txt("Дополнительных админов нет", "No additional admins")
     except APIError as e:
         text = f"❌ {e.detail}"
     await cq.answer()
@@ -37,7 +50,7 @@ async def cb_admin_list(cq: CallbackQuery):
 @router.callback_query(F.data == "admin_add")
 async def cb_admin_add(cq: CallbackQuery, state: FSMContext):
     await state.set_state(AddAdminFSM.telegram_id)
-    await cq.message.answer("Enter Telegram ID of new admin:")
+    await cq.message.answer(_txt("Введите Telegram ID нового админа:", "Enter Telegram ID of new admin:"))
     await cq.answer()
 
 
@@ -47,11 +60,14 @@ async def fsm_admin_id(msg: Message, state: FSMContext):
     try:
         tg_id = int(msg.text.strip())
     except ValueError:
-        await msg.answer("❌ Invalid Telegram ID", reply_markup=kb_back("menu_admin"))
+        await msg.answer(_txt("❌ Неверный Telegram ID", "❌ Invalid Telegram ID"), reply_markup=kb_back("menu_admin"))
         return
     try:
         await admin_api.add_admin(tg_id)
-        await msg.answer(f"✅ Admin {tg_id} added", reply_markup=kb_back("menu_admin"))
+        await msg.answer(
+            _txt(f"✅ Админ {tg_id} добавлен", f"✅ Admin {tg_id} added"),
+            reply_markup=kb_back("menu_admin"),
+        )
     except APIError as e:
         await msg.answer(f"❌ {e.detail}", reply_markup=kb_back("menu_admin"))
 
@@ -62,9 +78,9 @@ async def cb_admin_audit_log(cq: CallbackQuery):
         logs = await admin_api.audit_log(30)
         if logs:
             lines = [f"• {l['created_at'][:16]} [{l['actor']}] {l['action']}" for l in logs]
-            text = "📋 <b>Audit Log:</b>\n<pre>" + "\n".join(lines) + "</pre>"
+            text = _txt("📋 <b>Журнал аудита:</b>\n<pre>", "📋 <b>Audit Log:</b>\n<pre>") + "\n".join(lines) + "</pre>"
         else:
-            text = "📋 Audit log is empty"
+            text = _txt("📋 Журнал аудита пуст", "📋 Audit log is empty")
     except APIError as e:
         text = f"❌ {e.detail}"
     await cq.answer()
@@ -73,26 +89,8 @@ async def cb_admin_audit_log(cq: CallbackQuery):
 
 @router.callback_query(F.data == "admin_backup")
 async def cb_admin_backup(cq: CallbackQuery):
-    await cq.answer("Creating backup…")
-    try:
-        # For bot, we call API directly and get a stream
-        import httpx
-        from api.config import settings
-        async with httpx.AsyncClient(
-            base_url="http://localhost:8080",
-            headers={"X-Internal-Token": settings.internal_token},
-            timeout=60,
-        ) as client:
-            r = await client.get("/api/admin/backup")
-            if r.is_success:
-                from aiogram.types import BufferedInputFile
-                filename = "backup.zip"
-                cd = r.headers.get("content-disposition", "")
-                if "filename=" in cd:
-                    filename = cd.split("filename=")[-1].strip().strip('"')
-                file = BufferedInputFile(r.content, filename=filename)
-                await cq.message.answer_document(file, caption="💾 Backup created")
-            else:
-                await cq.message.answer("❌ Backup failed")
-    except Exception as e:
-        await cq.message.answer(f"❌ {e}")
+    await cq.answer(_txt("Перенесено в Обслуживание", "Moved to Maintenance"), show_alert=True)
+    await cq.message.answer(
+        _txt("💾 Backup перенесён в: Обслуживание → Backup", "💾 Backup moved to: Maintenance → Backup"),
+        reply_markup=kb_back("maint_backup_menu"),
+    )

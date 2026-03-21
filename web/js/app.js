@@ -100,6 +100,7 @@ function serverComponent() {
     return {
         status: null,
         logs: [],
+        logError: "",
         loading: false,
 
         async init() {
@@ -110,6 +111,9 @@ function serverComponent() {
             this.loading = true;
             try {
                 this.status = await api.serverStatus();
+                if (this.status?.error) {
+                    this.$dispatch("toast", { msg: this.status.error, type: "error" });
+                }
             } finally { this.loading = false; }
         },
 
@@ -118,6 +122,10 @@ function serverComponent() {
             try {
                 const data = await api.serverLogs(100);
                 this.logs = data.logs || [];
+                this.logError = data.error || "";
+                if (this.logError) {
+                    this.$dispatch("toast", { msg: this.logError, type: "error" });
+                }
             } finally { this.loading = false; }
         },
 
@@ -125,8 +133,14 @@ function serverComponent() {
             if (!confirm("Restart Sing-Box?")) return;
             this.loading = true;
             try {
-                await api.serverRestart();
-                this.$dispatch("toast", { msg: "Restarted", type: "success" });
+                const data = await api.serverRestart();
+                if (data?.success) {
+                    const warning = data.warning ? ` (${data.warning})` : "";
+                    this.$dispatch("toast", { msg: `Restarted${warning}`, type: "success" });
+                } else {
+                    const reason = data?.error || "Restart failed";
+                    this.$dispatch("toast", { msg: reason, type: "error" });
+                }
                 await this.loadStatus();
             } catch (e) {
                 this.$dispatch("toast", { msg: e.message, type: "error" });
@@ -136,8 +150,14 @@ function serverComponent() {
         async reload() {
             this.loading = true;
             try {
-                await api.serverReload();
-                this.$dispatch("toast", { msg: "Config reloaded", type: "success" });
+                const data = await api.serverReload();
+                if (data?.success) {
+                    const note = data.note ? ` (${data.note})` : "";
+                    this.$dispatch("toast", { msg: `Config reloaded${note}`, type: "success" });
+                } else {
+                    const reason = data?.error || "Reload failed";
+                    this.$dispatch("toast", { msg: reason, type: "error" });
+                }
             } catch (e) {
                 this.$dispatch("toast", { msg: e.message, type: "error" });
             } finally { this.loading = false; }

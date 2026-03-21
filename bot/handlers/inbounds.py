@@ -4,6 +4,7 @@ from aiogram.types import CallbackQuery, Message
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 
+from api.routers.settings_router import get_runtime
 from bot.api_client import inbounds_api, APIError
 from bot.keyboards.main import kb_back, kb_inbounds_list, kb_inbound_detail, kb_protocol_select
 
@@ -18,11 +19,22 @@ class AddInboundFSM(StatesGroup):
     port = State()
 
 
+def _is_ru() -> bool:
+    return get_runtime("bot_lang", "ru") == "ru"
+
+
+def _txt(ru: str, en: str) -> str:
+    return ru if _is_ru() else en
+
+
 @router.callback_query(F.data == "menu_inbounds")
 async def cb_inbounds_menu(cq: CallbackQuery):
     try:
         inbounds = await inbounds_api.list()
-        text = f"🔌 <b>Inbounds</b> — total: {len(inbounds)}"
+        text = _txt(
+            f"🔌 <b>Inbounds</b> — всего: {len(inbounds)}",
+            f"🔌 <b>Inbounds</b> — total: {len(inbounds)}",
+        )
         mk = kb_inbounds_list(inbounds)
     except APIError as e:
         text = f"❌ {e.detail}"
@@ -40,9 +52,9 @@ async def cb_inbound_detail(cq: CallbackQuery):
         users = len(ib.get("users", []))
         text = (
             f"🔌 <b>{tag}</b>\n"
-            f"Protocol: {proto}\n"
-            f"Port: {port}\n"
-            f"Users: {users}"
+            f"{_txt('Протокол', 'Protocol')}: {proto}\n"
+            f"{_txt('Порт', 'Port')}: {port}\n"
+            f"{_txt('Пользователи', 'Users')}: {users}"
         )
     except APIError as e:
         text = f"❌ {e.detail}"
@@ -55,8 +67,11 @@ async def cb_inbound_delete(cq: CallbackQuery):
     tag = cq.data.replace("inbound_delete_", "")
     try:
         await inbounds_api.delete(tag)
-        await cq.answer("✅ Deleted")
-        await cq.message.edit_text("✅ Inbound deleted", reply_markup=kb_back("menu_inbounds"))
+        await cq.answer(_txt("✅ Удалено", "✅ Deleted"))
+        await cq.message.edit_text(
+            _txt("✅ Inbound удалён", "✅ Inbound deleted"),
+            reply_markup=kb_back("menu_inbounds"),
+        )
     except APIError as e:
         await cq.answer(f"❌ {e.detail}", show_alert=True)
 
@@ -64,7 +79,10 @@ async def cb_inbound_delete(cq: CallbackQuery):
 @router.callback_query(F.data == "inbound_add")
 async def cb_inbound_add(cq: CallbackQuery, state: FSMContext):
     await state.set_state(AddInboundFSM.protocol)
-    await cq.message.answer("Choose protocol:", reply_markup=kb_protocol_select(PROTOCOLS, "addinbound"))
+    await cq.message.answer(
+        _txt("Выберите протокол:", "Choose protocol:"),
+        reply_markup=kb_protocol_select(PROTOCOLS, "addinbound"),
+    )
     await cq.answer()
 
 
@@ -73,7 +91,13 @@ async def fsm_inbound_proto(cq: CallbackQuery, state: FSMContext):
     proto = cq.data.replace("addinbound_proto_", "")
     await state.update_data(protocol=proto)
     await state.set_state(AddInboundFSM.tag)
-    await cq.message.answer(f"Protocol: <b>{proto}</b>\nEnter tag (unique name, e.g. vless-in):", parse_mode="HTML")
+    await cq.message.answer(
+        _txt(
+            f"Протокол: <b>{proto}</b>\nВведите тег (уникальное имя, например vless-in):",
+            f"Protocol: <b>{proto}</b>\nEnter tag (unique name, e.g. vless-in):",
+        ),
+        parse_mode="HTML",
+    )
     await cq.answer()
 
 
@@ -82,7 +106,13 @@ async def fsm_inbound_tag(msg: Message, state: FSMContext):
     tag = msg.text.strip().replace(" ", "_")
     await state.update_data(tag=tag)
     await state.set_state(AddInboundFSM.port)
-    await msg.answer(f"Tag: <b>{tag}</b>\nEnter listen port (1–65535):", parse_mode="HTML")
+    await msg.answer(
+        _txt(
+            f"Тег: <b>{tag}</b>\nВведите порт прослушивания (1–65535):",
+            f"Tag: <b>{tag}</b>\nEnter listen port (1–65535):",
+        ),
+        parse_mode="HTML",
+    )
 
 
 @router.message(AddInboundFSM.port)
@@ -92,7 +122,7 @@ async def fsm_inbound_port(msg: Message, state: FSMContext):
         if not 1 <= port <= 65535:
             raise ValueError
     except ValueError:
-        await msg.answer("Enter a valid port number (1–65535):")
+        await msg.answer(_txt("Введите корректный порт (1–65535):", "Enter a valid port number (1–65535):"))
         return
     data = await state.get_data()
     await state.clear()
@@ -104,18 +134,29 @@ async def fsm_inbound_port(msg: Message, state: FSMContext):
         )
         proto = ib.get("type", data["protocol"])
         text = (
-            f"✅ Inbound <b>{data['tag']}</b> created\n"
-            f"Protocol: {proto}\n"
-            f"Port: {port}"
+            _txt(
+                f"✅ Inbound <b>{data['tag']}</b> создан\n"
+                f"Протокол: {proto}\n"
+                f"Порт: {port}",
+                f"✅ Inbound <b>{data['tag']}</b> created\n"
+                f"Protocol: {proto}\n"
+                f"Port: {port}",
+            )
         )
         # For Reality, show public key
         tls = ib.get("tls", {})
         reality = tls.get("reality", {})
         if reality.get("public_key"):
-            text += f"\n🔑 Public key: <code>{reality['public_key']}</code>"
+            text += _txt(
+                f"\n🔑 Публичный ключ: <code>{reality['public_key']}</code>",
+                f"\n🔑 Public key: <code>{reality['public_key']}</code>",
+            )
             short_ids = reality.get("short_id", [])
             if short_ids:
-                text += f"\nShort ID: <code>{short_ids[0]}</code>"
+                text += _txt(
+                    f"\nShort ID: <code>{short_ids[0]}</code>",
+                    f"\nShort ID: <code>{short_ids[0]}</code>",
+                )
     except APIError as e:
         text = f"❌ {e.detail}"
     await msg.answer(text, parse_mode="HTML", reply_markup=kb_back("menu_inbounds"))

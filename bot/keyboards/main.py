@@ -31,7 +31,7 @@ def _build(*rows: List[InlineKeyboardButton]) -> InlineKeyboardMarkup:
 
 def kb_main_menu() -> InlineKeyboardMarkup:
     return _build(
-        [InlineKeyboardButton(text=_txt("🖥 Сервер", "🖥 Server"),       callback_data="menu_server"),
+        [InlineKeyboardButton(text=_txt("📡 Sing-Box", "📡 Sing-Box"),   callback_data="menu_server"),
          InlineKeyboardButton(text=_txt("👥 Клиенты", "👥 Clients"),      callback_data="menu_clients")],
         [InlineKeyboardButton(text=_txt("🔌 Входящие", "🔌 Inbounds"),    callback_data="menu_inbounds"),
          InlineKeyboardButton(text=_txt("🗺 Маршрутизация", "🗺 Routing"), callback_data="menu_routing")],
@@ -54,7 +54,6 @@ def kb_server() -> InlineKeyboardMarkup:
          InlineKeyboardButton(text=_txt("📋 Логи", "📋 Logs"),     callback_data="server_logs")],
         [InlineKeyboardButton(text=_txt("🔄 Перечитать", "🔄 Reload"), callback_data="server_reload"),
          InlineKeyboardButton(text=_txt("♻️ Рестарт", "♻️ Restart"),   callback_data="server_restart")],
-        [InlineKeyboardButton(text=_txt("🔐 SSH порт", "🔐 SSH port"), callback_data="server_ssh_port")],
         [InlineKeyboardButton(text=_txt("⬅️ Назад", "⬅️ Back"), callback_data="main_menu")],
     )
 
@@ -397,7 +396,6 @@ def kb_admin_menu() -> InlineKeyboardMarkup:
     return _build(
         [InlineKeyboardButton(text=_txt("👥 Админы", "👥 Admins"), callback_data="admin_list"),
          InlineKeyboardButton(text=_txt("➕ Добавить админа", "➕ Add admin"), callback_data="admin_add")],
-        [InlineKeyboardButton(text=_txt("📋 Аудит лог", "📋 Audit log"), callback_data="admin_audit_log"),
-         InlineKeyboardButton(text=_txt("💾 Бэкап", "💾 Backup"), callback_data="admin_backup")],
+        [InlineKeyboardButton(text=_txt("📋 Аудит лог", "📋 Audit log"), callback_data="admin_audit_log")],
         [InlineKeyboardButton(text=_txt("⬅️ Назад", "⬅️ Back"), callback_data="main_menu")],
     )

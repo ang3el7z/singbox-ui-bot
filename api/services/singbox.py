@@ -10,7 +10,7 @@ import asyncio
 import json
 import uuid as uuid_lib
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 from api.config import settings
 from api.services import docker_engine
@@ -21,6 +21,9 @@ class SingBoxError(Exception):
 
 
 class SingBoxService:
+    _CONTAINER_ALIASES = ("singbox_core", "singbox_sui")
+    _SERVICE_HINTS = {"singbox", "sui"}
+    _EXCLUDED_NAME_HINTS = ("app", "nginx", "adguard")
 
     @property
     def config_path(self) -> Path:
@@ -40,57 +43,276 @@ class SingBoxService:
             encoding="utf-8",
         )
 
-    async def reload(self) -> bool:
-        """Reload sing-box gracefully (no connection drop for existing users)."""
-        ok, _ = await self._exec(["sing-box", "reload", "-c", str(self.config_path)])
-        if ok:
-            return True
+    def _candidate_container_names(self) -> list[str]:
+        seen = set()
+        names: list[str] = []
+        for raw in [settings.singbox_container, *self._CONTAINER_ALIASES]:
+            name = (raw or "").strip()
+            if not name or name in seen:
+                continue
+            seen.add(name)
+            names.append(name)
+        return names
+
+    def _resolve_container(self) -> tuple[Optional[str], str]:
+        configured = (settings.singbox_container or "").strip()
+
+        for name in self._candidate_container_names():
+            try:
+                docker_engine.inspect_container(name, timeout=5)
+                if configured and name != configured:
+                    return name, (
+                        f"Configured SINGBOX_CONTAINER='{configured}', "
+                        f"using detected '{name}'."
+                    )
+                return name, ""
+            except Exception:
+                continue
+
         try:
-            ok2, _ = await asyncio.to_thread(
+            containers = docker_engine.list_containers(all=True, timeout=8)
+        except Exception as e:
+            msg = str(e).strip() or "cannot list docker containers"
+            return None, msg
+
+        best_name = ""
+        best_score = -10_000
+        for c in containers:
+            raw_names = c.get("Names") or []
+            if not isinstance(raw_names, list):
+                continue
+            names = [str(n).lstrip("/") for n in raw_names if str(n).strip()]
+            if not names:
+                continue
+
+            labels = c.get("Labels") or {}
+            if not isinstance(labels, dict):
+                labels = {}
+            service = str(labels.get("com.docker.compose.service") or "").strip().lower()
+            image = str(c.get("Image") or "").strip().lower()
+            state = str(c.get("State") or "").strip().lower()
+            names_lower = [n.lower() for n in names]
+            name_blob = " ".join(names_lower)
+
+            score = 0
+            if service in self._SERVICE_HINTS:
+                score += 120
+            if any(n in self._CONTAINER_ALIASES for n in names):
+                score += 100
+            if any("singbox" in n for n in names_lower):
+                score += 45
+            if "sing-box" in image or "singbox" in image:
+                score += 60
+            if "s-ui" in image:
+                score += 40
+            if any(hint in name_blob for hint in self._EXCLUDED_NAME_HINTS):
+                score -= 120
+            if state == "running":
+                score += 10
+
+            if score > best_score:
+                best_score = score
+                best_name = names[0]
+
+        if best_name and best_score > 0:
+            if configured and best_name != configured:
+                warning = (
+                    f"Configured SINGBOX_CONTAINER='{configured}', "
+                    f"using detected '{best_name}'."
+                )
+            else:
+                warning = ""
+            return best_name, warning
+
+        missing = configured or "<empty>"
+        return None, f"Sing-Box container '{missing}' not found."
+
+    async def reload(self) -> bool:
+        result = await self.reload_verbose()
+        return bool(result.get("success"))
+
+    async def reload_verbose(self) -> dict[str, Any]:
+        """Reload sing-box gracefully (no connection drop for existing users)."""
+        configured = (settings.singbox_container or "").strip()
+        container, warning = await asyncio.to_thread(self._resolve_container)
+        if not container:
+            return {
+                "success": False,
+                "container": configured,
+                "resolved_container": None,
+                "error": warning or "Sing-Box container is not available.",
+            }
+
+        ok, out = await self._exec(["sing-box", "reload", "-c", str(self.config_path)])
+        if ok:
+            result: dict[str, Any] = {
+                "success": True,
+                "container": configured,
+                "resolved_container": container,
+            }
+            if warning:
+                result["warning"] = warning
+            return result
+
+        local_error = (out or "").strip()
+        hup_error = ""
+        try:
+            ok2, out2 = await asyncio.to_thread(
                 docker_engine.exec_in_container,
-                settings.singbox_container,
+                container,
                 ["kill", "-HUP", "1"],
                 timeout=20,
             )
-            return ok2
-        except Exception:
-            return False
+            if ok2:
+                result = {
+                    "success": True,
+                    "container": configured,
+                    "resolved_container": container,
+                }
+                if warning:
+                    result["warning"] = warning
+                if local_error:
+                    result["note"] = f"local reload failed, docker HUP succeeded: {local_error}"
+                return result
+            hup_error = (out2 or "").strip() or "docker exec returned non-zero exit code"
+        except Exception as e:
+            hup_error = str(e).strip() or "docker exec failed"
+
+        errors = []
+        if warning:
+            errors.append(warning)
+        if local_error:
+            errors.append(f"local reload failed: {local_error}")
+        if hup_error:
+            errors.append(f"container HUP failed: {hup_error}")
+
+        return {
+            "success": False,
+            "container": configured,
+            "resolved_container": container,
+            "error": "; ".join(errors) or "Reload failed.",
+        }
 
     async def restart(self) -> bool:
+        result = await self.restart_verbose()
+        return bool(result.get("success"))
+
+    async def restart_verbose(self) -> dict[str, Any]:
+        configured = (settings.singbox_container or "").strip()
+        container, warning = await asyncio.to_thread(self._resolve_container)
+        if not container:
+            return {
+                "success": False,
+                "container": configured,
+                "resolved_container": None,
+                "error": warning or "Sing-Box container is not available.",
+            }
+
         try:
             await asyncio.to_thread(
                 docker_engine.restart_container,
-                settings.singbox_container,
+                container,
                 timeout=30,
             )
-            return True
-        except Exception:
-            return False
+            result: dict[str, Any] = {
+                "success": True,
+                "container": configured,
+                "resolved_container": container,
+            }
+            if warning:
+                result["warning"] = warning
+            return result
+        except Exception as e:
+            error_text = str(e).strip() or "Restart failed."
+            if warning:
+                error_text = f"{warning}; {error_text}"
+            return {
+                "success": False,
+                "container": configured,
+                "resolved_container": container,
+                "error": error_text,
+            }
 
     async def get_status(self) -> dict:
-        running = False
+        configured = (settings.singbox_container or "").strip()
+        container, warning = await asyncio.to_thread(self._resolve_container)
+        if not container:
+            return {
+                "running": False,
+                "status": "missing",
+                "container": configured,
+                "resolved_container": None,
+                "error": warning or "Sing-Box container is not available.",
+            }
+
         try:
             info = await asyncio.to_thread(
                 docker_engine.inspect_container,
-                settings.singbox_container,
+                container,
                 timeout=10,
             )
-            running = (info.get("State") or {}).get("Status") == "running"
-        except Exception:
-            running = False
-        return {"running": running, "container": settings.singbox_container}
+            status_text = str((info.get("State") or {}).get("Status") or "unknown")
+            result: dict[str, Any] = {
+                "running": status_text == "running",
+                "status": status_text,
+                "container": configured,
+                "resolved_container": container,
+            }
+            if warning:
+                result["warning"] = warning
+            return result
+        except Exception as e:
+            error_text = str(e).strip() or "Status check failed."
+            if warning:
+                error_text = f"{warning}; {error_text}"
+            return {
+                "running": False,
+                "status": "error",
+                "container": configured,
+                "resolved_container": container,
+                "error": error_text,
+            }
 
     async def get_logs(self, lines: int = 100) -> list[str]:
+        result = await self.get_logs_verbose(lines=lines)
+        return result.get("logs", [])
+
+    async def get_logs_verbose(self, lines: int = 100) -> dict[str, Any]:
+        configured = (settings.singbox_container or "").strip()
+        container, warning = await asyncio.to_thread(self._resolve_container)
+        if not container:
+            return {
+                "logs": [],
+                "container": configured,
+                "resolved_container": None,
+                "error": warning or "Sing-Box container is not available.",
+            }
+
         try:
             out = await asyncio.to_thread(
                 docker_engine.get_container_logs,
-                settings.singbox_container,
+                container,
                 tail=lines,
                 timeout=15,
             )
-            return out.splitlines()
-        except Exception:
-            return []
+            result: dict[str, Any] = {
+                "logs": out.splitlines(),
+                "container": configured,
+                "resolved_container": container,
+            }
+            if warning:
+                result["warning"] = warning
+            return result
+        except Exception as e:
+            error_text = str(e).strip() or "Log fetch failed."
+            if warning:
+                error_text = f"{warning}; {error_text}"
+            return {
+                "logs": [],
+                "container": configured,
+                "resolved_container": container,
+                "error": error_text,
+            }
 
     async def validate_config(self, cfg: dict) -> tuple[bool, str]:
         """Write to a temp file and validate with sing-box check."""

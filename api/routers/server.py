@@ -16,22 +16,22 @@ async def server_status(auth: dict = Depends(require_any_auth)):
 
 @router.get("/logs")
 async def server_logs(lines: int = 100, auth: dict = Depends(require_any_auth)):
-    logs = await singbox.get_logs(lines)
-    return {"logs": logs}
+    data = await singbox.get_logs_verbose(lines)
+    return data
 
 
 @router.post("/restart")
 async def server_restart(auth: dict = Depends(require_any_auth)):
-    ok = await singbox.restart()
+    result = await singbox.restart_verbose()
     await audit(auth["actor"], "restart_singbox")
-    return {"success": ok}
+    return result
 
 
 @router.post("/reload")
 async def server_reload(auth: dict = Depends(require_any_auth)):
-    ok = await singbox.reload()
+    result = await singbox.reload_verbose()
     await audit(auth["actor"], "reload_singbox")
-    return {"success": ok}
+    return result
 
 
 @router.get("/config")

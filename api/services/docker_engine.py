@@ -96,6 +96,19 @@ def inspect_container(container: str, *, timeout: int = 10) -> dict[str, Any]:
         raise DockerAPIError(f"Invalid Docker inspect response for '{container}': {e}") from e
 
 
+def list_containers(*, all: bool = True, timeout: int = 10) -> list[dict[str, Any]]:
+    all_param = "1" if all else "0"
+    status, body = _request("GET", f"/containers/json?all={all_param}", timeout=timeout)
+    _ensure(status, body, allowed=(200,))
+    try:
+        parsed = json.loads(body or "[]")
+    except Exception as e:
+        raise DockerAPIError(f"Invalid Docker containers list response: {e}") from e
+    if isinstance(parsed, list):
+        return parsed
+    raise DockerAPIError("Unexpected Docker containers list payload type.")
+
+
 def restart_container(container: str, *, timeout: int = 30) -> None:
     status, body = _request(
         "POST",
