@@ -1081,7 +1081,15 @@ function maintenanceComponent() {
             return this.updateInfo?.current_version || this.updateInfo?.current_tag || "-";
         },
         get latestTagNotes() {
-            return (this.updateInfo?.latest_tag_notes || "").trim();
+            const raw = (this.updateInfo?.latest_tag_notes || "").trim();
+            const i18n = this.updateInfo?.latest_tag_notes_i18n;
+            if (!i18n || typeof i18n !== "object") return raw;
+
+            const locale = String(navigator.language || "en").toLowerCase();
+            const base = locale.split("-")[0];
+            const pick = (code) => String(i18n?.[code] || "").trim();
+
+            return pick(locale) || pick(base) || pick("en") || raw;
         },
 
         async init() {

@@ -56,6 +56,30 @@ def _txt(ru: str, en: str) -> str:
     return ru if _is_ru() else en
 
 
+def _pick_localized_notes(git: dict, lang: str) -> str:
+    raw = (git.get("latest_tag_notes") or "").strip()
+    localized = git.get("latest_tag_notes_i18n") or {}
+    if not isinstance(localized, dict) or not localized:
+        return raw
+
+    lang_norm = (lang or "en").strip().lower()
+    base_lang = lang_norm.split("-", 1)[0]
+    en = (localized.get("en") or "").strip()
+
+    for key in (lang_norm, base_lang):
+        text = (localized.get(key) or "").strip()
+        if text:
+            return text
+    if en:
+        return en
+
+    for value in localized.values():
+        text = (value or "").strip()
+        if text:
+            return text
+    return raw
+
+
 async def _send_preflight_backup(cq: CallbackQuery, *, reason_ru: str, reason_en: str) -> str | None:
     try:
         pkg = await maintenance_api.backup_download_package()
@@ -824,7 +848,7 @@ async def cb_update_run_menu(cq: CallbackQuery):
         info = await maintenance_api.update_info()
         git = info.get("git", {})
         latest_tag = (git.get("latest_tag") or "-").strip() or "-"
-        notes = (git.get("latest_tag_notes") or "").strip()
+        notes = _pick_localized_notes(git, "ru" if _is_ru() else "en")
     except APIError:
         pass
 

@@ -168,6 +168,45 @@ def _git_tag_notes(tag: str) -> str:
     return text[:3500]
 
 
+def _parse_tag_notes_i18n(text: str) -> dict[str, str]:
+    """
+    Parse localized release notes from a tag message.
+    Supported section marker format (one per line):
+      [lang:ru]
+      [lang:en]
+      [lang:de]
+    If no markers are present, returns an empty dict and clients should use raw text.
+    """
+    src = (text or "").replace("\r\n", "\n").replace("\r", "\n")
+    if not src.strip():
+        return {}
+
+    marker_re = re.compile(r"^\[lang:([a-zA-Z0-9_-]{2,16})\]\s*$")
+    sections: dict[str, list[str]] = {}
+    current: str | None = None
+    found_markers = False
+
+    for line in src.split("\n"):
+        match = marker_re.match(line.strip())
+        if match:
+            found_markers = True
+            current = match.group(1).strip().lower()
+            sections.setdefault(current, [])
+            continue
+        if current is not None:
+            sections[current].append(line)
+
+    if not found_markers:
+        return {}
+
+    out: dict[str, str] = {}
+    for lang, lines in sections.items():
+        chunk = "\n".join(lines).strip()
+        if chunk:
+            out[lang] = chunk[:3500]
+    return out
+
+
 def _list_remote_branches(limit: int = 30) -> list[str]:
     code, out = _run(
         ["git", "for-each-ref", "--format=%(refname:short)", "refs/remotes/origin"],
@@ -212,6 +251,7 @@ def get_update_info(refresh_remote: bool = True) -> dict[str, Any]:
     tags_raw = _git_value("tag", "--sort=-v:refname", default="")
     latest_tag = tags_raw.splitlines()[0].strip() if tags_raw.strip() else ""
     latest_tag_notes = _git_tag_notes(latest_tag)
+    latest_tag_notes_i18n = _parse_tag_notes_i18n(latest_tag_notes)
 
     remote_commit = _git_value("rev-parse", f"origin/{current_branch}", default="")
     remote_commit_short = remote_commit[:7] if remote_commit else ""
@@ -228,6 +268,7 @@ def get_update_info(refresh_remote: bool = True) -> dict[str, Any]:
         "current_version": current_version,
         "latest_tag": latest_tag,
         "latest_tag_notes": latest_tag_notes,
+        "latest_tag_notes_i18n": latest_tag_notes_i18n,
         "remote_branch_commit": remote_commit_short,
         "update_available_branch": update_available_branch,
         "update_available_tag": update_available_tag,
