@@ -127,13 +127,14 @@ def _build_version_lines(git: dict, lang: str) -> tuple[str, str]:
     )
 
     if not has_updates:
-        return version_line, ("Обновлений нет" if lang == "ru" else "No updates detected")
+        return version_line, ""
 
     new_version = latest_tag or "latest"
+    shown_version = new_version if str(new_version).startswith("v") else f"v{new_version}"
     update_line = (
-        f"Доступно обновление: <code>{escape(new_version)}</code>"
+        f"Доступна новая версия: <code>{escape(shown_version)}</code>"
         if lang == "ru"
-        else f"Update available: <code>{escape(new_version)}</code>"
+        else f"New version available: <code>{escape(shown_version)}</code>"
     )
     return version_line, update_line
 
@@ -165,13 +166,16 @@ async def _main_menu_text(lang: str) -> str:
     )
     cert_line = _format_cert_line_for_main(cert, lang)
     version_line, update_line = _build_version_lines(git, lang)
-    return (
-        "<b>Singbox UI Bot</b>\n\n"
-        f"{domain_line}\n"
-        f"{cert_line}\n"
-        f"{version_line}\n"
-        f"{update_line}"
-    )
+    lines = [
+        "<b>Singbox UI Bot</b>",
+        "",
+        domain_line,
+        cert_line,
+        version_line,
+    ]
+    if update_line:
+        lines.append(update_line)
+    return "\n".join(lines)
 
 
 async def _get_menu_git_info() -> dict:
