@@ -69,6 +69,7 @@ def get_hidden_paths(domain: str = None) -> dict:
     base = f"https://{domain}"
     return {
         "web_ui":         f"{base}/web/",
+        "docs":           f"{base}/web/docs/",
         "subscriptions":  f"{base}/{h[12:24]}/sub/",
         "adguard":        f"{base}/{h[24:36]}/adg/",
         "api":            f"{base}/{h[36:48]}/api/",

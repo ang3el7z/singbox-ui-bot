@@ -11,9 +11,6 @@
 <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
 <!-- Tailwind CDN -->
 <script src="https://cdn.tailwindcss.com"></script>
-<!-- Marked.js — markdown renderer for Docs section -->
-<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-
 <link rel="stylesheet" href="/web/css/style.css"/>
 
 <script>
@@ -81,7 +78,7 @@ tailwind.config = {
         📊 Dashboard
       </div>
       <div class="sidebar-item" :class="page==='server' && 'active'" @click="navigate('server')">
-        🖥 Server
+        📡 Sing-Box
       </div>
       <div class="sidebar-item" :class="page==='clients' && 'active'" @click="navigate('clients')">
         👥 Clients
@@ -192,7 +189,7 @@ tailwind.config = {
     <section x-show="page==='server'" x-data="serverSection()" x-init="init()">
       <div class="p-6">
         <div class="flex items-center justify-between mb-4">
-          <h2 class="text-xl font-bold text-white">Server</h2>
+          <h2 class="text-xl font-bold text-white">Sing-Box</h2>
           <div class="flex gap-2">
             <button class="btn btn-secondary" @click="loadStatus()">🔄 Refresh</button>
             <button class="btn btn-primary"  @click="reload()" :disabled="loading">в†є Reload config</button>
@@ -215,6 +212,7 @@ tailwind.config = {
           </div>
           <div class="log-box" x-show="logs.length" x-text="logs.join('\n')"></div>
           <p class="text-slate-500 text-sm" x-show="!logs.length">Click "Load logs" to view</p>
+          <p class="text-red-400 text-xs mt-2" x-show="logError" x-text="logError"></p>
         </div>
       </div>
     </section>
@@ -1046,46 +1044,28 @@ tailwind.config = {
       </div>
     </section>
 
-    <!-- DOCS -->
-    <section x-show="page==='docs'" x-data="docsSection()" x-init="init()">
-      <div class="p-6 flex gap-6 min-h-screen">
-
-        <!-- Left: document list -->
-        <div class="w-56 flex-shrink-0">
-          <h2 class="text-xl font-bold text-white mb-4">📚 Docs</h2>
-          <div x-show="loading" class="flex gap-2 items-center text-slate-400"><span class="spinner"></span> Loading…</div>
-          <nav class="flex flex-col gap-1">
-            <template x-for="doc in docs" :key="doc.id">
-              <button
-                class="text-left px-3 py-2 rounded-lg text-sm transition-colors"
-                :class="activeId === doc.id
-                  ? 'bg-indigo-600 text-white'
-                  : 'text-slate-300 hover:bg-slate-700'"
-                @click="open(doc)"
-                x-text="doc.title">
-              </button>
-            </template>
-          </nav>
+        <!-- DOCS -->
+    <section x-show="page==='docs'" x-cloak>
+      <div class="p-6 min-h-screen">
+        <div class="flex items-center justify-between mb-4">
+          <div>
+            <h2 class="text-xl font-bold text-white">Documentation</h2>
+            <p class="text-slate-400 text-sm mt-1">
+              Standalone docs page with unified formatting for Telegram and Web.
+            </p>
+          </div>
+          <a class="btn btn-secondary" href="/api/docs/site" target="_blank" rel="noopener noreferrer">
+            Open in new tab
+          </a>
         </div>
 
-        <!-- Right: document content -->
-        <div class="flex-1 min-w-0">
-          <!-- Placeholder when no doc is selected -->
-          <div x-show="!activeId && !loading" class="flex flex-col items-center justify-center h-64 text-slate-500">
-            <div class="text-4xl mb-3">📖</div>
-            <p>Select a document from the list</p>
-          </div>
-
-          <!-- Loading spinner -->
-          <div x-show="loadingDoc" class="flex gap-2 items-center text-slate-400 mt-8"><span class="spinner"></span> Loading…</div>
-
-          <!-- Rendered content -->
-          <div x-show="activeId && !loadingDoc" class="card prose-doc">
-            <h3 class="text-lg font-bold text-white mb-4" x-text="activeTitle"></h3>
-            <div class="docs-content" x-html="rendered()"></div>
-          </div>
+        <div class="card p-2">
+          <iframe
+            src="/api/docs/site"
+            title="Singbox UI Bot docs"
+            style="width:100%;height:78vh;border:0;border-radius:10px;background:#f5f3ee;"
+          ></iframe>
         </div>
-
       </div>
     </section>
 
@@ -1505,6 +1485,7 @@ tailwind.config = {
 
 </body>
 </html>
+
 
 
 

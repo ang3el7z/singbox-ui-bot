@@ -77,6 +77,12 @@ server {
         try_files            /dev/null =403;
     }
 
+    # ── Public docs page (always available) ──────────────────────────────────
+    location /web/docs/ {
+        alias /var/www/web/docs/;
+        try_files $uri $uri/ /web/docs/index.html;
+    }
+
     # ── Web UI ────────────────────────────────────────────────────────────────
     location /web/ {
         {% if site_enabled %}

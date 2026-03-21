@@ -1,7 +1,4 @@
-"""
-Documentation browser for the Telegram bot.
-Supports Markdown-like formatting and disables link previews.
-"""
+"""Telegram documentation viewer with markdown-like rendering and optional web docs link."""
 from __future__ import annotations
 
 import html
@@ -36,6 +33,31 @@ _RE_CODE_FENCE = re.compile(r"^\s*```")
 
 def _t(lang: str, ru: str, en: str) -> str:
     return ru if lang == "ru" else en
+
+
+def _normalize_domain(raw_value: str) -> str:
+    value = (raw_value or "").strip()
+    if not value:
+        return ""
+    value = re.sub(r"^https?://", "", value, flags=re.IGNORECASE)
+    value = value.split("/", 1)[0].strip()
+    return value
+
+
+async def _get_docs_site_url(lang: str, doc_id: str | None = None) -> str | None:
+    """Build public docs URL from runtime domain (if configured)."""
+    try:
+        result = await settings_api.get("domain")
+        raw = result.get("value", "") if isinstance(result, dict) else ""
+        domain = _normalize_domain(str(raw))
+        if not domain:
+            return None
+        url = f"https://{domain}/api/docs/site?lang={lang}"
+        if doc_id:
+            url = f"{url}&doc={doc_id}"
+        return url
+    except Exception:
+        return None
 
 
 async def _get_lang() -> str:
@@ -147,7 +169,7 @@ def _md_to_html_blocks(markdown_text: str) -> list[str]:
                 blocks.append(f"> {_render_inline(quote_text)}")
             continue
 
-        # Markdown table rows: keep as monospace lines in Telegram.
+        # Markdown tables are flattened for Telegram readability.
         stripped = line.strip()
         if stripped.startswith("|") and stripped.endswith("|"):
             _flush_paragraph(paragraph, blocks)
@@ -182,7 +204,6 @@ def _split_blocks(blocks: list[str]) -> list[str]:
             current = block
             continue
 
-        # Split oversized code block safely.
         if block.startswith("<pre><code>") and block.endswith("</code></pre>"):
             open_tag = "<pre><code>"
             close_tag = "</code></pre>"
@@ -194,7 +215,6 @@ def _split_blocks(blocks: list[str]) -> list[str]:
                 chunks.append(f"{open_tag}{part}{close_tag}")
             continue
 
-        # Fallback for extra long non-code block.
         rest = block
         while len(rest) > _CHUNK:
             chunks.append(rest[:_CHUNK])
@@ -207,8 +227,19 @@ def _split_blocks(blocks: list[str]) -> list[str]:
     return chunks or ["<i>(empty)</i>"]
 
 
-def _kb_doc_list(docs: list[dict], lang: str) -> InlineKeyboardMarkup:
+def _kb_doc_list(docs: list[dict], lang: str, docs_url: str | None = None) -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
+    if docs_url:
+        builder.row(
+            InlineKeyboardButton(
+                text=_t(
+                    lang,
+                    "\u041e\u0442\u043a\u0440\u044b\u0442\u044c web-\u0434\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u0430\u0446\u0438\u044e",
+                    "Open web documentation",
+                ),
+                url=docs_url,
+            )
+        )
     for item in docs:
         builder.row(
             InlineKeyboardButton(
@@ -217,33 +248,62 @@ def _kb_doc_list(docs: list[dict], lang: str) -> InlineKeyboardMarkup:
             )
         )
     builder.row(
-        InlineKeyboardButton(text=_t(lang, "Назад", "Back"), callback_data="main_menu")
+        InlineKeyboardButton(
+            text=_t(lang, "\u041d\u0430\u0437\u0430\u0434", "Back"),
+            callback_data="main_menu",
+        )
     )
     return builder.as_markup()
 
 
-def _kb_page(doc_id: str, page: int, total: int, lang: str) -> InlineKeyboardMarkup:
+def _kb_page(
+    doc_id: str,
+    page: int,
+    total: int,
+    lang: str,
+    docs_url: str | None = None,
+) -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
     nav: list[InlineKeyboardButton] = []
+
     if page > 0:
         nav.append(
             InlineKeyboardButton(
-                text=_t(lang, "Назад", "Prev"),
+                text=_t(lang, "\u041d\u0430\u0437\u0430\u0434", "Prev"),
                 callback_data=f"docs_open_{doc_id}_{page - 1}",
             )
         )
     if page < total - 1:
         nav.append(
             InlineKeyboardButton(
-                text=_t(lang, "Далее", "Next"),
+                text=_t(lang, "\u0414\u0430\u043b\u0435\u0435", "Next"),
                 callback_data=f"docs_open_{doc_id}_{page + 1}",
             )
         )
     if nav:
         builder.row(*nav)
+
+    if docs_url:
+        builder.row(
+            InlineKeyboardButton(
+                text=_t(
+                    lang,
+                    "\u041e\u0442\u043a\u0440\u044b\u0442\u044c \u043a\u0430\u043a \u0441\u0442\u0440\u0430\u043d\u0438\u0446\u0443",
+                    "Open as page",
+                ),
+                url=docs_url,
+            )
+        )
+
     builder.row(
-        InlineKeyboardButton(text=_t(lang, "Все статьи", "All docs"), callback_data="menu_docs"),
-        InlineKeyboardButton(text=_t(lang, "Меню", "Menu"), callback_data="main_menu"),
+        InlineKeyboardButton(
+            text=_t(lang, "\u0412\u0441\u0435 \u0441\u0442\u0430\u0442\u044c\u0438", "All docs"),
+            callback_data="menu_docs",
+        ),
+        InlineKeyboardButton(
+            text=_t(lang, "\u041c\u0435\u043d\u044e", "Menu"),
+            callback_data="main_menu",
+        ),
     )
     return builder.as_markup()
 
@@ -267,10 +327,7 @@ async def _edit_text_no_preview(
             return
         except TypeError:
             pass
-    await cq.message.edit_text(
-        **kwargs,
-        disable_web_page_preview=True,
-    )
+    await cq.message.edit_text(**kwargs, disable_web_page_preview=True)
 
 
 @router.callback_query(F.data == "menu_docs")
@@ -282,12 +339,13 @@ async def cb_docs_menu(cq: CallbackQuery):
         await cq.answer(f"Error: {exc}", show_alert=True)
         return
 
-    header = _t(lang, "<b>Документация</b>", "<b>Documentation</b>")
-    hint = _t(lang, "Выберите тему:", "Select a topic:")
+    docs_url = await _get_docs_site_url(lang)
+    header = _t(lang, "<b>\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u0430\u0446\u0438\u044f</b>", "<b>Documentation</b>")
+    hint = _t(lang, "\u0412\u044b\u0431\u0435\u0440\u0438\u0442\u0435 \u0442\u0435\u043c\u0443:", "Select a topic:")
     await _edit_text_no_preview(
         cq,
         f"{header}\n\n{hint}",
-        _kb_doc_list(docs, lang),
+        _kb_doc_list(docs, lang, docs_url=docs_url),
     )
     await cq.answer()
 
@@ -295,20 +353,26 @@ async def cb_docs_menu(cq: CallbackQuery):
 @router.callback_query(F.data.startswith("docs_open_"))
 async def cb_docs_page(cq: CallbackQuery):
     # callback pattern: docs_open_{doc_id}_{page}
+    lang = await _get_lang()
     payload = cq.data[len("docs_open_") :]
     try:
         doc_id, page_text = payload.rsplit("_", 1)
         page = int(page_text)
     except Exception:
-        await cq.answer("Invalid docs item", show_alert=True)
+        await cq.answer(
+            _t(
+                lang,
+                "\u041d\u0435\u043a\u043e\u0440\u0440\u0435\u043a\u0442\u043d\u044b\u0439 \u044d\u043b\u0435\u043c\u0435\u043d\u0442 \u0434\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u0430\u0446\u0438\u0438",
+                "Invalid docs item",
+            ),
+            show_alert=True,
+        )
         return
-
-    lang = await _get_lang()
 
     try:
         markdown_content = await docs_api.get(doc_id, lang=lang)
     except Exception as exc:
-        await cq.answer(f"Error: {exc}", show_alert=True)
+        await cq.answer(_t(lang, f"\u041e\u0448\u0438\u0431\u043a\u0430: {exc}", f"Error: {exc}"), show_alert=True)
         return
 
     blocks = _md_to_html_blocks(markdown_content)
@@ -316,13 +380,14 @@ async def cb_docs_page(cq: CallbackQuery):
     total = len(chunks)
     page = max(0, min(page, total - 1))
 
-    title = _t(lang, "<b>Документация</b>", "<b>Documentation</b>")
+    docs_url = await _get_docs_site_url(lang, doc_id=doc_id)
+    title = _t(lang, "<b>\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u0430\u0446\u0438\u044f</b>", "<b>Documentation</b>")
     body = chunks[page]
-    text = f"{title} • {page + 1}/{total}\n\n{body}"
+    text = f"{title} - {page + 1}/{total}\n\n{body}"
 
     await _edit_text_no_preview(
         cq,
         text,
-        _kb_page(doc_id, page, total, lang),
+        _kb_page(doc_id, page, total, lang, docs_url=docs_url),
     )
     await cq.answer()
